@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
@@ -214,10 +215,18 @@ fun ModernDetailsScreen(
 		).show()
 	}
 
+	// Background of the focused card, applied once the focus rests a moment
+	var pendingBackgroundUrl by remember { mutableStateOf<String?>(null) }
+	LaunchedEffect(pendingBackgroundUrl) {
+		val url = pendingBackgroundUrl ?: return@LaunchedEffect
+		delay(300)
+		backgroundUrl = url
+	}
+
 	fun rememberFocus(index: Int, key: String, card: HomeCard?) {
 		viewModel.lastFocusIndex = index
 		viewModel.lastFocusKey = key
-		card?.backgroundUrl?.let { backgroundUrl = it }
+		card?.backgroundUrl?.let { pendingBackgroundUrl = it }
 	}
 
 	LaunchedEffect(state.backgroundUrl) {
@@ -446,6 +455,7 @@ fun ModernDetailsScreen(
 				homeActive = false,
 				onNavigateDown = { primaryFocusRequester.tryRequestFocus() },
 				onHideLibrary = viewModel::hideLibrary,
+				onMoveLibrary = viewModel::moveLibrary,
 			)
 		}
 

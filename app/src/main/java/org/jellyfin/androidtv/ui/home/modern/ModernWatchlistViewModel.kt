@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
@@ -57,6 +58,10 @@ class ModernWatchlistViewModel(
 
 	fun hideLibrary(library: BaseItemDto) = libraryVisibilityRepository.setHidden(library.id, hidden = true)
 
+	fun moveLibrary(library: BaseItemDto, offset: Int) {
+		viewModelScope.launch { libraryVisibilityRepository.moveLibrary(library.id, offset) }
+	}
+
 	private fun loadLibraries() {
 		viewModelScope.launch {
 			val libraries = try {
@@ -68,12 +73,15 @@ class ModernWatchlistViewModel(
 				emptyList()
 			}
 
-			var firstValue = true
-			libraryVisibilityRepository.hiddenLibraryIds.collect { hiddenLibraryIds ->
-				_state.update { state -> state.copy(libraries = libraries.filterNot { it.id in hiddenLibraryIds }) }
-				if (!firstValue) refresh()
-				firstValue = false
-			}
+			var previousHidden: Set<UUID>? = null
+			combine(libraryVisibilityRepository.hiddenLibraryIds, libraryVisibilityRepository.libraryOrder) { hidden, order -> hidden to order }
+				.collect { (hiddenLibraryIds, order) ->
+					_state.update { state ->
+						state.copy(libraries = LibraryVisibilityRepository.arrange(libraries, order).filterNot { it.id in hiddenLibraryIds })
+					}
+					if (previousHidden != null && previousHidden != hiddenLibraryIds) refresh()
+					previousHidden = hiddenLibraryIds
+				}
 		}
 	}
 }

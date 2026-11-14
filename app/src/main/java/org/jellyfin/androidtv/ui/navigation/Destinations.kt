@@ -18,6 +18,7 @@ import org.jellyfin.androidtv.ui.home.HomeFragment
 import org.jellyfin.androidtv.ui.itemdetail.FullDetailsFragment
 import org.jellyfin.androidtv.ui.itemdetail.ItemListFragment
 import org.jellyfin.androidtv.ui.itemdetail.MusicFavoritesListFragment
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicFragment
 import org.jellyfin.androidtv.ui.livetv.LiveTvGuideFragment
 import org.jellyfin.androidtv.ui.playback.AudioNowPlayingFragment
 import org.jellyfin.androidtv.ui.playback.CustomPlaybackOverlayFragment
@@ -78,6 +79,19 @@ object Destinations {
 			putString(Extras.IncludeType, includeType)
 		}
 
+	/**
+	 * Music library: the modern page (media bar, stations, recommendations) when enabled in the
+	 * settings, otherwise the original rows.
+	 */
+	fun musicLibrary(item: BaseItemDto): Destination.Fragment =
+		if (preference(UserPreferences.modernMusicEnabled)) modernMusic(item)
+		else librarySmartScreen(item)
+
+	// TODO only pass item id instead of complete JSON to browsing destinations
+	fun modernMusic(item: BaseItemDto) = fragmentDestination<ModernMusicFragment> {
+		putString(Extras.Folder, Json.encodeToString(item))
+	}
+
 	// TODO only pass item id instead of complete JSON to browsing destinations
 	fun librarySuggestions(item: BaseItemDto) =
 		fragmentDestination<SuggestedMoviesFragment> {
@@ -103,8 +117,10 @@ object Destinations {
 		putString(ModernDetailsFragment.ARGUMENT_ITEM_ID, item.toString())
 	}
 
-	private fun modernDetailsEnabled(): Boolean = runCatching {
-		KoinJavaComponent.get<UserPreferences>(UserPreferences::class.java)[UserPreferences.modernDetailsEnabled]
+	private fun modernDetailsEnabled(): Boolean = preference(UserPreferences.modernDetailsEnabled)
+
+	private fun preference(preference: org.jellyfin.preference.Preference<Boolean>): Boolean = runCatching {
+		KoinJavaComponent.get<UserPreferences>(UserPreferences::class.java)[preference]
 	}.getOrDefault(false)
 
 	// TODO only pass item id instead of complete JSON to browsing destinations

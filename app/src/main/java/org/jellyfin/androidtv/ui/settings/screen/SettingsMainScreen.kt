@@ -54,6 +54,24 @@ fun SettingsMainScreen() {
 			)
 		}
 
+		item {
+			ListButton(
+				leadingContent = { Icon(painterResource(R.drawable.ic_house), contentDescription = null) },
+				headingContent = { Text(stringResource(R.string.modern_home_sections)) },
+				onClick = { router.push(Routes.HOME_SECTIONS_ORDER) },
+				modifier = Modifier.focusKey(Routes.HOME_SECTIONS_ORDER),
+			)
+		}
+
+		item {
+			ListButton(
+				leadingContent = { Icon(painterResource(R.drawable.ic_music_album), contentDescription = null) },
+				headingContent = { Text(stringResource(R.string.modern_music_sections)) },
+				onClick = { router.push(Routes.MUSIC_SECTIONS_ORDER) },
+				modifier = Modifier.focusKey(Routes.MUSIC_SECTIONS_ORDER),
+			)
+		}
+
 		// TODO: Temporarily added to root - should be accessed via customization screen instead
 		item {
 			ListButton(

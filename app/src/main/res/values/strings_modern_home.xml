@@ -16,7 +16,7 @@
     <string name="modern_home_hide_library_title">Hide %1$s?</string>
     <string name="modern_home_hide_library_message">It will disappear from the navigation bar, the home screen and search results. You can show it again in Settings › Hidden libraries.</string>
 
-    <string name="modern_home_continue_watching">Continue watching &amp; next up</string>
+    <string name="modern_home_continue_watching">Continue Watching</string>
     <string name="modern_home_trending">Trending this week</string>
     <string name="modern_home_latest_releases">Latest releases</string>
     <string name="modern_home_recent_movies">Recently added movies</string>
@@ -96,4 +96,65 @@
     <string name="modern_details_default">Default</string>
     <string name="modern_details_forced">Forced</string>
     <string name="modern_details_external">External</string>
+
+    <!-- Modern player -->
+    <string name="modern_player_enabled">Modern player controls</string>
+    <string name="modern_player_enabled_description">Streaming style controls with scenes, subtitle offset and Skip intro / Skip credits (live TV keeps the original controls)</string>
+    <string name="modern_player_back">Back</string>
+    <string name="modern_player_pause">Pause</string>
+    <string name="modern_player_previous">Previous episode</string>
+    <string name="modern_player_next">Next episode</string>
+    <string name="modern_player_ends_at">Ends at %1$s</string>
+    <string name="modern_player_you_are_watching">You\'re watching</string>
+    <string name="modern_player_paused">Paused</string>
+    <string name="modern_player_season_episode">Season %1$d: Ep. %2$d</string>
+    <string name="modern_player_skip">Skip</string>
+    <string name="modern_player_skip_intro">Skip intro</string>
+    <string name="modern_player_skip_credits">Skip credits</string>
+    <string name="modern_player_skip_recap">Skip recap</string>
+    <string name="modern_player_skip_preview">Skip preview</string>
+    <string name="modern_player_audio">Audio</string>
+    <string name="modern_player_subtitles">Subtitles</string>
+    <string name="modern_player_subtitles_off">Off</string>
+    <string name="modern_player_chapters">Scenes</string>
+    <string name="modern_player_quality">Quality</string>
+    <string name="modern_player_speed">Playback speed</string>
+    <string name="modern_player_subtitle_offset">Subtitle offset</string>
+    <string name="modern_player_subtitle_offset_hint">Positive: subtitles later. Negative: subtitles earlier.</string>
+    <string name="modern_player_reset">Reset</string>
+
+    <!-- Home sections order, library order -->
+    <string name="modern_home_sections">Home sections</string>
+    <string name="modern_home_sections_description">Order of the rows on the home screen</string>
+    <string name="modern_home_sections_hint">Select a section, move it with up and down, and press OK again to drop it</string>
+    <string name="modern_home_sections_moving">Moving: use up and down, OK to finish</string>
+    <string name="modern_home_sections_reset">Restore the default order</string>
+    <string name="modern_home_move">Move</string>
+    <string name="modern_home_move_hint">Use left and right to move it, OK to finish</string>
+
+    <string name="modern_home_latest_episodes">Latest Episodes</string>
+    <string name="modern_home_latest_films">Latest Films</string>
+
+    <string name="modern_player_dv_as_hdr10">Play Dolby Vision as HDR10</string>
+    <string name="modern_player_dv_as_hdr10_description">For Dolby Vision files that play with a black screen (e.g. Dolby Vision + HDR10+ web releases). Uses the HDR10 layer of the video</string>
+
+    <string name="modern_player_audio_offload">Audio offload</string>
+    <string name="modern_player_audio_offload_description">Lets the device process the audio in offload mode. Off by default: on some Fire TVs it freezes videos with Dolby Atmos (black screen, time not moving)</string>
+
+    <!-- Modern music page -->
+    <string name="modern_music_enabled">Modern music page</string>
+    <string name="modern_music_enabled_description">Music libraries with recommendations, stations and the same look as the home screen</string>
+    <string name="modern_music_sections">Music sections</string>
+    <string name="modern_music_sections_description">Order of the rows on the music page</string>
+    <string name="modern_music_latest">Recently Added</string>
+    <string name="modern_music_last_played">Last Played</string>
+    <string name="modern_music_stations">Stations</string>
+    <string name="modern_music_recommended">Recommended for You</string>
+    <string name="modern_music_favorites">Favorite Albums</string>
+    <string name="modern_music_playlists">Playlists</string>
+    <string name="modern_music_because_you_listen">Because you listen to %1$s</string>
+    <string name="modern_music_your_mix">Your Mix</string>
+    <string name="modern_music_radio">Radio</string>
+    <string name="modern_music_open_album">Go to album</string>
+    <string name="modern_music_shuffle">Shuffle</string>
 </resources>

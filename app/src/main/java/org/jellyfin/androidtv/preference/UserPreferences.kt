@@ -228,6 +228,26 @@ class UserPreferences(context: Context) : SharedPreferenceStore(
 		var hiddenLibraryIds = stringPreference("pref_hidden_library_ids", "")
 
 		/**
+		 * Custom order of the libraries in the navigation bar of the modern screens (comma separated ids)
+		 */
+		var libraryOrder = stringPreference("pref_library_order", "")
+
+		/**
+		 * Order of the rows of the modern home screen (comma separated HomeSectionType names)
+		 */
+		var homeSectionOrder = stringPreference("pref_modern_home_section_order", "")
+
+		/**
+		 * Use the modern music library page (media bar, stations, recommendations)
+		 */
+		var modernMusicEnabled = booleanPreference("pref_modern_music_enabled", true)
+
+		/**
+		 * Order of the rows of the modern music page (comma separated MusicSectionType names)
+		 */
+		var musicSectionOrder = stringPreference("pref_modern_music_section_order", "")
+
+		/**
 		 * Use the modern details screen for movies, series, seasons and people
 		 */
 		var modernDetailsEnabled = booleanPreference("pref_modern_details_enabled", true)
@@ -236,6 +256,21 @@ class UserPreferences(context: Context) : SharedPreferenceStore(
 		 * Play the theme song of a series on its page and on its season pages
 		 */
 		var themeMusicEnabled = booleanPreference("pref_theme_music_enabled", true)
+
+		/**
+		 * Use the streaming style controls in the video player (live TV keeps the original ones)
+		 */
+		var modernPlayerEnabled = booleanPreference("pref_modern_player_enabled", true)
+
+		/**
+		 * Decode Dolby Vision profile 8 videos as HDR10 (for TVs/files that show a black screen)
+		 */
+		var dolbyVisionAsHdr10 = booleanPreference("pref_dolby_vision_as_hdr10", false)
+
+		/**
+		 * Let the system decode/output audio in offload mode (can freeze playback on some devices)
+		 */
+		var audioOffloadEnabled = booleanPreference("pref_audio_offload_enabled", false)
 
 		/**
 		 * Subtitles foreground color

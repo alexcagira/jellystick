@@ -234,6 +234,7 @@ fun ModernWatchlistScreen(
 				watchlistActive = true,
 				onNavigateDown = { firstCardFocusRequester.tryRequestFocus() },
 				onHideLibrary = viewModel::hideLibrary,
+				onMoveLibrary = viewModel::moveLibrary,
 			)
 		}
 	}

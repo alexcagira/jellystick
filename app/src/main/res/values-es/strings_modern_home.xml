@@ -16,7 +16,7 @@
     <string name="modern_home_hide_library_title">¿Ocultar %1$s?</string>
     <string name="modern_home_hide_library_message">Desaparecerá de la barra de navegación, del inicio y de los resultados de búsqueda. Puedes volver a mostrarla en Ajustes › Bibliotecas ocultas.</string>
 
-    <string name="modern_home_continue_watching">Seguir viendo y a continuación</string>
+    <string name="modern_home_continue_watching">Seguir viendo</string>
     <string name="modern_home_trending">Tendencias de la semana</string>
     <string name="modern_home_latest_releases">Últimos estrenos</string>
     <string name="modern_home_recent_movies">Películas añadidas recientemente</string>
@@ -96,4 +96,65 @@
     <string name="modern_details_default">Por defecto</string>
     <string name="modern_details_forced">Forzados</string>
     <string name="modern_details_external">Externos</string>
+
+    <!-- Reproductor moderno -->
+    <string name="modern_player_enabled">Controles modernos del reproductor</string>
+    <string name="modern_player_enabled_description">Controles estilo plataforma de streaming con escenas, desfase de subtítulos y Saltar intro / Saltar créditos (la TV en directo mantiene los controles originales)</string>
+    <string name="modern_player_back">Atrás</string>
+    <string name="modern_player_pause">Pausa</string>
+    <string name="modern_player_previous">Episodio anterior</string>
+    <string name="modern_player_next">Episodio siguiente</string>
+    <string name="modern_player_ends_at">Termina a las %1$s</string>
+    <string name="modern_player_you_are_watching">Estás viendo</string>
+    <string name="modern_player_paused">En pausa</string>
+    <string name="modern_player_season_episode">Temporada %1$d: Ep. %2$d</string>
+    <string name="modern_player_skip">Saltar</string>
+    <string name="modern_player_skip_intro">Saltar intro</string>
+    <string name="modern_player_skip_credits">Saltar créditos</string>
+    <string name="modern_player_skip_recap">Saltar resumen</string>
+    <string name="modern_player_skip_preview">Saltar avance</string>
+    <string name="modern_player_audio">Audio</string>
+    <string name="modern_player_subtitles">Subtítulos</string>
+    <string name="modern_player_subtitles_off">Desactivados</string>
+    <string name="modern_player_chapters">Escenas</string>
+    <string name="modern_player_quality">Calidad</string>
+    <string name="modern_player_speed">Velocidad de reproducción</string>
+    <string name="modern_player_subtitle_offset">Desfase de subtítulos</string>
+    <string name="modern_player_subtitle_offset_hint">Positivo: subtítulos más tarde. Negativo: más pronto.</string>
+    <string name="modern_player_reset">Restablecer</string>
+
+    <!-- Orden de las secciones del inicio y de las bibliotecas -->
+    <string name="modern_home_sections">Secciones del inicio</string>
+    <string name="modern_home_sections_description">Orden de las filas de la pantalla de inicio</string>
+    <string name="modern_home_sections_hint">Selecciona una sección, muévela con arriba y abajo y pulsa OK otra vez para soltarla</string>
+    <string name="modern_home_sections_moving">Moviendo: usa arriba y abajo, OK para terminar</string>
+    <string name="modern_home_sections_reset">Restablecer el orden por defecto</string>
+    <string name="modern_home_move">Mover</string>
+    <string name="modern_home_move_hint">Usa izquierda y derecha para moverla y OK para terminar</string>
+
+    <string name="modern_home_latest_episodes">Últimos episodios</string>
+    <string name="modern_home_latest_films">Últimas películas</string>
+
+    <string name="modern_player_dv_as_hdr10">Reproducir Dolby Vision como HDR10</string>
+    <string name="modern_player_dv_as_hdr10_description">Para archivos Dolby Vision que se ven en negro (p. ej. WEB-DL con Dolby Vision + HDR10+). Usa la capa HDR10 del vídeo</string>
+
+    <string name="modern_player_audio_offload">Audio offload</string>
+    <string name="modern_player_audio_offload_description">Deja que el dispositivo procese el audio en modo offload. Desactivado por defecto: en algunos Fire TV congela vídeos con Dolby Atmos (pantalla negra y el tiempo no avanza)</string>
+
+    <!-- Página de música moderna -->
+    <string name="modern_music_enabled">Página de música moderna</string>
+    <string name="modern_music_enabled_description">Bibliotecas de música con recomendaciones, radios y el mismo estilo que la pantalla de inicio</string>
+    <string name="modern_music_sections">Secciones de música</string>
+    <string name="modern_music_sections_description">Orden de las filas de la página de música</string>
+    <string name="modern_music_latest">Añadido recientemente</string>
+    <string name="modern_music_last_played">Escuchado recientemente</string>
+    <string name="modern_music_stations">Radios</string>
+    <string name="modern_music_recommended">Recomendado para ti</string>
+    <string name="modern_music_favorites">Álbumes favoritos</string>
+    <string name="modern_music_playlists">Listas de reproducción</string>
+    <string name="modern_music_because_you_listen">Porque escuchas a %1$s</string>
+    <string name="modern_music_your_mix">Tu mix</string>
+    <string name="modern_music_radio">Radio</string>
+    <string name="modern_music_open_album">Ir al álbum</string>
+    <string name="modern_music_shuffle">Aleatorio</string>
 </resources>

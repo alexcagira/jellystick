@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
@@ -100,6 +101,9 @@ fun ModernHomeScreen(
 	var initialFocusDone by remember { mutableStateOf(false) }
 	var screenHasFocus by remember { mutableStateOf(false) }
 	var backgroundUrl by remember { mutableStateOf<String?>(null) }
+	// Background of the focused card, applied once the focus rests a moment (no full screen
+	// crossfade for every card while scrolling fast)
+	var pendingBackgroundUrl by remember { mutableStateOf<String?>(null) }
 	var heroIndex by rememberSaveable { mutableIntStateOf(0) }
 	var menuCard by remember { mutableStateOf<HomeCard?>(null) }
 	val currentSlide = state.hero.getOrNull(heroIndex.coerceIn(0, (state.hero.size - 1).coerceAtLeast(0)))
@@ -180,6 +184,12 @@ fun ModernHomeScreen(
 			state.hero.isNotEmpty() -> heroFocusRequester.tryRequestFocus()
 			else -> firstCardFocusRequester.tryRequestFocus()
 		}
+	}
+
+	LaunchedEffect(pendingBackgroundUrl) {
+		val url = pendingBackgroundUrl ?: return@LaunchedEffect
+		delay(BACKGROUND_DELAY_MS)
+		backgroundUrl = url
 	}
 
 	// While the hero is on screen the ambient background follows the current slide
@@ -300,7 +310,7 @@ fun ModernHomeScreen(
 						onCardLongClick = { card -> onCardLongClick(card) },
 						onCardPlay = { card -> onCardPlay(card) },
 						onCardFocused = { card ->
-							backgroundUrl = card.backgroundUrl
+							pendingBackgroundUrl = card.backgroundUrl
 							viewModel.lastFocus = HomeFocusPosition(section.type, card.key)
 						},
 						modifier = Modifier
@@ -343,6 +353,7 @@ fun ModernHomeScreen(
 					else firstCardFocusRequester.tryRequestFocus()
 				},
 				onHideLibrary = { library -> viewModel.hideLibrary(library) },
+				onMoveLibrary = { library, offset -> viewModel.moveLibrary(library, offset) },
 			)
 		}
 
@@ -389,17 +400,20 @@ private fun ContinueWatchingMenu(
 }
 
 @Composable
-private fun sectionTitle(type: HomeSectionType): String = stringResource(
-	when (type) {
+private fun sectionTitle(type: HomeSectionType): String = stringResource(type.titleRes)
+
+/** Title of a home row, also used in Settings › Home sections */
+internal val HomeSectionType.titleRes: Int
+	get() = when (this) {
 		HomeSectionType.CONTINUE_WATCHING -> R.string.modern_home_continue_watching
 		HomeSectionType.WATCHLIST -> R.string.modern_home_watchlist
 		HomeSectionType.TRENDING -> R.string.modern_home_trending
-		HomeSectionType.LATEST_RELEASES -> R.string.modern_home_latest_releases
+		HomeSectionType.LATEST_EPISODES -> R.string.modern_home_latest_episodes
+		HomeSectionType.LATEST_FILMS -> R.string.modern_home_latest_films
 		HomeSectionType.RECENT_MOVIES -> R.string.modern_home_recent_movies
 		HomeSectionType.RECENT_SHOWS -> R.string.modern_home_recent_shows
 		HomeSectionType.FAVORITES -> R.string.modern_home_favorites
 	}
-)
 
 /**
  * A titled horizontal row of cards.
@@ -524,3 +538,5 @@ internal fun FocusRequester.tryRequestFocus(): Boolean = try {
 }
 
 internal suspend fun awaitFrames(count: Int) = repeat(count) { withFrameNanos { } }
+
+private const val BACKGROUND_DELAY_MS = 300L

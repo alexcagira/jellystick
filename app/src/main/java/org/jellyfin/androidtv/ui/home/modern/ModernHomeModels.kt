@@ -1,12 +1,20 @@
 package org.jellyfin.androidtv.ui.home.modern
 
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.serializer.UUIDSerializer
 import java.time.LocalDate
 import java.util.UUID
 
 /**
  * Label shown in red at the bottom of a poster when a series received new content recently.
  */
+@Serializable
 enum class NewContentLabel {
 	NEW_EPISODE,
 	NEW_SEASON,
@@ -17,6 +25,7 @@ enum class NewContentLabel {
  * Technical quality of the media file, used for the small badges on top of posters
  * (Dolby Vision / Atmos / HDR / 4K / 1080p...).
  */
+@Serializable
 data class MediaQuality(
 	val resolution: String? = null,
 	val dolbyVision: Boolean = false,
@@ -53,6 +62,7 @@ data class MediaQuality(
  * and Brazilian Portuguese ("por-br")
  * @param flag flag drawn for the language (see LanguageFlags.kt), null to show the code as text
  */
+@Serializable
 data class LanguageBadge(
 	val language: String,
 	val flag: String?,
@@ -62,6 +72,7 @@ data class LanguageBadge(
 		get() = language.substringBefore('-').uppercase()
 }
 
+@Serializable
 enum class CardStyle {
 	/** 16:9 card with title and progress (continue watching) */
 	LANDSCAPE,
@@ -73,22 +84,26 @@ enum class CardStyle {
 	RANKED,
 }
 
+@Serializable
 enum class HomeSectionType {
 	CONTINUE_WATCHING,
 	WATCHLIST,
 	TRENDING,
-	LATEST_RELEASES,
+	LATEST_EPISODES,
+	LATEST_FILMS,
 	RECENT_MOVIES,
 	RECENT_SHOWS,
 	FAVORITES,
 }
 
+@Serializable
 data class HomeCard(
 	/** Stable key, unique inside a section */
 	val key: String,
 	/** Item used to render the card */
 	val item: BaseItemDto,
 	/** Item opened (details) or played when the card is clicked */
+	@Serializable(with = UUIDSerializer::class)
 	val targetId: UUID,
 	val title: String,
 	val subtitle: String? = null,
@@ -99,6 +114,7 @@ data class HomeCard(
 	/** Audio languages shown as flags, at most [MediaBadges.MAX_LANGUAGE_FLAGS] */
 	val languages: List<LanguageBadge> = emptyList(),
 	val newLabel: NewContentLabel? = null,
+	@Serializable(with = LocalDateSerializer::class)
 	val releaseDate: LocalDate? = null,
 	val unplayedCount: Int? = null,
 	val progress: Float? = null,
@@ -111,15 +127,18 @@ data class HomeCard(
 	/** Episode shown when a series poster is focused, e.g. "S1 · E8" */
 	val episodeLabel: String? = null,
 	/** Item played with the play/pause button of the remote, null to resolve it when pressed */
+	@Serializable(with = UUIDSerializer::class)
 	val playId: UUID? = null,
 )
 
+@Serializable
 data class HomeSection(
 	val type: HomeSectionType,
 	val style: CardStyle,
 	val cards: List<HomeCard>,
 )
 
+@Serializable
 data class HeroSlide(
 	val item: BaseItemDto,
 	val title: String,
@@ -157,3 +176,10 @@ data class HomeFocusPosition(
 	val section: HomeSectionType,
 	val cardKey: String,
 )
+
+/** ISO date ("2026-11-14") for the home cache */
+object LocalDateSerializer : KSerializer<LocalDate> {
+	override val descriptor = PrimitiveSerialDescriptor("LocalDate", PrimitiveKind.STRING)
+	override fun serialize(encoder: Encoder, value: LocalDate) = encoder.encodeString(value.toString())
+	override fun deserialize(decoder: Decoder): LocalDate = LocalDate.parse(decoder.decodeString())
+}

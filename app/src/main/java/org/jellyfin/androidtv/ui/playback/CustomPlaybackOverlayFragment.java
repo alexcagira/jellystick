@@ -59,6 +59,7 @@ import org.jellyfin.androidtv.ui.livetv.LiveTvGuideFragmentHelperKt;
 import org.jellyfin.androidtv.ui.livetv.TvManager;
 import org.jellyfin.androidtv.ui.navigation.Destinations;
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository;
+import org.jellyfin.androidtv.ui.playback.modern.ModernPlayerOverlay;
 import org.jellyfin.androidtv.ui.playback.overlay.LeanbackOverlayFragment;
 import org.jellyfin.androidtv.ui.presentation.CardPresenter;
 import org.jellyfin.androidtv.ui.presentation.ChannelCardPresenter;
@@ -126,6 +127,10 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
     private boolean navigating = false;
 
     protected LeanbackOverlayFragment leanbackOverlayFragment;
+
+    // Streaming style controls replacing the Leanback ones (null for live TV or when disabled)
+    @Nullable
+    private ModernPlayerOverlay modernOverlay;
 
     private final Lazy<org.jellyfin.sdk.api.client.ApiClient> api = inject(org.jellyfin.sdk.api.client.ApiClient.class);
     private final Lazy<MediaManager> mediaManager = inject(MediaManager.class);
@@ -223,6 +228,25 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         if (playbackController != null) {
             playbackController.init(new VideoManager(requireActivity(), view, helper), this);
         }
+
+        if (ModernPlayerOverlay.isEnabledFor(mItemsToPlay)) {
+            modernOverlay = new ModernPlayerOverlay(requireContext());
+            modernOverlay.setOnClose(() -> {
+                closePlayer();
+                return kotlin.Unit.INSTANCE;
+            });
+
+            // The modern controls replace the title panel, the Leanback controls and the skip button
+            binding.topPanel.setVisibility(View.GONE);
+            binding.skipOverlay.setVisibility(View.GONE);
+            binding.leanbackFragment.setVisibility(View.GONE);
+            modernOverlay.attach(binding.getRoot());
+        }
+    }
+
+    @Nullable
+    public ModernPlayerOverlay getModernOverlay() {
+        return modernOverlay;
     }
 
     @Override
@@ -230,6 +254,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         super.onDestroyView();
 
         binding = null;
+        modernOverlay = null;
         // To fix race condition in hide timer
         mIsVisible = false;
     }
@@ -715,6 +740,8 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
     public void show() {
         // Already showing!
         if (mIsVisible) return;
+        // The modern controls have their own title
+        if (modernOverlay != null) return;
 
         binding.topPanel.startAnimation(slideDown);
         mIsVisible = true;
@@ -1215,6 +1242,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
     }
 
     public void setCurrentTime(long time) {
+        if (modernOverlay != null) modernOverlay.onProgress(time);
         binding.skipOverlay.setCurrentPositionMs(time);
         if (leanbackOverlayFragment != null)
             leanbackOverlayFragment.updateCurrentPosition();
@@ -1233,12 +1261,14 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
     }
 
     public void setPlayPauseActionState(final int state) {
+        if (modernOverlay != null) modernOverlay.onPlayStateChanged();
         leanbackOverlayFragment.updatePlayState();
     }
 
     public void updateDisplay() {
         BaseItemDto current = playbackControllerContainer.getValue().getPlaybackController().getCurrentlyPlayingItem();
         if (current != null && getContext() != null) {
+            if (modernOverlay != null) modernOverlay.onItemChanged();
             leanbackOverlayFragment.mediaInfoChanged();
             leanbackOverlayFragment.onFullyInitialized();
             leanbackOverlayFragment.recordingStateChanged();
@@ -1274,6 +1304,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
     }
 
     public void clearSkipOverlay() {
+        if (modernOverlay != null) modernOverlay.clearSkip();
         binding.skipOverlay.setTargetPositionMs(null);
     }
 

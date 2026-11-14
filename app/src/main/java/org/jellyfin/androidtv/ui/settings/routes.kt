@@ -21,6 +21,8 @@ import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.Settings
 import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SettingsSubtitlesBackgroundColorScreen
 import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SettingsSubtitlesScreen
 import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SettingsSubtitlesTextColorScreen
+import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeSectionsOrderScreen
+import org.jellyfin.androidtv.ui.settings.screen.home.SettingsMusicSectionsOrderScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeLibrariesScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeNextUpCutoffScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeScreen
@@ -92,6 +94,8 @@ object Routes {
 	const val HOME_SECTION = "/home/section/{index}"
 	const val HOME_NEXT_UP_CUTOFF = "/home/next-up-cutoff"
 	const val HOME_LIBRARIES = "/home/libraries"
+	const val HOME_SECTIONS_ORDER = "/home/sections-order"
+	const val MUSIC_SECTIONS_ORDER = "/home/music-sections-order"
 	const val LIVETV_GUIDE_FILTERS = "/livetv/guide/filters"
 	const val LIVETV_GUIDE_OPTIONS = "/livetv/guide/options"
 	const val LIVETV_GUIDE_CHANNEL_ORDER = "/livetv/guide/channel-order"
@@ -219,6 +223,12 @@ val routes = mapOf<String, RouteComposable>(
 	},
 	Routes.HOME_LIBRARIES to {
 		SettingsHomeLibrariesScreen()
+	},
+	Routes.HOME_SECTIONS_ORDER to {
+		SettingsHomeSectionsOrderScreen()
+	},
+	Routes.MUSIC_SECTIONS_ORDER to {
+		SettingsMusicSectionsOrderScreen()
 	},
 	Routes.LIVETV_GUIDE_FILTERS to {
 		SettingsLiveTvGuideFiltersScreen()

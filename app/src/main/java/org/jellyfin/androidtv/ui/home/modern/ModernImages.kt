@@ -22,10 +22,12 @@ internal object ModernImageSizes {
 	const val HERO = 1920
 	const val LOGO = 700
 	const val PERSON = 420
-	const val BACKGROUND = 480
-	const val BACKGROUND_BLUR = 40
-	const val GLASS = 960
-	const val GLASS_BLUR = 14
+	// Blurred images are requested small (quick for the server to blur and to download) and
+	// scaled up on screen, which keeps them soft
+	const val BACKGROUND = 200
+	const val BACKGROUND_BLUR = 16
+	const val GLASS = 480
+	const val GLASS_BLUR = 7
 }
 
 internal fun BaseItemDto.posterImage(): JellyfinImage? = when (type) {

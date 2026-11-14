@@ -46,6 +46,7 @@ import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 
+import org.jellyfin.androidtv.ui.playback.modern.SubtitleOffsetRenderersFactory;
 import org.jellyfin.androidtv.R;
 import org.jellyfin.androidtv.data.compat.StreamInfo;
 import org.jellyfin.androidtv.preference.UserPreferences;
@@ -218,14 +219,21 @@ public class VideoManager {
      */
     private ExoPlayer.Builder configureExoplayerBuilder(Context context, AssHandler assHandler) {
         ExoPlayer.Builder exoPlayerBuilder = new ExoPlayer.Builder(context);
-        DefaultRenderersFactory defaultRendererFactory = new DefaultRenderersFactory(context);
+        // Wraps the subtitle renderers so the subtitle offset of the player controls applies
+        DefaultRenderersFactory defaultRendererFactory = new SubtitleOffsetRenderersFactory(
+                context,
+                userPreferences.get(UserPreferences.Companion.getDolbyVisionAsHdr10())
+        );
         defaultRendererFactory.setEnableDecoderFallback(true);
         defaultRendererFactory.setExtensionRendererMode(determineExoPlayerExtensionRendererMode());
 
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(context);
         trackSelector.setParameters(trackSelector.buildUponParameters()
                 .setAudioOffloadPreferences(new TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                        .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+                        // Offload can stall the playback clock with some audio (e.g. E-AC3 Atmos on Fire TV): black screen, time not moving
+                        .setAudioOffloadMode(userPreferences.get(UserPreferences.Companion.getAudioOffloadEnabled())
+                                ? TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                                : TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
                         .build()
                 )
                 .setAllowInvalidateSelectionsOnRendererCapabilitiesChange(true)

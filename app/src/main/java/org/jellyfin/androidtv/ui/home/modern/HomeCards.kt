@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,7 +31,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -425,8 +428,14 @@ internal fun RankedPosterCard(
 			softWrap = false,
 			modifier = Modifier
 				.align(Alignment.BottomStart)
-				// Move the baseline to the bottom of the poster (Bebas Neue descent is 30% of the font size)
-				.offset(y = RANK_FONT_SIZE * 0.3f),
+				// Sit the digits on the bottom edge of the poster: the baseline is placed on it, so
+				// nothing is cut off whatever the font metrics are
+				.layout { measurable, constraints ->
+					val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+					val baseline = placeable[LastBaseline].takeIf { it != AlignmentLine.Unspecified } ?: placeable.height
+					val height = constraints.maxHeight
+					layout(placeable.width, height) { placeable.place(0, height - baseline) }
+				},
 		)
 
 		PosterCard(

@@ -33,9 +33,12 @@ import org.jellyfin.androidtv.ui.InteractionTrackerViewModel
 import org.jellyfin.androidtv.ui.details.modern.ModernDetailsRepository
 import org.jellyfin.androidtv.ui.details.modern.ModernDetailsViewModel
 import org.jellyfin.androidtv.ui.details.modern.ThemeMusicPlayer
+import org.jellyfin.androidtv.ui.home.modern.HomeCache
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
 import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicViewModel
 import org.jellyfin.androidtv.ui.home.modern.TmdbTrendingClient
 import org.jellyfin.androidtv.ui.itemhandling.ItemLauncher
 import org.jellyfin.androidtv.ui.navigation.Destinations
@@ -156,12 +159,14 @@ val appModule = module {
 	single<CustomMessageRepository> { CustomMessageRepositoryImpl() }
 	single<NavigationRepository> { NavigationRepositoryImpl(Destinations.home) }
 	single<SearchRepository> { SearchRepositoryImpl(get(), get()) }
-	single { LibraryVisibilityRepository(get(), get(), get()) }
+	single { LibraryVisibilityRepository(get(), get(), get(), androidContext()) }
 
 	// Modern home screen
 	single { TmdbTrendingClient(BuildConfig.TMDB_API_KEY) }
 	single { ModernHomeRepository(get(), get(), get()) }
+	single { HomeCache(androidContext()) }
 	single { ModernDetailsRepository(get(), get()) }
+	single { ModernMusicRepository(get()) }
 	single { ThemeMusicPlayer(androidContext(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
 	single<MediaSegmentRepository> { MediaSegmentRepositoryImpl(get(), get()) }
 	single<ExternalAppRepository> { ExternalAppRepository(get(), getAll(), get<DefaultExternalPlayerApi>()) }
@@ -180,9 +185,10 @@ val appModule = module {
 	viewModel { StillWatchingViewModel(get(), get(), get(), get()) }
 	viewModel { PhotoPlayerViewModel(get(), get()) }
 	viewModel { SearchViewModel(get()) }
-	viewModel { ModernHomeViewModel(get(), get()) }
+	viewModel { ModernHomeViewModel(get(), get(), get(), get()) }
 	viewModel { ModernDetailsViewModel(get(), get()) }
 	viewModel { ModernWatchlistViewModel(get(), get()) }
+	viewModel { ModernMusicViewModel(get(), get(), get()) }
 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }
 	viewModel { SettingsViewModel() }
 	viewModel { SettingsLibrariesScreenViewModel(get()) }

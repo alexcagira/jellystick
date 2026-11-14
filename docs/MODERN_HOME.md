@@ -9,10 +9,11 @@ calidad (Dolby Vision, Atmos, HDR, 4K…) y fecha de estreno.
 | Fila | Origen de los datos |
 |---|---|
 | Carrusel principal | Películas y series aleatorias con fondo (prioriza las que tienen logo) |
-| Continue watching & next up | `Items/Resume` + `Shows/NextUp` (las series ya empezadas no se repiten) |
+| Continue Watching | Episodios/películas a medias y siguientes episodios mezclados, ordenados por lo último que viste (para el siguiente episodio cuenta la última vez que viste la serie) |
 | Watchlist | Películas y series marcadas con el botón de watchlist (ver más abajo) |
 | Trending this week | Lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador). Los huecos se rellenan con las tendencias de TMDB (si hay clave) y con lo mejor valorado reciente |
-| Latest releases | Películas y episodios por fecha de estreno (una tarjeta por serie, con la fecha) |
+| Latest Episodes | Episodios por fecha de emisión (una tarjeta por serie, con la fecha) |
+| Latest Films | Películas por fecha de estreno, con la fecha |
 | Recently added movies / shows | Por fecha de añadido al servidor |
 | Favourites | Tus favoritos |
 
@@ -35,9 +36,16 @@ Si una película o serie está en varias bibliotecas (por ejemplo, una por idiom
   la de Brasil. Idiomas sin bandera se muestran con su código ("ARA").
 - En las series se usan los idiomas y la calidad de uno de sus episodios.
 
-## Bibliotecas ocultas
+## Orden de las filas del inicio
 
-- **Mantén pulsado OK** sobre una biblioteca de la barra flotante → *Ocultar*.
+Ajustes → **Secciones del inicio** (también en Personalización → Inicio): selecciona una sección con OK, muévela
+con arriba/abajo y pulsa OK otra vez para soltarla. *Restablecer el orden por defecto* vuelve al orden original.
+
+## Bibliotecas: mover y ocultar
+
+- **Mantén pulsado OK** sobre una biblioteca de la barra flotante → *Mover*: con izquierda/derecha cambia de sitio,
+  OK (o Atrás) para terminar. El orden se guarda en el dispositivo.
+- **Mantén pulsado OK** → *Ocultar*.
 - Una biblioteca oculta desaparece de la barra, del inicio (todas sus filas) y de la búsqueda. Útil si
   tienes las mismas películas dos veces (por ejemplo "Films" en inglés y "Películas" en español).
 - Para volver a mostrarla: Ajustes → **Hidden libraries / Bibliotecas ocultas** (también en
@@ -62,6 +70,34 @@ de la app. Suena una vez, no en bucle.
 - Se desactiva en Ajustes → Personalización → Inicio → **Música de la serie**. El volumen está en
   `ThemeMusicPlayer.kt` (`MAX_VOLUME`).
 
+## Biblioteca de música
+
+Al abrir una biblioteca de música desde la barra se muestra una página con el mismo estilo que el inicio:
+
+- **Media bar** con álbumes recomendados ("Porque escuchas a …"): Reproducir, **Radio** (mezcla
+  instantánea a partir del álbum) e Ir al álbum. Izquierda/derecha en los botones de los extremos cambian
+  de recomendación; pasan solas cada 10 segundos cuando el foco no está en la barra.
+- Accesos rápidos: Álbumes, Artistas del álbum, Artistas, Géneros y Aleatorio.
+- Filas: Añadido recientemente, Escuchado recientemente, **Radios**, Recomendado para ti, Álbumes
+  favoritos y Listas de reproducción. El orden se cambia en Ajustes → **Secciones de música** (igual que
+  las del inicio).
+- En las tarjetas: OK abre el álbum o la lista (en canciones y radios, reproduce); el botón
+  play/pausa del mando reproduce directamente; mantener OK en una canción abre su álbum.
+
+Las recomendaciones y las radios salen del propio servidor de Jellyfin, sin servicios externos:
+
+- Se miran las canciones que más escuchas (número de reproducciones). Los álbumes más escuchados sirven
+  de "semilla" y se piden álbumes parecidos (`/Albums/{id}/Similar`), quitando los que ya escuchas.
+- Las radios son mezclas instantáneas de Jellyfin (`InstantMix`): "Tu mix" a partir de tu álbum más
+  escuchado, una radio por cada uno de tus 4 artistas más escuchados y otra por tus 4 géneros favoritos.
+- Si todavía no hay nada escuchado, se muestran álbumes al azar y géneros de la biblioteca.
+- Las sugerencias mejoran con buenos metadatos (géneros y artistas bien etiquetados, p. ej. con
+  MusicBrainz). Opcionalmente, el plugin de ListenBrainz/Last.fm del servidor registra lo que escuchas,
+  pero no hace falta para esta página.
+
+Se desactiva en Ajustes → Personalización → Inicio → **Página de música moderna** (vuelve la página clásica).
+El código está en `app/src/main/java/org/jellyfin/androidtv/ui/music/modern/`.
+
 ## Fichas de películas, series, temporadas y personas
 
 "More info" (y cualquier ficha de la app) abre la nueva página para películas, series, temporadas y
@@ -76,6 +112,35 @@ manteniendo OK se abre su ficha clásica.
 
 Se puede desactivar en Ajustes → Personalización → Inicio → **Fichas modernas**. Los demás tipos
 (episodios, álbumes, colecciones…) siguen usando la ficha clásica.
+
+## Reproductor
+
+Controles nuevos para películas y episodios (la TV en directo mantiene los originales, con la guía):
+
+- **Reproduciendo**: sin nada en pantalla. **OK** pausa, **izquierda/derecha** avanzan o retroceden (mantener
+  pulsado acelera) con miniatura de la escena, **arriba/abajo** muestran los controles.
+- **Controles**: título y logo arriba; barra de progreso (OK reproduce/pausa) con los
+  capítulos marcados con líneas, tiempo transcurrido y restante; episodio anterior / siguiente y "Termina a las…"
+  abajo a la izquierda; abajo a la derecha **audio**, **subtítulos**, **escenas**, **calidad**, **velocidad** y
+  **desfase de subtítulos**. En pausa se ven dos barras discretas en el centro. Se ocultan solos a los 5 segundos; **Atrás** también los oculta.
+- **En pausa** (sin controles): "Estás viendo" con el logo, temporada y episodio, año, duración, valoración y
+  sinopsis.
+- **Saltar intro / Saltar créditos / Saltar resumen**: usa los segmentos del servidor (plugin *Intro Skipper* o
+  segmentos de Jellyfin 10.10+) cuando su acción es "Preguntar" en los ajustes de reproducción (segmentos multimedia). OK salta.
+- **Desfase de subtítulos**: de ±0,1 s o ±0,5 s, se reinicia en cada reproducción. No afecta a los subtítulos
+  ASS/SSA con estilos (los dibuja otra librería).
+
+Se desactiva en Ajustes → Personalización → Inicio → **Controles modernos del reproductor**.
+
+**Arranque rápido**: el inicio guarda lo que mostró la última vez y lo enseña al momento al abrir la app; las
+filas nuevas se cargan por detrás y el carrusel nuevo aparece en el siguiente arranque.
+
+**Vídeo congelado con Dolby Atmos** (pantalla negra y el tiempo no avanza): el *audio offload* está desactivado por
+defecto (Ajustes → Personalización → Inicio → **Audio offload**).
+
+**Pantalla negra con Dolby Vision**: si un archivo Dolby Vision (por ejemplo WEB-DL "DV HDR10+") se queda en negro,
+activa Ajustes → Personalización → Inicio → **Reproducir Dolby Vision como HDR10**. Los archivos Dolby Vision
+perfil 8 llevan una capa HDR10, que se reproduce con el decodificador HEVC normal.
 
 ## Activar / desactivar
 
@@ -150,5 +215,7 @@ Todo está en `app/src/main/java/org/jellyfin/androidtv/ui/home/modern/`:
 | `MediaBadges.kt` | Reglas de calidad, idiomas y de "New episode/season" (con tests en `app/src/test`) |
 | `LanguageFlags.kt` | Banderas de idioma (dibujadas con código, sin imágenes) |
 | `../../details/modern/` | Fichas de películas/series/temporadas/personas y `ThemeMusicPlayer.kt` |
+| `../../playback/modern/` | Controles del reproductor, menús, miniaturas y desfase de subtítulos |
+| `../../music/modern/` | Página de música: media bar, radios y recomendaciones |
 
 La fuente de los títulos es Bebas Neue (licencia SIL OFL, ver `docs/fonts/BebasNeue-OFL.txt`).

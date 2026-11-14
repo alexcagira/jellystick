@@ -19,11 +19,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -47,12 +55,27 @@ internal fun ModernDialog(
 	maxWidth: Dp = 520.dp,
 	content: @Composable ColumnScope.() -> Unit,
 ) {
+	// Dialogs opened by holding OK: the key is still down when the dialog appears, so its repeats
+	// and its release must not select the first option. Only a new press counts
+	var armed by remember(visible) { mutableStateOf(false) }
+
 	DialogBase(
 		visible = visible,
 		onDismissRequest = onDismissRequest,
 	) {
 		Column(
 			modifier = modifier
+				.onPreviewKeyEvent { event ->
+					if (armed || !event.isConfirmKey) return@onPreviewKeyEvent false
+					if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+						armed = true
+						false
+					} else {
+						// Repeats and the release of the press that opened the dialog
+						if (event.type == KeyEventType.KeyUp) armed = true
+						true
+					}
+				}
 				.widthIn(min = 320.dp, max = maxWidth)
 				.background(Color(0xF2121722), dialogShape)
 				.border(1.dp, ModernHomeColors.GlassBorder, dialogShape)
@@ -193,3 +216,6 @@ private fun MenuOptionRow(
 		)
 	}
 }
+
+private val KeyEvent.isConfirmKey: Boolean
+	get() = key == Key.DirectionCenter || key == Key.Enter || key == Key.NumPadEnter

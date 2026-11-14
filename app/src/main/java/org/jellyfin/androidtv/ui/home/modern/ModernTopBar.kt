@@ -1,9 +1,10 @@
 package org.jellyfin.androidtv.ui.home.modern
 
+import android.widget.Toast
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -40,6 +43,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,13 +85,20 @@ internal fun ModernTopBar(
 	watchlistActive: Boolean = false,
 	onNavigateDown: () -> Boolean = { false },
 	onHideLibrary: ((BaseItemDto) -> Unit)? = null,
+	onMoveLibrary: ((BaseItemDto, Int) -> Unit)? = null,
 ) {
 	val navigationRepository = koinInject<NavigationRepository>()
 	val itemLauncher = koinInject<ItemLauncher>()
 	val settingsViewModel = koinActivityViewModel<SettingsViewModel>()
+	val context = LocalContext.current
 	var libraryToHide by remember { mutableStateOf<BaseItemDto?>(null) }
 	// Keeps the name visible while the dialog fades out
 	var lastLibraryToHide by remember { mutableStateOf<BaseItemDto?>(null) }
+	// Hold OK on a library: menu with "Move" and "Hide"
+	var libraryMenu by remember { mutableStateOf<BaseItemDto?>(null) }
+	var lastLibraryMenu by remember { mutableStateOf<BaseItemDto?>(null) }
+	// Library being moved with left/right
+	var movingLibraryId by remember { mutableStateOf<java.util.UUID?>(null) }
 
 	ToolbarLayout(
 		modifier = modifier
@@ -99,7 +110,7 @@ internal fun ModernTopBar(
 			)
 			// Down always leaves the bar (to the hero buttons), whatever is below it
 			.onPreviewKeyEvent { event ->
-				event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && onNavigateDown()
+				movingLibraryId == null && event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && onNavigateDown()
 			}
 			.focusRestorer()
 			.focusGroup(),
@@ -118,19 +129,28 @@ internal fun ModernTopBar(
 				)
 
 				for (library in libraries) {
-					NavigationPillButton(
-						text = library.name.orEmpty(),
-						icon = library.collectionType.navigationIcon,
-						active = false,
-						onClick = { itemLauncher.launchUserView(library) },
-						// Hold OK to hide the library
-						onLongClick = onHideLibrary?.let {
-							{
-								libraryToHide = library
-								lastLibraryToHide = library
-							}
-						},
-					)
+					// Keyed so the focus follows the library when it moves
+					key(library.id) {
+						NavigationPillButton(
+							text = library.name.orEmpty(),
+							icon = library.collectionType.navigationIcon,
+							active = false,
+							moving = movingLibraryId == library.id,
+							onClick = {
+								if (movingLibraryId == library.id) movingLibraryId = null
+								else itemLauncher.launchUserView(library)
+							},
+							// Hold OK: move or hide the library
+							onLongClick = if (onHideLibrary != null || onMoveLibrary != null) {
+								{
+									libraryMenu = library
+									lastLibraryMenu = library
+								}
+							} else null,
+							onMove = { offset -> onMoveLibrary?.invoke(library, offset) },
+							onMoveDone = { movingLibraryId = null },
+						)
+					}
 				}
 
 				NavigationPillButton(
@@ -162,6 +182,29 @@ internal fun ModernTopBar(
 				UserButton()
 			}
 		},
+	)
+
+	val menuLibrary = lastLibraryMenu
+	ModernMenuDialog(
+		visible = libraryMenu != null,
+		title = menuLibrary?.name.orEmpty(),
+		subtitle = null,
+		options = buildList {
+			if (menuLibrary == null) return@buildList
+			if (onMoveLibrary != null) {
+				add(ModernMenuOption(stringResource(R.string.modern_home_move), R.drawable.ic_move_horizontal) {
+					movingLibraryId = menuLibrary.id
+					Toast.makeText(context, context.getString(R.string.modern_home_move_hint), Toast.LENGTH_LONG).show()
+				})
+			}
+			if (onHideLibrary != null) {
+				add(ModernMenuOption(stringResource(R.string.modern_home_hide), R.drawable.ic_visibility_off) {
+					libraryToHide = menuLibrary
+					lastLibraryToHide = menuLibrary
+				})
+			}
+		},
+		onDismissRequest = { libraryMenu = null },
 	)
 
 	val hideName = lastLibraryToHide?.name.orEmpty()
@@ -219,19 +262,50 @@ private fun NavigationPillButton(
 	active: Boolean,
 	onClick: () -> Unit,
 	onLongClick: (() -> Unit)? = null,
+	moving: Boolean = false,
+	onMove: (Int) -> Unit = {},
+	onMoveDone: () -> Unit = {},
 ) {
 	val interactionSource = remember { MutableInteractionSource() }
 	val focused by interactionSource.collectIsFocusedAsState()
 
 	val containerColor = when {
+		moving -> ModernHomeColors.Accent
 		focused -> Color.White
 		active -> ModernHomeColors.PillActive
 		else -> Color.Transparent
 	}
-	val contentColor = if (focused) Color.Black else ModernHomeColors.TextPrimary
+	val contentColor = if (focused && !moving) Color.Black else ModernHomeColors.TextPrimary
 
 	Row(
 		modifier = Modifier
+			// Leaving the library ends the move
+			.onFocusChanged { state -> if (moving && !state.isFocused) onMoveDone() }
+			// While moving, left/right move the library instead of the focus
+			.onPreviewKeyEvent { event ->
+				if (!moving) return@onPreviewKeyEvent false
+				val isDown = event.type == KeyEventType.KeyDown
+				when (event.key) {
+					Key.DirectionLeft -> {
+						if (isDown) onMove(-1)
+						true
+					}
+
+					Key.DirectionRight -> {
+						if (isDown) onMove(1)
+						true
+					}
+
+					Key.DirectionUp, Key.DirectionDown -> true
+
+					Key.Back, Key.Escape -> {
+						if (event.type == KeyEventType.KeyUp) onMoveDone()
+						true
+					}
+
+					else -> false
+				}
+			}
 			.combinedClickable(
 				interactionSource = interactionSource,
 				indication = null,
@@ -252,7 +326,7 @@ private fun NavigationPillButton(
 		if (text != null) {
 			Spacer(Modifier.width(6.dp))
 			Text(
-				text = text,
+				text = if (moving) "‹ $text ›" else text,
 				color = contentColor,
 				fontSize = 12.sp,
 				fontWeight = FontWeight.SemiBold,

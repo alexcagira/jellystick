@@ -60,7 +60,8 @@ class ModernHomeRepository(
 	// Hero carousel
 
 	suspend fun loadHero(): List<HeroSlide> = withContext(Dispatchers.IO) {
-		val hidden = hiddenItemIds()
+		// Both at the same time: the hero is the first thing on screen
+		val hiddenAsync = async { hiddenItemIds() }
 		val items = api.itemsApi.getItems(
 			GetItemsRequest(
 				includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
@@ -72,7 +73,7 @@ class ModernHomeRepository(
 				enableTotalRecordCount = false,
 				limit = HERO_CANDIDATES,
 			)
-		).content.items.withoutHidden(hidden)
+		).content.items.withoutHidden(hiddenAsync.await())
 
 		// Prefer items with a logo, they look a lot better in the hero
 		items
@@ -125,6 +126,9 @@ class ModernHomeRepository(
 			.map { posterCard(it, context, withReleaseDate = false) }
 	}
 
+	/** Identifies the server and session for the home cache */
+	fun cacheKey(): String = "${api.baseUrl}|${api.accessToken?.hashCode()}"
+
 	suspend fun setPlayed(itemId: UUID) = withContext(Dispatchers.IO) {
 		api.playStateApi.markPlayedItem(itemId)
 		Unit
@@ -132,7 +136,11 @@ class ModernHomeRepository(
 
 	// Rows
 
-	suspend fun loadSections(): List<HomeSection> = withContext(Dispatchers.IO) {
+	/**
+	 * Load all rows. [onPartial] receives the rows as soon as the quick ones are ready (without
+	 * "Trending this week" and the series badges), so the first start shows content sooner.
+	 */
+	suspend fun loadSections(onPartial: ((List<HomeSection>) -> Unit)? = null): List<HomeSection> = withContext(Dispatchers.IO) {
 		// Titles of hidden libraries (e.g. the same movies with Spanish metadata) never show up on the home screen
 		val hidden = hiddenItemIds()
 
@@ -142,8 +150,10 @@ class ModernHomeRepository(
 				safe("next up") { nextUpBySeries() }.orEmpty().filterKeys { it !in hidden }
 			}
 			val continueWatchingAsync = async { safe("continue watching") { continueWatching() }.orEmpty().withoutHidden(hidden) }
+			// The slowest row (plays of every user), started first and added last
 			val trendingAsync = async { safe("trending") { trending() }.orEmpty().withoutHidden(hidden) }
-			val latestReleasesAsync = async { safe("latest releases") { latestReleases() }.orEmpty().withoutHidden(hidden) }
+			val latestEpisodesAsync = async { safe("latest episodes") { latestEpisodes() }.orEmpty().withoutHidden(hidden) }
+			val latestFilmsAsync = async { safe("latest films") { latestFilms() }.orEmpty().withoutHidden(hidden) }
 			val recentMoviesAsync = async { safe("recent movies") { recentMovies() }.orEmpty().withoutHidden(hidden) }
 			val favoritesAsync = async { safe("favorites") { favorites() }.orEmpty().withoutHidden(hidden) }
 			val watchlistAsync = async { safe("watchlist") { watchlist() }.orEmpty().withoutHidden(hidden) }
@@ -161,8 +171,8 @@ class ModernHomeRepository(
 			val recentShowsAsync = async { safe("recent shows") { itemsByIds(recentSeriesIds, CARD_FIELDS) }.orEmpty() }
 
 			val continueWatching = continueWatchingAsync.await()
-			val trending = trendingAsync.await()
-			val latestReleases = latestReleasesAsync.await()
+			val latestEpisodes = latestEpisodesAsync.await()
+			val latestFilms = latestFilmsAsync.await()
 			val recentMovies = recentMoviesAsync.await()
 			val recentShows = recentShowsAsync.await()
 			val favorites = favoritesAsync.await()
@@ -171,6 +181,39 @@ class ModernHomeRepository(
 			// Episode shown on a focused series: the next one to watch, otherwise the newest one
 			val episodeHints = newestEpisodeBySeries + nextUpBySeries
 
+			fun build(trending: List<BaseItemDto>, seriesMedia: Map<UUID, SeriesMedia>): List<HomeSection> {
+				val cardContext = CardContext(
+					labels = labels,
+					seriesMedia = seriesMedia,
+					episodeHints = episodeHints,
+					nextUpBySeries = nextUpBySeries,
+				)
+
+				fun posters(items: List<BaseItemDto>, withReleaseDate: Boolean = false) = items
+					// The same movie/show can exist in several libraries (e.g. one per language)
+					.distinctBy { MediaBadges.duplicateKey(it) }
+					.map { posterCard(it, cardContext, withReleaseDate) }
+					.distinctBy { it.key }
+
+				return listOfNotNull(
+					section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, continueWatching.map { landscapeCard(it) }.distinctBy { it.key }),
+					section(HomeSectionType.WATCHLIST, CardStyle.POSTER, posters(watchlist)),
+					section(HomeSectionType.TRENDING, CardStyle.RANKED, posters(trending).take(RANKED_LIMIT)),
+					section(HomeSectionType.LATEST_EPISODES, CardStyle.POSTER, posters(latestEpisodes, withReleaseDate = true)),
+					section(HomeSectionType.LATEST_FILMS, CardStyle.POSTER, posters(latestFilms, withReleaseDate = true)),
+					section(HomeSectionType.RECENT_MOVIES, CardStyle.POSTER, posters(recentMovies)),
+					section(HomeSectionType.RECENT_SHOWS, CardStyle.POSTER, posters(recentShows)),
+					section(HomeSectionType.FAVORITES, CardStyle.POSTER, posters(favorites)),
+				)
+			}
+
+			// Quick rows first, with the badges already known (cached series)
+			if (onPartial != null && !trendingAsync.isCompleted) {
+				onPartial(build(trending = emptyList(), seriesMedia = cachedSeriesMedia()))
+			}
+
+			val trending = trendingAsync.await()
+
 			// Series have no media streams themselves: quality and languages come from one of their episodes
 			val posterSeriesIds = (watchlist + trending + recentShows + favorites)
 				.filter { it.type == BaseItemKind.SERIES }
@@ -178,30 +221,11 @@ class ModernHomeRepository(
 				.distinct()
 			val seriesMedia = safe("series media") { seriesMedia(posterSeriesIds, episodeHints) }.orEmpty()
 
-			val cardContext = CardContext(
-				labels = labels,
-				seriesMedia = seriesMedia,
-				episodeHints = episodeHints,
-				nextUpBySeries = nextUpBySeries,
-			)
-
-			fun posters(items: List<BaseItemDto>, withReleaseDate: Boolean = false) = items
-				// The same movie/show can exist in several libraries (e.g. one per language)
-				.distinctBy { MediaBadges.duplicateKey(it) }
-				.map { posterCard(it, cardContext, withReleaseDate) }
-				.distinctBy { it.key }
-
-			listOfNotNull(
-				section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, continueWatching.map { landscapeCard(it) }.distinctBy { it.key }),
-				section(HomeSectionType.WATCHLIST, CardStyle.POSTER, posters(watchlist)),
-				section(HomeSectionType.TRENDING, CardStyle.RANKED, posters(trending).take(RANKED_LIMIT)),
-				section(HomeSectionType.LATEST_RELEASES, CardStyle.POSTER, posters(latestReleases, withReleaseDate = true)),
-				section(HomeSectionType.RECENT_MOVIES, CardStyle.POSTER, posters(recentMovies)),
-				section(HomeSectionType.RECENT_SHOWS, CardStyle.POSTER, posters(recentShows)),
-				section(HomeSectionType.FAVORITES, CardStyle.POSTER, posters(favorites)),
-			)
+			build(trending, seriesMedia)
 		}
 	}
+
+	private fun cachedSeriesMedia(): Map<UUID, SeriesMedia> = synchronized(seriesMediaCache) { HashMap(seriesMediaCache) }
 
 	private suspend fun hiddenItemIds(): Set<UUID> = safe("hidden libraries") { libraryVisibilityRepository.hiddenItemIds() }.orEmpty()
 
@@ -250,35 +274,72 @@ class ModernHomeRepository(
 		.mapNotNull { episode -> episode.seriesId?.let { seriesId -> seriesId to episode } }
 		.toMap()
 
-	private suspend fun continueWatching(): List<BaseItemDto> {
-		val resume = api.itemsApi.getResumeItems(
-			GetResumeItemsRequest(
-				limit = SECTION_LIMIT,
-				mediaTypes = setOf(MediaType.VIDEO),
-				fields = CARD_FIELDS,
-				imageTypeLimit = 1,
-				enableTotalRecordCount = false,
-			)
-		).content.items
+	/**
+	 * Episodes/movies in progress and next episodes, mixed and sorted by the last time something of
+	 * them was watched (the series for next episodes), most recent first.
+	 */
+	private suspend fun continueWatching(): List<BaseItemDto> = coroutineScope {
+		val resumeAsync = async {
+			api.itemsApi.getResumeItems(
+				GetResumeItemsRequest(
+					limit = SECTION_LIMIT,
+					mediaTypes = setOf(MediaType.VIDEO),
+					fields = CARD_FIELDS,
+					imageTypeLimit = 1,
+					enableTotalRecordCount = false,
+				)
+			).content.items
+		}
 
-		val nextUp = api.tvShowsApi.getNextUp(
-			GetNextUpRequest(
-				limit = SECTION_LIMIT,
-				fields = CARD_FIELDS,
-				imageTypeLimit = 1,
-				enableResumable = false,
-				enableTotalRecordCount = false,
-			)
-		).content.items
+		val nextUpAsync = async {
+			api.tvShowsApi.getNextUp(
+				GetNextUpRequest(
+					limit = SECTION_LIMIT,
+					fields = CARD_FIELDS,
+					imageTypeLimit = 1,
+					enableResumable = false,
+					enableTotalRecordCount = false,
+				)
+			).content.items
+		}
 
+		val seriesActivityAsync = async { safe("series activity") { seriesActivity() }.orEmpty() }
+
+		val resume = resumeAsync.await()
 		// Don't show the next episode of a series that is already in progress
 		val resumedSeries = resume.mapNotNull { it.seriesId }.toSet()
-		val filteredNextUp = nextUp.filter { episode ->
+		val nextUp = nextUpAsync.await().filter { episode ->
 			val seriesId = episode.seriesId
 			seriesId == null || !resumedSeries.contains(seriesId)
 		}
 
-		return (resume + filteredNextUp).distinctBy { it.id }
+		ContinueWatchingOrder.sort(resume + nextUp, seriesActivityAsync.await())
+	}
+
+	/**
+	 * Last time an episode of each series was watched (or started).
+	 */
+	private suspend fun seriesActivity(): Map<UUID, LocalDateTime> {
+		val episodes = api.itemsApi.getItems(
+			GetItemsRequest(
+				includeItemTypes = setOf(BaseItemKind.EPISODE),
+				recursive = true,
+				sortBy = setOf(ItemSortBy.DATE_PLAYED),
+				sortOrder = setOf(SortOrder.DESCENDING),
+				enableImages = false,
+				enableTotalRecordCount = false,
+				limit = SERIES_ACTIVITY_LIMIT,
+			)
+		).content.items
+
+		val activity = HashMap<UUID, LocalDateTime>()
+		for (episode in episodes) {
+			val seriesId = episode.seriesId ?: continue
+			val lastPlayed = episode.userData?.lastPlayedDate ?: continue
+			val current = activity[seriesId]
+			if (current == null || lastPlayed.isAfter(current)) activity[seriesId] = lastPlayed
+		}
+		return activity
 	}
 
 	/**
@@ -449,9 +510,10 @@ class ModernHomeRepository(
 		return index
 	}
 
-	private suspend fun latestReleases(): List<BaseItemDto> = api.itemsApi.getItems(
+	/** Latest aired episodes, one card per series with the date of its most recent episode */
+	private suspend fun latestEpisodes(): List<BaseItemDto> = api.itemsApi.getItems(
 		GetItemsRequest(
-			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.EPISODE),
+			includeItemTypes = setOf(BaseItemKind.EPISODE),
 			recursive = true,
 			sortBy = setOf(ItemSortBy.PREMIERE_DATE),
 			sortOrder = setOf(SortOrder.DESCENDING),
@@ -460,12 +522,26 @@ class ModernHomeRepository(
 			fields = CARD_FIELDS,
 			imageTypeLimit = 1,
 			enableTotalRecordCount = false,
-			limit = LATEST_RELEASES_CANDIDATES,
+			limit = LATEST_EPISODES_CANDIDATES,
 		)
 	).content.items
-		// Show each series only once, with the date of its most recent episode
 		.distinctBy { it.seriesId ?: it.id }
 		.take(SECTION_LIMIT)
+
+	/** Latest released films */
+	private suspend fun latestFilms(): List<BaseItemDto> = api.itemsApi.getItems(
+		GetItemsRequest(
+			includeItemTypes = setOf(BaseItemKind.MOVIE),
+			recursive = true,
+			sortBy = setOf(ItemSortBy.PREMIERE_DATE),
+			sortOrder = setOf(SortOrder.DESCENDING),
+			maxPremiereDate = LocalDateTime.now(),
+			fields = CARD_FIELDS,
+			imageTypeLimit = 1,
+			enableTotalRecordCount = false,
+			limit = SECTION_LIMIT,
+		)
+	).content.items
 
 	private suspend fun recentMovies(): List<BaseItemDto> = api.itemsApi.getItems(
 		GetItemsRequest(
@@ -709,11 +785,12 @@ class ModernHomeRepository(
 		const val SECTION_LIMIT = 30
 		const val RANKED_LIMIT = 10
 		const val TRENDING_DAYS = 7L
-		const val RECENTLY_PLAYED_LIMIT = 300
-		const val NEXT_UP_LIMIT = 300
-		const val RECENT_EPISODES_LIMIT = 300
-		const val LATEST_RELEASES_CANDIDATES = 80
+		const val RECENTLY_PLAYED_LIMIT = 200
+		const val NEXT_UP_LIMIT = 150
+		const val RECENT_EPISODES_LIMIT = 150
+		const val LATEST_EPISODES_CANDIDATES = 80
 		const val SERIES_MEDIA_LOOKUPS = 40
+		const val SERIES_ACTIVITY_LIMIT = 150
 		const val WATCHLIST_PAGE_LIMIT = 300
 
 		const val POSTER_IMAGE_WIDTH = 360
