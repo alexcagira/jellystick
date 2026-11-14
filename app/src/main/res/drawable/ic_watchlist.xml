@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Bookmark outline with a plus -->
+    <path
+        android:fillColor="#fff"
+        android:fillType="evenOdd"
+        android:pathData="M7,3h10a2,2 0,0 1,2 2v16l-7,-4 -7,4V5a2,2 0,0 1,2 -2zM7.8,4.8a0.8,0.8 0,0 0,-0.8 0.8v12.3l5,-2.86 5,2.86V5.6a0.8,0.8 0,0 0,-0.8 -0.8zM11.15,6.75h1.7v2.4h2.4v1.7h-2.4v2.4h-1.7v-2.4h-2.4v-1.7h2.4z" />
+</vector>

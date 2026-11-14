@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pantalla de inicio moderna -->
+    <string name="modern_home_enabled">Pantalla de inicio moderna</string>
+    <string name="modern_home_enabled_description">Inicio estilo plataforma de streaming con carrusel, tendencias y etiquetas de nuevos episodios. Vuelve a abrir el inicio para aplicarlo.</string>
+
+    <string name="modern_home_libraries">Bibliotecas ocultas</string>
+    <string name="modern_home_libraries_description">Las bibliotecas ocultas desaparecen de la barra de navegación, del inicio y de los resultados de búsqueda</string>
+
+    <string name="modern_home_libraries_hidden">Ocultas</string>
+    <string name="modern_home_libraries_visible">Visibles</string>
+    <string name="modern_home_libraries_none_hidden">No hay bibliotecas ocultas</string>
+    <string name="modern_home_libraries_hint">Mantén pulsado OK sobre una biblioteca de la barra de navegación para ocultarla</string>
+    <string name="modern_home_show_again">Selecciónala para volver a mostrarla</string>
+    <string name="modern_home_hide">Ocultar</string>
+    <string name="modern_home_hide_library_title">¿Ocultar %1$s?</string>
+    <string name="modern_home_hide_library_message">Desaparecerá de la barra de navegación, del inicio y de los resultados de búsqueda. Puedes volver a mostrarla en Ajustes › Bibliotecas ocultas.</string>
+
+    <string name="modern_home_continue_watching">Seguir viendo y a continuación</string>
+    <string name="modern_home_trending">Tendencias de la semana</string>
+    <string name="modern_home_latest_releases">Últimos estrenos</string>
+    <string name="modern_home_recent_movies">Películas añadidas recientemente</string>
+    <string name="modern_home_recent_shows">Series añadidas recientemente</string>
+    <string name="modern_home_favorites">Favoritos</string>
+
+    <string name="modern_home_new_episode">Nuevo episodio</string>
+    <string name="modern_home_new_season">Nueva temporada</string>
+    <string name="modern_home_new_series">Nueva serie</string>
+
+    <string name="modern_home_time_left_minutes">Quedan %1$d min</string>
+    <string name="modern_home_time_left_hours">Quedan %1$d h %2$d min</string>
+
+    <string name="modern_home_more_info">Más información</string>
+    <string name="modern_home_tv_show">Serie</string>
+    <string name="modern_home_movie">Película</string>
+    <string name="modern_home_empty">Aún no hay nada por aquí</string>
+
+    <!-- Details pages -->
+    <string name="modern_details_enabled">Fichas modernas</string>
+    <string name="modern_details_enabled_description">Páginas estilo plataforma de streaming para películas, series, temporadas y personas</string>
+    <string name="modern_details_add_favorite">Añadir a favoritos</string>
+    <string name="modern_details_favorite">En favoritos</string>
+    <string name="modern_details_trailer">Tráiler</string>
+    <string name="modern_details_more_options">Más opciones</string>
+    <string name="modern_details_media_info">Información del archivo</string>
+    <string name="modern_details_video">Vídeo</string>
+    <string name="modern_details_audio">Audio</string>
+    <string name="modern_details_subtitles">Subtítulos</string>
+    <string name="modern_details_close">Cerrar</string>
+    <string name="modern_details_as_role">como %1$s</string>
+    <string name="modern_details_born">Nacimiento: %1$s</string>
+    <string name="modern_details_age">(%1$d años)</string>
+    <string name="modern_details_died">Fallecimiento: %1$s</string>
+    <string name="modern_details_birth_place">Lugar de nacimiento: %1$s</string>
+    <string name="modern_details_show_more">Mostrar más</string>
+    <string name="modern_details_show_less">Mostrar menos</string>
+    <string name="modern_details_failed">No se ha podido cargar este título</string>
+    <plurals name="modern_details_seasons">
+        <item quantity="one">%d temporada</item>
+        <item quantity="other">%d temporadas</item>
+    </plurals>
+    <plurals name="modern_details_episodes">
+        <item quantity="one">%d episodio</item>
+        <item quantity="other">%d episodios</item>
+    </plurals>
+
+    <!-- Watchlist, botón de reproducir y música de la serie -->
+    <string name="modern_home_watchlist">Watchlist</string>
+    <string name="modern_details_watchlist_add">Añadir a la watchlist</string>
+    <string name="modern_details_watchlist_remove">Quitar de la watchlist</string>
+    <string name="modern_details_watchlist_added">Añadido a tu watchlist</string>
+    <string name="modern_details_watchlist_removed">Quitado de tu watchlist</string>
+    <string name="modern_details_episode_code">T%1$02d:E%2$02d</string>
+    <string name="modern_details_resume_episode">Reanudar %1$s</string>
+    <string name="modern_details_play_episode">Reproducir %1$s</string>
+    <string name="modern_details_theme_music">Música de la serie</string>
+    <string name="modern_details_theme_music_description">Reproduce la sintonía de la serie en su ficha y en sus temporadas (la serie necesita una canción de tema en la biblioteca)</string>
+
+    <!-- Menú de seguir viendo, página de watchlist, información del archivo -->
+    <string name="modern_home_mark_watched">Marcar como visto</string>
+    <string name="modern_home_go_to_season">Ir a la temporada</string>
+    <string name="modern_home_go_to_show">Ir a la serie</string>
+    <string name="modern_home_watchlist_empty">Tu watchlist está vacía</string>
+    <string name="modern_home_watchlist_hint">Añade películas y series con el botón del marcador en su ficha</string>
+    <plurals name="modern_home_titles">
+        <item quantity="one">%d título</item>
+        <item quantity="other">%d títulos</item>
+    </plurals>
+    <string name="modern_details_file">Archivo</string>
+    <string name="modern_details_file_name">Nombre</string>
+    <string name="modern_details_file_path">Ubicación</string>
+    <string name="modern_details_file_size">Tamaño</string>
+    <string name="modern_details_container">Contenedor</string>
+    <string name="modern_details_duration">Duración</string>
+    <string name="modern_details_bitrate">Tasa de bits</string>
+    <string name="modern_details_default">Por defecto</string>
+    <string name="modern_details_forced">Forzados</string>
+    <string name="modern_details_external">Externos</string>
+</resources>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Modern home screen -->
+    <string name="modern_home_enabled">Modern home screen</string>
+    <string name="modern_home_enabled_description">Streaming style home with hero carousel, trending and new episode badges. Reopen the home screen to apply.</string>
+
+    <string name="modern_home_libraries">Hidden libraries</string>
+    <string name="modern_home_libraries_description">Hidden libraries disappear from the navigation bar, the home screen and search results</string>
+
+    <string name="modern_home_libraries_hidden">Hidden</string>
+    <string name="modern_home_libraries_visible">Visible</string>
+    <string name="modern_home_libraries_none_hidden">No hidden libraries</string>
+    <string name="modern_home_libraries_hint">Hold OK on a library in the navigation bar to hide it</string>
+    <string name="modern_home_show_again">Select to show it again</string>
+    <string name="modern_home_hide">Hide</string>
+    <string name="modern_home_hide_library_title">Hide %1$s?</string>
+    <string name="modern_home_hide_library_message">It will disappear from the navigation bar, the home screen and search results. You can show it again in Settings › Hidden libraries.</string>
+
+    <string name="modern_home_continue_watching">Continue watching &amp; next up</string>
+    <string name="modern_home_trending">Trending this week</string>
+    <string name="modern_home_latest_releases">Latest releases</string>
+    <string name="modern_home_recent_movies">Recently added movies</string>
+    <string name="modern_home_recent_shows">Recently added shows</string>
+    <string name="modern_home_favorites">Favourites</string>
+
+    <string name="modern_home_new_episode">New episode</string>
+    <string name="modern_home_new_season">New season</string>
+    <string name="modern_home_new_series">New series</string>
+
+    <string name="modern_home_time_left_minutes">%1$dm left</string>
+    <string name="modern_home_time_left_hours">%1$dh %2$dm left</string>
+
+    <string name="modern_home_more_info">More info</string>
+    <string name="modern_home_tv_show">TV Show</string>
+    <string name="modern_home_movie">Movie</string>
+    <string name="modern_home_empty">Nothing here yet</string>
+
+    <!-- Details pages -->
+    <string name="modern_details_enabled">Modern details pages</string>
+    <string name="modern_details_enabled_description">Streaming style pages for movies, series, seasons and people</string>
+    <string name="modern_details_add_favorite">Add to favourites</string>
+    <string name="modern_details_favorite">Favourite</string>
+    <string name="modern_details_trailer">Trailer</string>
+    <string name="modern_details_more_options">More options</string>
+    <string name="modern_details_media_info">Media info</string>
+    <string name="modern_details_video">Video</string>
+    <string name="modern_details_audio">Audio</string>
+    <string name="modern_details_subtitles">Subtitles</string>
+    <string name="modern_details_close">Close</string>
+    <string name="modern_details_as_role">as %1$s</string>
+    <string name="modern_details_born">Born: %1$s</string>
+    <string name="modern_details_age">(%1$d years old)</string>
+    <string name="modern_details_died">Died: %1$s</string>
+    <string name="modern_details_birth_place">Birth place: %1$s</string>
+    <string name="modern_details_show_more">Show more</string>
+    <string name="modern_details_show_less">Show less</string>
+    <string name="modern_details_failed">This title could not be loaded</string>
+    <plurals name="modern_details_seasons">
+        <item quantity="one">%d Season</item>
+        <item quantity="other">%d Seasons</item>
+    </plurals>
+    <plurals name="modern_details_episodes">
+        <item quantity="one">%d Episode</item>
+        <item quantity="other">%d Episodes</item>
+    </plurals>
+
+    <!-- Watchlist, play button and theme music -->
+    <string name="modern_home_watchlist">Watchlist</string>
+    <string name="modern_details_watchlist_add">Add to watchlist</string>
+    <string name="modern_details_watchlist_remove">Remove from watchlist</string>
+    <string name="modern_details_watchlist_added">Added to your watchlist</string>
+    <string name="modern_details_watchlist_removed">Removed from your watchlist</string>
+    <string name="modern_details_episode_code">S%1$02d:E%2$02d</string>
+    <string name="modern_details_resume_episode">Resume %1$s</string>
+    <string name="modern_details_play_episode">Play %1$s</string>
+    <string name="modern_details_theme_music">Theme music</string>
+    <string name="modern_details_theme_music_description">Play the theme song of a series on its page and on its seasons (the series needs a theme song in the library)</string>
+
+    <!-- Continue watching menu, watchlist page, media info -->
+    <string name="modern_home_mark_watched">Mark as watched</string>
+    <string name="modern_home_go_to_season">Go to season</string>
+    <string name="modern_home_go_to_show">Go to show</string>
+    <string name="modern_home_watchlist_empty">Your watchlist is empty</string>
+    <string name="modern_home_watchlist_hint">Add movies and shows with the bookmark button on their page</string>
+    <plurals name="modern_home_titles">
+        <item quantity="one">%d title</item>
+        <item quantity="other">%d titles</item>
+    </plurals>
+    <string name="modern_details_file">File</string>
+    <string name="modern_details_file_name">Name</string>
+    <string name="modern_details_file_path">Location</string>
+    <string name="modern_details_file_size">Size</string>
+    <string name="modern_details_container">Container</string>
+    <string name="modern_details_duration">Duration</string>
+    <string name="modern_details_bitrate">Bitrate</string>
+    <string name="modern_details_default">Default</string>
+    <string name="modern_details_forced">Forced</string>
+    <string name="modern_details_external">External</string>
+</resources>
