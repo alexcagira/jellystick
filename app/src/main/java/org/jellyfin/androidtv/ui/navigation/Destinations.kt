@@ -2,6 +2,7 @@ package org.jellyfin.androidtv.ui.navigation
 
 import kotlinx.serialization.json.Json
 import org.jellyfin.androidtv.constant.Extras
+import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.browsing.BrowseGridFragment
 import org.jellyfin.androidtv.ui.browsing.BrowseRecordingsFragment
 import org.jellyfin.androidtv.ui.browsing.BrowseScheduleFragment
@@ -11,6 +12,8 @@ import org.jellyfin.androidtv.ui.browsing.ByLetterFragment
 import org.jellyfin.androidtv.ui.browsing.CollectionFragment
 import org.jellyfin.androidtv.ui.browsing.GenericFolderFragment
 import org.jellyfin.androidtv.ui.browsing.SuggestedMoviesFragment
+import org.jellyfin.androidtv.ui.details.modern.ModernDetailsFragment
+import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistFragment
 import org.jellyfin.androidtv.ui.home.HomeFragment
 import org.jellyfin.androidtv.ui.itemdetail.FullDetailsFragment
 import org.jellyfin.androidtv.ui.itemdetail.ItemListFragment
@@ -27,6 +30,7 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SeriesTimerInfoDto
 import org.jellyfin.sdk.model.api.SortOrder
+import org.koin.java.KoinJavaComponent
 import java.util.UUID
 
 @Suppress("TooManyFunctions")
@@ -81,9 +85,27 @@ object Destinations {
 		}
 
 	// Item details
-	fun itemDetails(item: UUID) = fragmentDestination<FullDetailsFragment> {
+	/**
+	 * Details of an item: the modern screen for movies, series, seasons and people when enabled in
+	 * the settings (it hands other item types over to [legacyItemDetails]).
+	 */
+	fun itemDetails(item: UUID): Destination.Fragment =
+		if (modernDetailsEnabled()) modernItemDetails(item)
+		else legacyItemDetails(item)
+
+	val modernWatchlist = fragmentDestination<ModernWatchlistFragment>()
+
+	fun legacyItemDetails(item: UUID) = fragmentDestination<FullDetailsFragment> {
 		putString("ItemId", item.toString())
 	}
+
+	fun modernItemDetails(item: UUID) = fragmentDestination<ModernDetailsFragment> {
+		putString(ModernDetailsFragment.ARGUMENT_ITEM_ID, item.toString())
+	}
+
+	private fun modernDetailsEnabled(): Boolean = runCatching {
+		KoinJavaComponent.get<UserPreferences>(UserPreferences::class.java)[UserPreferences.modernDetailsEnabled]
+	}.getOrDefault(false)
 
 	// TODO only pass item id instead of complete JSON to browsing destinations
 	fun channelDetails(item: UUID, channel: UUID, programInfo: BaseItemDto) =

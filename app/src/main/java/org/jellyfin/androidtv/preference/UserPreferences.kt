@@ -218,6 +218,26 @@ class UserPreferences(context: Context) : SharedPreferenceStore(
 		var homeNextUpMaxDays = intPreference("home_next_up_max_days", 0)
 
 		/**
+		 * Use the modern (streaming service style) home screen with hero carousel and badges
+		 */
+		var modernHomeEnabled = booleanPreference("pref_modern_home_enabled", true)
+
+		/**
+		 * Comma separated ids of the libraries hidden from the navigation bar and search results
+		 */
+		var hiddenLibraryIds = stringPreference("pref_hidden_library_ids", "")
+
+		/**
+		 * Use the modern details screen for movies, series, seasons and people
+		 */
+		var modernDetailsEnabled = booleanPreference("pref_modern_details_enabled", true)
+
+		/**
+		 * Play the theme song of a series on its page and on its season pages
+		 */
+		var themeMusicEnabled = booleanPreference("pref_theme_music_enabled", true)
+
+		/**
 		 * Subtitles foreground color
 		 */
 		var subtitlesBackgroundColor = longPreference("subtitles_background_color", 0x00FFFFFF)

@@ -45,6 +45,15 @@ fun SettingsMainScreen() {
 			)
 		}
 
+		item {
+			ListButton(
+				leadingContent = { Icon(painterResource(R.drawable.ic_folder), contentDescription = null) },
+				headingContent = { Text(stringResource(R.string.modern_home_libraries)) },
+				onClick = { router.push(Routes.HOME_LIBRARIES) },
+				modifier = Modifier.focusKey(Routes.HOME_LIBRARIES),
+			)
+		}
+
 		// TODO: Temporarily added to root - should be accessed via customization screen instead
 		item {
 			ListButton(

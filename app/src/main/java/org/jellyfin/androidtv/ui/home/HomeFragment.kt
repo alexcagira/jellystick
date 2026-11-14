@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,26 +24,54 @@ import androidx.fragment.compose.content
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.auth.repository.ServerRepository
 import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.data.repository.NotificationsRepository
+import org.jellyfin.androidtv.preference.UserPreferences
+import org.jellyfin.androidtv.ui.home.modern.ModernHomeScreen
+import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
 import org.jellyfin.androidtv.ui.shared.toolbar.MainToolbar
 import org.jellyfin.androidtv.ui.shared.toolbar.MainToolbarActiveButton
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.sockets.subscribe
+import org.jellyfin.sdk.model.api.LibraryChangedMessage
+import org.jellyfin.sdk.model.api.UserDataChangedMessage
 import org.koin.android.ext.android.inject
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class HomeFragment : Fragment() {
 	private val sessionRepository by inject<SessionRepository>()
 	private val serverRepository by inject<ServerRepository>()
 	private val notificationRepository by inject<NotificationsRepository>()
+	private val userPreferences by inject<UserPreferences>()
+	private val api by inject<ApiClient>()
+
+	// Only created when the modern home screen is enabled
+	private val modernHomeViewModel by viewModel<ModernHomeViewModel>()
+
+	private var useModernHome = false
+	private var firstResume = true
 
 	override fun onCreateView(
 		inflater: LayoutInflater,
 		container: ViewGroup?,
 		savedInstanceState: Bundle?
-	) = content {
+	): View {
+		useModernHome = userPreferences[UserPreferences.modernHomeEnabled]
+
+		return content {
+			if (useModernHome) ModernHomeScreen(viewModel = modernHomeViewModel)
+			else LegacyHome()
+		}
+	}
+
+	@Composable
+	private fun LegacyHome() {
 		val rowsFocusRequester = remember { FocusRequester() }
 		LaunchedEffect(rowsFocusRequester) { rowsFocusRequester.requestFocus() }
 
@@ -90,5 +119,28 @@ class HomeFragment : Fragment() {
 				notificationRepository.updateServerNotifications(server)
 			}
 			.launchIn(viewLifecycleOwner.lifecycleScope)
+
+		if (useModernHome) {
+			// Refresh rows when something was watched or added while the home screen is visible
+			viewLifecycleOwner.lifecycleScope.launch {
+				viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+					api.webSocket.subscribe<UserDataChangedMessage>()
+						.onEach { modernHomeViewModel.refresh() }
+						.launchIn(this)
+
+					api.webSocket.subscribe<LibraryChangedMessage>()
+						.onEach { modernHomeViewModel.refresh() }
+						.launchIn(this)
+				}
+			}
+		}
+	}
+
+	override fun onResume() {
+		super.onResume()
+
+		// Coming back from the player or details screen: update continue watching, new episodes...
+		if (useModernHome && !firstResume) modernHomeViewModel.refresh()
+		firstResume = false
 	}
 }

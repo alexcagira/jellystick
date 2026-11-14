@@ -1,9 +1,24 @@
+import java.util.Properties
+
 plugins {
 	alias(libs.plugins.aboutlibraries)
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.compose)
 	alias(libs.plugins.kotlin.serialization)
 }
+
+// TMDB key for the "Trending this week" row of the modern home screen.
+// Add `tmdb.api.key=YOUR_KEY` to local.properties (never committed) or set the TMDB_API_KEY environment variable.
+val tmdbApiKey: String = run {
+	val localProperties = Properties()
+	val localPropertiesFile = rootProject.file("local.properties")
+	if (localPropertiesFile.exists()) localPropertiesFile.inputStream().use { localProperties.load(it) }
+
+	localProperties.getProperty("tmdb.api.key")
+		?: findProperty("tmdb.api.key")?.toString()
+		?: System.getenv("TMDB_API_KEY")
+		?: ""
+}.trim().replace("\"", "")
 
 android {
 	namespace = "org.jellyfin.androidtv"
@@ -17,6 +32,8 @@ android {
 		applicationId = namespace
 		versionName = project.getVersionName()
 		versionCode = getVersionCode(versionName!!)
+
+		buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
 	}
 
 	buildFeatures {

@@ -22,6 +22,7 @@ import org.jellyfin.androidtv.data.repository.CustomMessageRepositoryImpl
 import org.jellyfin.androidtv.data.repository.ExternalAppRepository
 import org.jellyfin.androidtv.data.repository.ItemMutationRepository
 import org.jellyfin.androidtv.data.repository.ItemMutationRepositoryImpl
+import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
 import org.jellyfin.androidtv.data.repository.NotificationsRepository
 import org.jellyfin.androidtv.data.repository.NotificationsRepositoryImpl
 import org.jellyfin.androidtv.data.repository.UserViewsRepository
@@ -29,6 +30,13 @@ import org.jellyfin.androidtv.data.repository.UserViewsRepositoryImpl
 import org.jellyfin.androidtv.data.service.BackgroundService
 import org.jellyfin.androidtv.integration.dream.DreamViewModel
 import org.jellyfin.androidtv.ui.InteractionTrackerViewModel
+import org.jellyfin.androidtv.ui.details.modern.ModernDetailsRepository
+import org.jellyfin.androidtv.ui.details.modern.ModernDetailsViewModel
+import org.jellyfin.androidtv.ui.details.modern.ThemeMusicPlayer
+import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
+import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
+import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
+import org.jellyfin.androidtv.ui.home.modern.TmdbTrendingClient
 import org.jellyfin.androidtv.ui.itemhandling.ItemLauncher
 import org.jellyfin.androidtv.ui.navigation.Destinations
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository
@@ -147,7 +155,14 @@ val appModule = module {
 	single<ItemMutationRepository> { ItemMutationRepositoryImpl(get(), get()) }
 	single<CustomMessageRepository> { CustomMessageRepositoryImpl() }
 	single<NavigationRepository> { NavigationRepositoryImpl(Destinations.home) }
-	single<SearchRepository> { SearchRepositoryImpl(get()) }
+	single<SearchRepository> { SearchRepositoryImpl(get(), get()) }
+	single { LibraryVisibilityRepository(get(), get(), get()) }
+
+	// Modern home screen
+	single { TmdbTrendingClient(BuildConfig.TMDB_API_KEY) }
+	single { ModernHomeRepository(get(), get(), get()) }
+	single { ModernDetailsRepository(get(), get()) }
+	single { ThemeMusicPlayer(androidContext(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
 	single<MediaSegmentRepository> { MediaSegmentRepositoryImpl(get(), get()) }
 	single<ExternalAppRepository> { ExternalAppRepository(get(), getAll(), get<DefaultExternalPlayerApi>()) }
 
@@ -165,6 +180,9 @@ val appModule = module {
 	viewModel { StillWatchingViewModel(get(), get(), get(), get()) }
 	viewModel { PhotoPlayerViewModel(get(), get()) }
 	viewModel { SearchViewModel(get()) }
+	viewModel { ModernHomeViewModel(get(), get()) }
+	viewModel { ModernDetailsViewModel(get(), get()) }
+	viewModel { ModernWatchlistViewModel(get(), get()) }
 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }
 	viewModel { SettingsViewModel() }
 	viewModel { SettingsLibrariesScreenViewModel(get()) }
