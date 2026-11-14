@@ -126,6 +126,29 @@ class ModernHomeRepository(
 			.map { posterCard(it, context, withReleaseDate = false) }
 	}
 
+	/**
+	 * Poster cards with every badge (quality, HDR, Dolby, audio languages) for any list of
+	 * movies, series, episodes or people, e.g. search results. Items need `ItemFields.MEDIA_STREAMS`.
+	 */
+	suspend fun posterCards(items: List<BaseItemDto>): List<HomeCard> = withContext(Dispatchers.IO) {
+		val visible = items.withoutHidden(hiddenItemIds())
+		val seriesIds = visible.filter { it.type == BaseItemKind.SERIES }.map { it.id }
+		val context = CardContext(
+			labels = emptyMap(),
+			seriesMedia = safe("series media") { seriesMedia(seriesIds, emptyMap()) }.orEmpty(),
+			episodeHints = emptyMap(),
+			nextUpBySeries = emptyMap(),
+		)
+
+		visible
+			.distinctBy { if (it.type == BaseItemKind.MOVIE || it.type == BaseItemKind.SERIES) MediaBadges.duplicateKey(it) else it.id.toString() }
+			.map { item ->
+				val card = posterCard(item, context, withReleaseDate = false)
+				// Episodes: the series page, the play button plays the episode
+				if (item.type == BaseItemKind.EPISODE) card.copy(key = item.id.toString(), subtitle = item.name) else card
+			}
+	}
+
 	/** Identifies the server and session for the home cache */
 	fun cacheKey(): String = "${api.baseUrl}|${api.accessToken?.hashCode()}"
 

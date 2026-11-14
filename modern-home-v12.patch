@@ -1,0 +1,4013 @@
+From 6f69de305c4e5786ebd65869f76d8e087e848774 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 14 Nov 2026 23:32:10 +0000
+Subject: [PATCH] Modern search with voice, album/playlist/artist pages, new
+ Now Playing, genres and stations, shared queue fixes
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GggjeFTHGBVvzy3LQsupNE
+---
+ .../org/jellyfin/androidtv/di/AppModule.kt    |   8 +
+ .../details/modern/ModernDetailsFragment.kt   |   5 +-
+ .../ui/home/modern/ModernHomeRepository.kt    |  23 +
+ .../androidtv/ui/home/modern/ModernTopBar.kt  |   2 +-
+ .../ui/itemhandling/ItemLauncher.java         |   3 +-
+ .../ui/music/modern/AddToPlaylistDialog.kt    | 189 ++++++
+ .../ui/music/modern/ModernMusicBrowse.kt      | 283 ++++++++
+ .../music/modern/ModernMusicItemFragment.kt   |  43 ++
+ .../ui/music/modern/ModernMusicItemScreen.kt  | 516 ++++++++++++++
+ .../music/modern/ModernMusicItemViewModel.kt  |  85 +++
+ .../ui/music/modern/ModernMusicRepository.kt  | 139 +++-
+ .../ui/music/modern/ModernMusicScreen.kt      |  42 +-
+ .../ui/music/modern/MusicItemRepository.kt    | 222 ++++++
+ .../androidtv/ui/music/modern/MusicModels.kt  |   4 +
+ .../nowplaying/ModernNowPlayingScreen.kt      | 631 ++++++++++++++++++
+ .../music/nowplaying/NowPlayingScreensaver.kt | 227 +++++++
+ .../ui/music/share/SharedQueueDialog.kt       |  12 +
+ .../ui/music/share/SharedQueueServer.kt       | 125 +++-
+ .../ui/music/share/StreamingLinkResolver.kt   | 191 ++++++
+ .../androidtv/ui/navigation/Destinations.kt   |  43 +-
+ .../ui/search/modern/ModernSearchScreen.kt    | 403 +++++++++++
+ .../ui/search/modern/ModernSearchViewModel.kt | 116 ++++
+ app/src/main/res/raw/shared_queue.html        |  53 +-
+ .../res/values-es/strings_modern_home.xml     |  49 ++
+ .../main/res/values/strings_modern_home.xml   |  49 ++
+ docs/MODERN_HOME.md                           |  46 ++
+ 26 files changed, 3481 insertions(+), 28 deletions(-)
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/modern/AddToPlaylistDialog.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicBrowse.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemFragment.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemScreen.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemViewModel.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicItemRepository.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/ModernNowPlayingScreen.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/NowPlayingScreensaver.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/music/share/StreamingLinkResolver.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchScreen.kt
+ create mode 100644 app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchViewModel.kt
+
+diff --git a/app/src/main/java/org/jellyfin/androidtv/di/AppModule.kt b/app/src/main/java/org/jellyfin/androidtv/di/AppModule.kt
+index 4c62360..b7e0416 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/di/AppModule.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/di/AppModule.kt
+@@ -39,7 +39,10 @@ import org.jellyfin.androidtv.ui.collections.LanguageCollectionsRepository
+ import org.jellyfin.androidtv.ui.home.modern.ItemActions
+ import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
+ import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
++import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseViewModel
++import org.jellyfin.androidtv.ui.music.modern.ModernMusicItemViewModel
+ import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
++import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
+ import org.jellyfin.androidtv.ui.music.share.SharedQueueServer
+ import org.jellyfin.androidtv.ui.music.modern.ModernMusicViewModel
+ import org.jellyfin.androidtv.ui.home.modern.TmdbTrendingClient
+@@ -61,6 +64,7 @@ import org.jellyfin.androidtv.ui.playback.stillwatching.StillWatchingViewModel
+ import org.jellyfin.androidtv.ui.player.photo.PhotoPlayerViewModel
+ import org.jellyfin.androidtv.ui.search.SearchFragmentDelegate
+ import org.jellyfin.androidtv.ui.search.SearchRepository
++import org.jellyfin.androidtv.ui.search.modern.ModernSearchViewModel
+ import org.jellyfin.androidtv.ui.search.SearchRepositoryImpl
+ import org.jellyfin.androidtv.ui.search.SearchViewModel
+ import org.jellyfin.androidtv.ui.settings.compat.SettingsViewModel
+@@ -173,6 +177,7 @@ val appModule = module {
+ 	single { HomeCache(androidContext()) }
+ 	single { ModernDetailsRepository(get(), get()) }
+ 	single { ModernMusicRepository(get()) }
++	single { MusicItemRepository(get(), get()) }
+ 	single { ThemeMusicPlayer(androidContext(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
+ 	single<MediaSegmentRepository> { MediaSegmentRepositoryImpl(get(), get()) }
+ 	single<ExternalAppRepository> { ExternalAppRepository(get(), getAll(), get<DefaultExternalPlayerApi>()) }
+@@ -195,6 +200,9 @@ val appModule = module {
+ 	viewModel { ModernDetailsViewModel(get(), get()) }
+ 	viewModel { ModernWatchlistViewModel(get(), get()) }
+ 	viewModel { ModernMusicViewModel(get(), get(), get()) }
++	viewModel { ModernMusicItemViewModel(get(), get()) }
++	viewModel { ModernMusicBrowseViewModel(get()) }
++	viewModel { ModernSearchViewModel(get(), get(), get()) }
+ 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }
+ 	viewModel { SettingsViewModel() }
+ 	viewModel { SettingsLibrariesScreenViewModel(get()) }
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/details/modern/ModernDetailsFragment.kt b/app/src/main/java/org/jellyfin/androidtv/ui/details/modern/ModernDetailsFragment.kt
+index 795507a..7396a98 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/details/modern/ModernDetailsFragment.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/details/modern/ModernDetailsFragment.kt
+@@ -61,7 +61,10 @@ class ModernDetailsFragment : Fragment() {
+ 
+ 			val item = state.item
+ 			if (item != null && state.kind == null) {
+-				navigationRepository.navigate(Destinations.legacyItemDetails(item.id), replace = true)
++				// Albums, artists and music playlists: the page in the style of the music library
++				val destination = if (Destinations.isModernMusicItem(item)) Destinations.modernMusicItem(item.id)
++				else Destinations.legacyItemDetails(item.id)
++				navigationRepository.navigate(destination, replace = true)
+ 			}
+ 		}
+ 
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt
+index 670a28f..1dfa704 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt
+@@ -126,6 +126,29 @@ class ModernHomeRepository(
+ 			.map { posterCard(it, context, withReleaseDate = false) }
+ 	}
+ 
++	/**
++	 * Poster cards with every badge (quality, HDR, Dolby, audio languages) for any list of
++	 * movies, series, episodes or people, e.g. search results. Items need `ItemFields.MEDIA_STREAMS`.
++	 */
++	suspend fun posterCards(items: List<BaseItemDto>): List<HomeCard> = withContext(Dispatchers.IO) {
++		val visible = items.withoutHidden(hiddenItemIds())
++		val seriesIds = visible.filter { it.type == BaseItemKind.SERIES }.map { it.id }
++		val context = CardContext(
++			labels = emptyMap(),
++			seriesMedia = safe("series media") { seriesMedia(seriesIds, emptyMap()) }.orEmpty(),
++			episodeHints = emptyMap(),
++			nextUpBySeries = emptyMap(),
++		)
++
++		visible
++			.distinctBy { if (it.type == BaseItemKind.MOVIE || it.type == BaseItemKind.SERIES) MediaBadges.duplicateKey(it) else it.id.toString() }
++			.map { item ->
++				val card = posterCard(item, context, withReleaseDate = false)
++				// Episodes: the series page, the play button plays the episode
++				if (item.type == BaseItemKind.EPISODE) card.copy(key = item.id.toString(), subtitle = item.name) else card
++			}
++	}
++
+ 	/** Identifies the server and session for the home cache */
+ 	fun cacheKey(): String = "${api.baseUrl}|${api.accessToken?.hashCode()}"
+ 
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt
+index 28836ce..0eb6785 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt
+@@ -172,7 +172,7 @@ internal fun ModernTopBar(
+ 						text = null,
+ 						icon = R.drawable.ic_search,
+ 						active = false,
+-						onClick = { navigationRepository.navigate(Destinations.search()) },
++						onClick = { navigationRepository.navigate(Destinations.modernSearch()) },
+ 					)
+ 				}
+ 			},
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/itemhandling/ItemLauncher.java b/app/src/main/java/org/jellyfin/androidtv/ui/itemhandling/ItemLauncher.java
+index 85d13fc..2195385 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/itemhandling/ItemLauncher.java
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/itemhandling/ItemLauncher.java
+@@ -90,7 +90,8 @@ public class ItemLauncher {
+ 
+                     case MUSIC_ALBUM:
+                     case PLAYLIST:
+-                        navigationRepository.getValue().navigate(Destinations.INSTANCE.itemList(baseItem.getId()));
++                        // Music: the modern album/playlist page when enabled
++                        navigationRepository.getValue().navigate(Destinations.INSTANCE.albumOrPlaylist(baseItem));
+                         return;
+ 
+                     case AUDIO:
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/AddToPlaylistDialog.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/AddToPlaylistDialog.kt
+new file mode 100644
+index 0000000..8803062
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/AddToPlaylistDialog.kt
+@@ -0,0 +1,189 @@
++package org.jellyfin.androidtv.ui.music.modern
++
++import android.widget.Toast
++import androidx.compose.foundation.background
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.interaction.MutableInteractionSource
++import androidx.compose.foundation.interaction.collectIsFocusedAsState
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.heightIn
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.items
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.res.vectorResource
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.launch
++import org.jellyfin.androidtv.R
++import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
++import org.jellyfin.androidtv.ui.base.Icon
++import org.jellyfin.androidtv.ui.base.Text
++import org.jellyfin.androidtv.ui.home.modern.EditableField
++import org.jellyfin.androidtv.ui.home.modern.HeroButton
++import org.jellyfin.androidtv.ui.home.modern.ModernDialog
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.koin.compose.koinInject
++import timber.log.Timber
++import java.util.UUID
++
++/**
++ * "Add to playlist": the music playlists of the user, and a new one.
++ */
++@Composable
++fun AddToPlaylistDialog(
++	visible: Boolean,
++	itemIds: List<UUID>,
++	onDismissRequest: () -> Unit,
++) {
++	val repository = koinInject<MusicItemRepository>()
++	val context = LocalContext.current
++	val scope = rememberCoroutineScope()
++	var playlists by remember(visible) { mutableStateOf<List<BaseItemDto>?>(null) }
++	var newName by remember(visible) { mutableStateOf("") }
++	var working by remember(visible) { mutableStateOf(false) }
++
++	LaunchedEffect(visible) {
++		if (!visible) return@LaunchedEffect
++		playlists = runCatching { repository.playlists() }
++			.onFailure { Timber.w(it, "Unable to load the playlists") }
++			.getOrDefault(emptyList())
++	}
++
++	fun run(message: String, block: suspend () -> Unit) {
++		if (working || itemIds.isEmpty()) return
++		working = true
++		scope.launch {
++			val text = try {
++				block()
++				message
++			} catch (err: CancellationException) {
++				throw err
++			} catch (err: Exception) {
++				Timber.w(err, "Unable to change the playlist")
++				context.getString(R.string.modern_menu_failed)
++			}
++			working = false
++			Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
++			onDismissRequest()
++		}
++	}
++
++	ModernDialog(
++		visible = visible,
++		title = stringResource(R.string.music_add_to_playlist),
++		onDismissRequest = onDismissRequest,
++		maxWidth = 560.dp,
++	) {
++		Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
++			EditableField(
++				label = stringResource(R.string.music_new_playlist),
++				value = newName,
++				onValueChange = { newName = it },
++				onSubmit = {},
++				modifier = Modifier.weight(1f),
++			)
++			HeroButton(
++				text = stringResource(R.string.music_create),
++				icon = R.drawable.ic_add,
++				primary = false,
++				onClick = {
++					val name = newName.trim()
++					if (name.isNotEmpty()) {
++						run(context.getString(R.string.music_added_to_playlist, name)) { repository.createPlaylist(name, itemIds) }
++					}
++				},
++			)
++		}
++		Spacer(Modifier.height(16.dp))
++
++		val list = playlists
++		when {
++			list == null || working -> CircularProgressIndicator(color = ModernHomeColors.Accent, modifier = Modifier.size(32.dp))
++			list.isEmpty() -> Text(stringResource(R.string.music_no_playlists), color = ModernHomeColors.TextMuted, fontSize = 14.sp)
++			else -> LazyColumn(
++				verticalArrangement = Arrangement.spacedBy(8.dp),
++				modifier = Modifier.heightIn(max = 360.dp),
++			) {
++				items(list, key = { it.id.toString() }) { playlist ->
++					PlaylistRow(
++						name = playlist.name.orEmpty(),
++						count = playlist.childCount,
++						onClick = {
++							run(context.getString(R.string.music_added_to_playlist, playlist.name.orEmpty())) {
++								repository.addToPlaylist(playlist.id, itemIds)
++							}
++						},
++					)
++				}
++			}
++		}
++	}
++}
++
++@Composable
++private fun PlaylistRow(
++	name: String,
++	count: Int?,
++	onClick: () -> Unit,
++) {
++	val interactionSource = remember { MutableInteractionSource() }
++	val focused by interactionSource.collectIsFocusedAsState()
++	val shape = RoundedCornerShape(12.dp)
++	val color = if (focused) Color.Black else ModernHomeColors.TextPrimary
++
++	Row(
++		verticalAlignment = Alignment.CenterVertically,
++		modifier = Modifier
++			.fillMaxWidth()
++			.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
++			.background(if (focused) Color.White else Color.White.copy(alpha = 0.06f), shape)
++			.padding(horizontal = 18.dp, vertical = 12.dp),
++	) {
++		Icon(ImageVector.vectorResource(R.drawable.ic_grid), contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
++		Spacer(Modifier.width(14.dp))
++		Text(
++			text = name,
++			color = color,
++			fontSize = 15.sp,
++			fontWeight = FontWeight.SemiBold,
++			maxLines = 1,
++			overflow = TextOverflow.Ellipsis,
++			modifier = Modifier.weight(1f),
++		)
++		if (count != null) Text(text = "$count", color = if (focused) Color.Black.copy(alpha = 0.6f) else ModernHomeColors.TextMuted, fontSize = 13.sp)
++	}
++}
++
++/** "3:45" */
++internal fun formatDuration(ticks: Long?): String? {
++	val seconds = (ticks ?: return null) / 10_000_000
++	if (seconds <= 0) return null
++	val hours = seconds / 3600
++	val minutes = (seconds % 3600) / 60
++	val rest = seconds % 60
++	return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, rest) else "%d:%02d".format(minutes, rest)
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicBrowse.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicBrowse.kt
+new file mode 100644
+index 0000000..c149601
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicBrowse.kt
+@@ -0,0 +1,283 @@
++package org.jellyfin.androidtv.ui.music.modern
++
++import android.os.Bundle
++import android.view.LayoutInflater
++import android.view.View
++import android.view.ViewGroup
++import androidx.compose.foundation.background
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.LazyListScope
++import androidx.compose.foundation.lazy.itemsIndexed
++import androidx.compose.foundation.lazy.rememberLazyListState
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import androidx.fragment.app.Fragment
++import androidx.fragment.compose.content
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import coil3.ImageLoader
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.launch
++import kotlinx.serialization.json.Json
++import org.jellyfin.androidtv.R
++import org.jellyfin.androidtv.constant.Extras
++import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
++import org.jellyfin.androidtv.ui.base.Text
++import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
++import org.jellyfin.androidtv.ui.home.modern.SectionHeader
++import org.jellyfin.androidtv.ui.home.modern.awaitFrames
++import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
++import org.jellyfin.androidtv.ui.navigation.Destinations
++import org.jellyfin.androidtv.ui.navigation.NavigationRepository
++import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.koin.androidx.viewmodel.ext.android.viewModel
++import org.koin.compose.koinInject
++import timber.log.Timber
++
++/** Music pages with a grid of cards */
++enum class MusicBrowseMode {
++	GENRES,
++	STATIONS,
++}
++
++private const val COLUMNS = 7
++
++/** A titled group of cards (stations page: for you, genres, artists) */
++data class MusicBrowseGroup(
++	val title: Int?,
++	val cards: List<MusicCard>,
++)
++
++data class MusicBrowseState(
++	val loading: Boolean = true,
++	val groups: List<MusicBrowseGroup> = emptyList(),
++)
++
++class ModernMusicBrowseViewModel(
++	private val repository: ModernMusicRepository,
++) : ViewModel() {
++	private val _state = MutableStateFlow(MusicBrowseState())
++	val state: StateFlow<MusicBrowseState> = _state.asStateFlow()
++
++	/** Last focused card, restored when coming back to the page */
++	var lastFocusKey: String? = null
++	private var loaded = false
++
++	fun load(mode: MusicBrowseMode, library: BaseItemDto, labels: MusicLabels) {
++		if (loaded) return
++		loaded = true
++		viewModelScope.launch {
++			val groups = try {
++				when (mode) {
++					MusicBrowseMode.GENRES -> listOf(MusicBrowseGroup(null, repository.genres(library.id)))
++					MusicBrowseMode.STATIONS -> repository.allStations(library.id, labels).let { stations ->
++						listOf(
++							MusicBrowseGroup(R.string.music_stations_for_you, stations.forYou),
++							MusicBrowseGroup(R.string.lbl_genres, stations.genres),
++							MusicBrowseGroup(R.string.lbl_artists, stations.artists),
++						).filter { it.cards.isNotEmpty() }
++					}
++				}
++			} catch (err: CancellationException) {
++				throw err
++			} catch (err: Exception) {
++				Timber.w(err, "Unable to load the music $mode")
++				emptyList()
++			}
++			_state.value = MusicBrowseState(loading = false, groups = groups)
++		}
++	}
++
++	suspend fun stationTracks(source: StationSource): List<BaseItemDto> =
++		runCatching { repository.stationTracks(source) }.getOrDefault(emptyList())
++}
++
++class ModernMusicBrowseFragment : Fragment() {
++	companion object {
++		const val ARGUMENT_MODE = "Mode"
++	}
++
++	private val viewModel by viewModel<ModernMusicBrowseViewModel>()
++
++	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
++		val library = arguments?.getString(Extras.Folder)?.let { json -> runCatching { Json.decodeFromString<BaseItemDto>(json) }.getOrNull() }
++		val mode = arguments?.getString(ARGUMENT_MODE)?.let { name -> MusicBrowseMode.entries.firstOrNull { it.name == name } } ?: MusicBrowseMode.GENRES
++
++		if (library != null) {
++			viewModel.load(
++				mode = mode,
++				library = library,
++				labels = MusicLabels(
++					yourMix = getString(R.string.modern_music_your_mix),
++					radio = getString(R.string.modern_music_radio),
++					recommended = getString(R.string.modern_music_recommended),
++					becauseYouListen = { artist -> getString(R.string.modern_music_because_you_listen, artist) },
++				),
++			)
++		}
++
++		return content { ModernMusicBrowseScreen(viewModel, mode) }
++	}
++}
++
++@Composable
++fun ModernMusicBrowseScreen(
++	viewModel: ModernMusicBrowseViewModel,
++	mode: MusicBrowseMode,
++) {
++	val state by viewModel.state.collectAsState()
++	val context = LocalContext.current
++	val scope = rememberCoroutineScope()
++	val navigationRepository = koinInject<NavigationRepository>()
++	val playbackLauncher = koinInject<PlaybackLauncher>()
++	val imageLoader = koinInject<ImageLoader>()
++	val listState = rememberLazyListState()
++	val firstFocusRequester = remember { FocusRequester() }
++	val restoreFocusRequester = remember { FocusRequester() }
++	val restoreKey = remember { viewModel.lastFocusKey }
++	val backgroundState = remember { mutableStateOf<String?>(null) }
++
++	fun playStation(source: StationSource) {
++		scope.launch {
++			val tracks = viewModel.stationTracks(source)
++			if (tracks.isNotEmpty()) playbackLauncher.launch(context, tracks)
++		}
++	}
++
++	fun onClick(card: MusicCard) {
++		when (card.kind) {
++			MusicCardKind.STATION -> card.station?.let(::playStation)
++			else -> card.item?.let { navigationRepository.navigate(Destinations.modernMusicItem(it.id)) }
++		}
++	}
++
++	fun onPlay(card: MusicCard) {
++		when (card.kind) {
++			MusicCardKind.STATION -> card.station?.let(::playStation)
++			MusicCardKind.GENRE -> card.item?.let { playStation(StationSource(genreId = it.id)) }
++			else -> onClick(card)
++		}
++	}
++
++	LaunchedEffect(state.loading) {
++		if (state.loading) return@LaunchedEffect
++		awaitFrames(2)
++		if (!restoreFocusRequester.tryRequestFocus()) firstFocusRequester.tryRequestFocus()
++	}
++
++	Box(
++		modifier = Modifier
++			.fillMaxSize()
++			.background(ModernHomeColors.Background),
++	) {
++		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
++
++		LazyColumn(
++			state = listState,
++			contentPadding = PaddingValues(top = 40.dp, bottom = 80.dp),
++			modifier = Modifier.fillMaxSize(),
++		) {
++			item(key = "title") {
++				Text(
++					text = stringResource(if (mode == MusicBrowseMode.GENRES) R.string.lbl_genres else R.string.modern_music_stations),
++					color = ModernHomeColors.TextPrimary,
++					fontSize = 30.sp,
++					fontWeight = FontWeight.Bold,
++					modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, bottom = 6.dp),
++				)
++			}
++
++			for ((groupIndex, group) in state.groups.withIndex()) {
++				val firstGroup = groupIndex == 0
++				if (group.title != null) {
++					item(key = "group_$groupIndex") {
++						SectionHeader(stringResource(group.title), compact = true, modifier = Modifier.padding(top = 14.dp))
++					}
++				}
++				cardGrid(
++					keyPrefix = "group_$groupIndex",
++					cards = group.cards,
++					focusRequesterFor = { card ->
++						when {
++							card.key == restoreKey -> restoreFocusRequester
++							firstGroup && card == group.cards.first() -> firstFocusRequester
++							else -> null
++						}
++					},
++					onFocused = { card ->
++						viewModel.lastFocusKey = card.key
++						card.backgroundUrl?.let { backgroundState.value = it }
++					},
++					onClick = ::onClick,
++					onPlay = ::onPlay,
++				)
++			}
++		}
++
++		if (state.loading) {
++			CircularProgressIndicator(color = ModernHomeColors.Accent, modifier = Modifier.align(Alignment.Center).size(48.dp))
++		} else if (state.groups.isEmpty()) {
++			Text(
++				text = stringResource(R.string.music_nothing_here),
++				color = ModernHomeColors.TextSecondary,
++				fontSize = 16.sp,
++				modifier = Modifier.align(Alignment.Center),
++			)
++		}
++	}
++}
++
++/** Cards in rows of [COLUMNS], as items of a lazy list */
++internal fun LazyListScope.cardGrid(
++	keyPrefix: String,
++	cards: List<MusicCard>,
++	focusRequesterFor: (MusicCard) -> FocusRequester?,
++	onFocused: (MusicCard) -> Unit,
++	onClick: (MusicCard) -> Unit,
++	onPlay: (MusicCard) -> Unit,
++	onLongClick: (MusicCard) -> Unit = onClick,
++) {
++	itemsIndexed(cards.chunked(COLUMNS), key = { index, _ -> "${keyPrefix}_row_$index" }) { _, row ->
++		Row(
++			horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
++			modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
++		) {
++			for (card in row) {
++				MusicCardView(
++					card = card,
++					focusRequester = focusRequesterFor(card),
++					onFocused = { onFocused(card) },
++					onClick = { onClick(card) },
++					onLongClick = { onLongClick(card) },
++					onPlay = { onPlay(card) },
++				)
++			}
++		}
++	}
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemFragment.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemFragment.kt
+new file mode 100644
+index 0000000..1f50f45
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemFragment.kt
+@@ -0,0 +1,43 @@
++package org.jellyfin.androidtv.ui.music.modern
++
++import android.os.Bundle
++import android.view.LayoutInflater
++import android.view.View
++import android.view.ViewGroup
++import androidx.fragment.app.Fragment
++import androidx.fragment.compose.content
++import org.koin.androidx.viewmodel.ext.android.viewModel
++import java.util.UUID
++
++/**
++ * Album, playlist, artist or genre in the style of the music page, with its songs.
++ */
++class ModernMusicItemFragment : Fragment() {
++	companion object {
++		const val ARGUMENT_ITEM_ID = "ItemId"
++	}
++
++	private val viewModel by viewModel<ModernMusicItemViewModel>()
++	private var firstResume = true
++
++	override fun onCreateView(
++		inflater: LayoutInflater,
++		container: ViewGroup?,
++		savedInstanceState: Bundle?,
++	): View {
++		val itemId = arguments?.getString(ARGUMENT_ITEM_ID)?.let { runCatching { UUID.fromString(it) }.getOrNull() }
++		if (itemId != null) viewModel.load(itemId)
++
++		return content {
++			ModernMusicItemScreen(viewModel = viewModel)
++		}
++	}
++
++	override fun onResume() {
++		super.onResume()
++
++		// Playlists change after "Add to playlist", favorites on other pages
++		if (!firstResume) viewModel.refresh()
++		firstResume = false
++	}
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemScreen.kt
+new file mode 100644
+index 0000000..7aac211
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemScreen.kt
+@@ -0,0 +1,516 @@
++package org.jellyfin.androidtv.ui.music.modern
++
++import android.widget.Toast
++import androidx.compose.foundation.ExperimentalFoundationApi
++import androidx.compose.foundation.background
++import androidx.compose.foundation.combinedClickable
++import androidx.compose.foundation.interaction.MutableInteractionSource
++import androidx.compose.foundation.interaction.collectIsFocusedAsState
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.itemsIndexed
++import androidx.compose.foundation.lazy.rememberLazyListState
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.focus.focusRequester
++import androidx.compose.ui.focus.onFocusChanged
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.input.key.KeyEventType
++import androidx.compose.ui.input.key.onPreviewKeyEvent
++import androidx.compose.ui.input.key.type
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.res.vectorResource
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import coil3.ImageLoader
++import kotlinx.coroutines.launch
++import org.jellyfin.androidtv.R
++import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
++import org.jellyfin.androidtv.ui.base.Icon
++import org.jellyfin.androidtv.ui.base.Text
++import org.jellyfin.androidtv.ui.composable.rememberQueueEntry
++import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
++import org.jellyfin.androidtv.ui.home.modern.CardArtwork
++import org.jellyfin.androidtv.ui.home.modern.HeroButton
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
++import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
++import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
++import org.jellyfin.androidtv.ui.home.modern.SectionHeader
++import org.jellyfin.androidtv.ui.home.modern.awaitFrames
++import org.jellyfin.androidtv.ui.home.modern.isPlayKey
++import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
++import org.jellyfin.androidtv.ui.navigation.Destinations
++import org.jellyfin.androidtv.ui.navigation.NavigationRepository
++import org.jellyfin.androidtv.ui.playback.MediaManager
++import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
++import org.jellyfin.androidtv.util.PlaybackHelper
++import org.jellyfin.playback.core.PlaybackManager
++import org.jellyfin.playback.jellyfin.queue.baseItem
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.koin.compose.koinInject
++import java.util.UUID
++
++/** Albums per line in the album grids (artist and genre pages) */
++private const val GRID_COLUMNS = 7
++
++@Composable
++fun ModernMusicItemScreen(
++	viewModel: ModernMusicItemViewModel,
++) {
++	val state by viewModel.state.collectAsState()
++	val context = LocalContext.current
++	val scope = rememberCoroutineScope()
++	val navigationRepository = koinInject<NavigationRepository>()
++	val playbackLauncher = koinInject<PlaybackLauncher>()
++	val playbackHelper = koinInject<PlaybackHelper>()
++	val mediaManager = koinInject<MediaManager>()
++	val imageLoader = koinInject<ImageLoader>()
++
++	val listState = rememberLazyListState()
++	val playFocusRequester = remember { FocusRequester() }
++	val restoreFocusRequester = remember { FocusRequester() }
++	val restoreKey = remember { viewModel.lastFocusKey }
++	var initialFocusDone by remember { mutableStateOf(false) }
++	var menuTrack by remember { mutableStateOf<Pair<Int, BaseItemDto>?>(null) }
++	var lastMenuTrack by remember { mutableStateOf<Pair<Int, BaseItemDto>?>(null) }
++	var playlistItems by remember { mutableStateOf<List<UUID>?>(null) }
++	val backgroundState = remember { mutableStateOf<String?>(null) }
++
++	val entry by rememberQueueEntry(koinInject<PlaybackManager>())
++	val playingId = entry?.baseItem?.id
++
++	val content = state.content
++	LaunchedEffect(content?.backgroundUrl) { backgroundState.value = content?.backgroundUrl }
++
++	fun open(id: UUID) = navigationRepository.navigate(Destinations.modernMusicItem(id))
++	fun playTracks(tracks: List<BaseItemDto>, index: Int = 0, shuffle: Boolean = false) {
++		if (tracks.isNotEmpty()) playbackLauncher.launch(context, tracks, itemsPosition = index, shuffle = shuffle)
++	}
++	fun playRadio(source: StationSource) {
++		scope.launch { playTracks(viewModel.stationTracks(source)) }
++	}
++
++	// Focus: the element focused before, otherwise "Play"
++	LaunchedEffect(state.loading) {
++		if (state.loading || initialFocusDone || content == null) return@LaunchedEffect
++		val trackIndex = content.tracks.indexOfFirst { "track_${it.id}" == restoreKey }
++		if (trackIndex >= 0) {
++			listState.scrollToItem(trackIndex + trackListOffset(content))
++			awaitFrames(2)
++			if (restoreFocusRequester.tryRequestFocus()) {
++				initialFocusDone = true
++				return@LaunchedEffect
++			}
++		}
++		awaitFrames(1)
++		initialFocusDone = playFocusRequester.tryRequestFocus()
++	}
++
++	Box(
++		modifier = Modifier
++			.fillMaxSize()
++			.background(ModernHomeColors.Background),
++	) {
++		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
++
++		when {
++			content != null -> LazyColumn(
++				state = listState,
++				contentPadding = PaddingValues(top = 44.dp, bottom = 80.dp),
++				modifier = Modifier.fillMaxSize(),
++			) {
++				item(key = "header") {
++					MusicItemHeader(
++						content = content,
++						favorite = state.favorite,
++						playFocusRequester = playFocusRequester,
++						onPlay = {
++							when (content.kind) {
++								MusicItemKind.GENRE -> playRadio(StationSource(genreId = content.item.id))
++								else -> playTracks(content.tracks)
++							}
++						},
++						onShuffle = { playTracks(content.tracks, shuffle = true) },
++						onRadio = {
++							playRadio(
++								when (content.kind) {
++									MusicItemKind.ALBUM -> StationSource(albumId = content.item.id)
++									MusicItemKind.PLAYLIST -> StationSource(playlistId = content.item.id)
++									MusicItemKind.ARTIST -> StationSource(artistId = content.item.id)
++									MusicItemKind.GENRE -> StationSource(genreId = content.item.id)
++								}
++							)
++						},
++						onFavorite = viewModel::toggleFavorite,
++						onArtist = content.item.albumArtists?.firstOrNull()?.id?.let { id -> { open(id) } },
++					)
++				}
++
++				// Artist and genre: their albums
++				if (content.albums.isNotEmpty()) {
++					item(key = "albums_title") {
++						SectionHeader(stringResource(R.string.lbl_albums), compact = true, modifier = Modifier.padding(top = 18.dp))
++					}
++					val rows = content.albums.chunked(GRID_COLUMNS)
++					itemsIndexed(rows, key = { index, _ -> "albums_$index" }) { _, row ->
++						Row(
++							horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
++							modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
++						) {
++							for (card in row) {
++								MusicCardView(
++									card = card,
++									focusRequester = null,
++									onFocused = {
++										viewModel.lastFocusKey = card.key
++										card.backgroundUrl?.let { backgroundState.value = it }
++									},
++									onClick = { card.item?.let { open(it.id) } },
++									onLongClick = { card.item?.let { open(it.id) } },
++									onPlay = { card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
++								)
++							}
++						}
++					}
++				}
++
++				if (content.tracks.isNotEmpty()) {
++					item(key = "tracks_title") {
++						SectionHeader(
++							stringResource(if (content.kind == MusicItemKind.ARTIST) R.string.music_popular_songs else R.string.music_songs),
++							compact = true,
++							modifier = Modifier.padding(top = 18.dp, bottom = 6.dp),
++						)
++					}
++					val showDiscs = content.kind == MusicItemKind.ALBUM && content.tracks.mapNotNull { it.parentIndexNumber }.distinct().size > 1
++					itemsIndexed(content.tracks, key = { index, track -> "track_${index}_${track.id}" }) { index, track ->
++						val disc = track.parentIndexNumber
++						if (showDiscs && disc != null && content.tracks.getOrNull(index - 1)?.parentIndexNumber != disc) {
++							Text(
++								text = stringResource(R.string.music_disc, disc),
++								color = ModernHomeColors.TextMuted,
++								fontSize = 12.sp,
++								fontWeight = FontWeight.Bold,
++								modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal + 12.dp, top = 12.dp, bottom = 4.dp),
++							)
++						}
++						TrackRow(
++							number = if (content.kind == MusicItemKind.ALBUM) track.indexNumber ?: (index + 1) else index + 1,
++							track = track,
++							showArtist = content.kind != MusicItemKind.ALBUM ||
++								(track.artists.orEmpty().joinToString() != (track.albumArtist ?: content.item.albumArtist)),
++							showAlbum = content.kind != MusicItemKind.ALBUM,
++							playing = track.id == playingId,
++							focusRequester = if ("track_${track.id}" == restoreKey) restoreFocusRequester else null,
++							onFocused = { viewModel.lastFocusKey = "track_${track.id}" },
++							onClick = { playTracks(content.tracks, index) },
++							onLongClick = {
++								lastMenuTrack = index to track
++								menuTrack = index to track
++							},
++						)
++					}
++				}
++
++				if (content.similar.isNotEmpty()) {
++					item(key = "similar") {
++						MusicSectionRow(
++							title = stringResource(R.string.lbl_more_like_this),
++							cards = content.similar,
++							focusRequesterFor = { null },
++							onFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
++							onClick = { card -> card.item?.let { open(it.id) } },
++							onLongClick = { card -> card.item?.let { open(it.id) } },
++							onPlay = { card -> card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
++							modifier = Modifier.padding(top = 18.dp),
++						)
++					}
++				}
++			}
++
++			state.loading -> CircularProgressIndicator(
++				color = ModernHomeColors.Accent,
++				modifier = Modifier
++					.align(Alignment.Center)
++					.size(48.dp),
++			)
++
++			else -> Text(
++				text = stringResource(R.string.modern_details_failed),
++				color = ModernHomeColors.TextSecondary,
++				fontSize = 18.sp,
++				modifier = Modifier.align(Alignment.Center),
++			)
++		}
++
++		// Hold OK on a song
++		val menu = lastMenuTrack
++		ModernMenuDialog(
++			visible = menuTrack != null,
++			title = menu?.second?.name.orEmpty(),
++			subtitle = menu?.second?.let { listOfNotNull(it.artists?.firstOrNull() ?: it.albumArtist, it.album).joinToString(" · ") },
++			options = buildList {
++				val (index, track) = menu ?: return@buildList
++				val tracks = content?.tracks.orEmpty()
++				add(ModernMenuOption(stringResource(R.string.music_play_from_here), R.drawable.ic_play) { playTracks(tracks, index) })
++				add(ModernMenuOption(stringResource(R.string.music_add_to_queue), R.drawable.ic_add) {
++					mediaManager.addToAudioQueue(listOf(track))
++					Toast.makeText(context, R.string.music_added_to_queue, Toast.LENGTH_SHORT).show()
++				})
++				add(ModernMenuOption(stringResource(R.string.music_add_to_playlist), R.drawable.ic_grid) { playlistItems = listOf(track.id) })
++				val favorite = track.userData?.isFavorite == true
++				add(ModernMenuOption(stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite), if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart) {
++					scope.launch {
++						if (viewModel.setSongFavorite(track, !favorite)) viewModel.refresh()
++					}
++				})
++				val albumId = track.albumId
++				if (albumId != null && albumId != content?.item?.id) add(ModernMenuOption(stringResource(R.string.music_go_to_album), R.drawable.ic_album) { open(albumId) })
++				val artistId = track.artistItems?.firstOrNull()?.id ?: track.albumArtists?.firstOrNull()?.id
++				if (artistId != null && artistId != content?.item?.id) add(ModernMenuOption(stringResource(R.string.music_go_to_artist), R.drawable.ic_artist) { open(artistId) })
++			},
++			onDismissRequest = { menuTrack = null },
++		)
++
++		AddToPlaylistDialog(
++			visible = playlistItems != null,
++			itemIds = playlistItems.orEmpty(),
++			onDismissRequest = { playlistItems = null },
++		)
++	}
++}
++
++/** Index of the first song in the list (header, album grid...) */
++private fun trackListOffset(content: MusicItemContent): Int {
++	var offset = 1
++	if (content.albums.isNotEmpty()) offset += 1 + content.albums.chunked(GRID_COLUMNS).size
++	return offset + 1
++}
++
++@Composable
++private fun MusicItemHeader(
++	content: MusicItemContent,
++	favorite: Boolean,
++	playFocusRequester: FocusRequester,
++	onPlay: () -> Unit,
++	onShuffle: () -> Unit,
++	onRadio: () -> Unit,
++	onFavorite: () -> Unit,
++	onArtist: (() -> Unit)?,
++) {
++	val item = content.item
++	val isArtist = content.kind == MusicItemKind.ARTIST
++	val coverShape = if (isArtist) CircleShape else RoundedCornerShape(14.dp)
++
++	val typeLabel = stringResource(
++		when (content.kind) {
++			MusicItemKind.ALBUM -> R.string.music_type_album
++			MusicItemKind.PLAYLIST -> R.string.music_type_playlist
++			MusicItemKind.ARTIST -> R.string.music_type_artist
++			MusicItemKind.GENRE -> R.string.music_type_genre
++		}
++	)
++	val totalTicks = content.tracks.sumOf { it.runTimeTicks ?: 0L }
++	val songsText = if (content.tracks.isNotEmpty() && !isArtist) {
++		LocalContext.current.resources.getQuantityString(R.plurals.music_song_count, content.tracks.size, content.tracks.size)
++	} else null
++	val albumsText = if (content.albums.isNotEmpty()) {
++		LocalContext.current.resources.getQuantityString(R.plurals.music_album_count, content.albums.size, content.albums.size)
++	} else null
++	val details = listOfNotNull(
++		item.productionYear?.toString(),
++		item.genres?.firstOrNull()?.takeIf { content.kind == MusicItemKind.ALBUM },
++		albumsText,
++		songsText,
++		formatDuration(totalTicks)?.takeIf { !isArtist && content.kind != MusicItemKind.GENRE },
++	).joinToString("  ·  ")
++
++	Row(
++		verticalAlignment = Alignment.Bottom,
++		modifier = Modifier
++			.fillMaxWidth()
++			.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
++	) {
++		Box(
++			modifier = Modifier
++				.size(250.dp)
++				.clip(coverShape)
++				.background(ModernHomeColors.CardSurface, coverShape),
++		) {
++			CardArtwork(url = content.coverUrl, fallbackTitle = item.name.orEmpty())
++		}
++
++		Spacer(Modifier.width(32.dp))
++
++		Column(modifier = Modifier.weight(1f)) {
++			Text(
++				text = typeLabel.uppercase(),
++				color = ModernHomeColors.Accent,
++				fontSize = 12.sp,
++				fontWeight = FontWeight.Bold,
++				letterSpacing = 1.sp,
++			)
++			Spacer(Modifier.height(6.dp))
++			Text(
++				text = item.name.orEmpty(),
++				color = ModernHomeColors.TextPrimary,
++				fontSize = 34.sp,
++				lineHeight = 38.sp,
++				fontWeight = FontWeight.Bold,
++				maxLines = 2,
++				overflow = TextOverflow.Ellipsis,
++			)
++			val artist = item.albumArtist ?: item.artists?.firstOrNull()
++			if (artist != null && content.kind == MusicItemKind.ALBUM) {
++				Spacer(Modifier.height(4.dp))
++				Text(text = artist, color = ModernHomeColors.TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
++			}
++			if (details.isNotEmpty()) {
++				Spacer(Modifier.height(6.dp))
++				Text(text = details, color = ModernHomeColors.TextMuted, fontSize = 13.sp, maxLines = 1)
++			}
++			val overview = item.overview
++			if (isArtist && !overview.isNullOrBlank()) {
++				Spacer(Modifier.height(8.dp))
++				Text(
++					text = overview,
++					color = ModernHomeColors.TextSecondary,
++					fontSize = 13.sp,
++					lineHeight = 18.sp,
++					maxLines = 3,
++					overflow = TextOverflow.Ellipsis,
++				)
++			}
++
++			Spacer(Modifier.height(18.dp))
++			Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
++				HeroButton(
++					text = stringResource(if (content.kind == MusicItemKind.GENRE) R.string.modern_music_radio else R.string.lbl_play),
++					icon = if (content.kind == MusicItemKind.GENRE) R.drawable.ic_radio else R.drawable.ic_play,
++					primary = true,
++					onClick = onPlay,
++					modifier = Modifier.focusRequester(playFocusRequester),
++				)
++				if (content.tracks.isNotEmpty()) {
++					HeroButton(text = stringResource(R.string.modern_music_shuffle), icon = R.drawable.ic_shuffle, primary = false, onClick = onShuffle)
++				}
++				if (content.kind != MusicItemKind.GENRE) {
++					HeroButton(text = stringResource(R.string.modern_music_radio), icon = R.drawable.ic_radio, primary = false, onClick = onRadio)
++					HeroButton(
++						text = stringResource(if (favorite) R.string.music_favorite else R.string.music_add_favorite),
++						icon = if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart,
++						primary = false,
++						onClick = onFavorite,
++					)
++				}
++				if (onArtist != null) {
++					HeroButton(text = stringResource(R.string.music_go_to_artist), icon = R.drawable.ic_artist, primary = false, onClick = onArtist)
++				}
++			}
++		}
++	}
++}
++
++/**
++ * Song of the list: number (or a play icon when it is playing), name, artist, album and length.
++ * OK plays from this song, holding OK opens its menu.
++ */
++@OptIn(ExperimentalFoundationApi::class)
++@Composable
++internal fun TrackRow(
++	number: Int?,
++	track: BaseItemDto,
++	showArtist: Boolean,
++	showAlbum: Boolean,
++	playing: Boolean,
++	focusRequester: FocusRequester?,
++	onFocused: () -> Unit,
++	onClick: () -> Unit,
++	onLongClick: () -> Unit,
++	modifier: Modifier = Modifier,
++) {
++	val interactionSource = remember { MutableInteractionSource() }
++	val focused by interactionSource.collectIsFocusedAsState()
++	val shape = RoundedCornerShape(10.dp)
++	val primary = when {
++		focused -> Color.Black
++		playing -> ModernHomeColors.Accent
++		else -> ModernHomeColors.TextPrimary
++	}
++	val secondary = if (focused) Color.Black.copy(alpha = 0.65f) else ModernHomeColors.TextMuted
++	val subtitle = listOfNotNull(
++		if (showArtist) track.artists?.joinToString(", ")?.takeIf { it.isNotEmpty() } ?: track.albumArtist else null,
++		if (showAlbum) track.album else null,
++	).joinToString(" · ")
++
++	Row(
++		verticalAlignment = Alignment.CenterVertically,
++		modifier = modifier
++			.fillMaxWidth()
++			.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal - 12.dp, vertical = 2.dp)
++			.then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
++			.onFocusChanged { if (it.isFocused) onFocused() }
++			.onPreviewKeyEvent { event ->
++				if (!event.isPlayKey) return@onPreviewKeyEvent false
++				if (event.type == KeyEventType.KeyDown) onClick()
++				true
++			}
++			.combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
++			.background(if (focused) Color.White else Color.Transparent, shape)
++			.padding(horizontal = 12.dp, vertical = 9.dp),
++	) {
++		Box(modifier = Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
++			if (playing) {
++				Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = primary, modifier = Modifier.size(16.dp))
++			} else if (number != null) {
++				Text(text = "$number", color = secondary, fontSize = 14.sp)
++			}
++		}
++		Column(modifier = Modifier.weight(1f)) {
++			Text(
++				text = track.name.orEmpty(),
++				color = primary,
++				fontSize = 15.sp,
++				fontWeight = FontWeight.SemiBold,
++				maxLines = 1,
++				overflow = TextOverflow.Ellipsis,
++			)
++			if (subtitle.isNotEmpty()) {
++				Text(text = subtitle, color = secondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
++			}
++		}
++		if (track.userData?.isFavorite == true) {
++			Icon(ImageVector.vectorResource(R.drawable.ic_heart_red), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(14.dp))
++			Spacer(Modifier.width(12.dp))
++		}
++		formatDuration(track.runTimeTicks)?.let { Text(text = it, color = secondary, fontSize = 13.sp) }
++	}
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemViewModel.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemViewModel.kt
+new file mode 100644
+index 0000000..ce3b414
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicItemViewModel.kt
+@@ -0,0 +1,85 @@
++package org.jellyfin.androidtv.ui.music.modern
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.launch
++import org.jellyfin.sdk.model.api.BaseItemDto
++import timber.log.Timber
++import java.util.UUID
++
++data class MusicItemState(
++	val loading: Boolean = true,
++	val failed: Boolean = false,
++	val content: MusicItemContent? = null,
++	val favorite: Boolean = false,
++)
++
++class ModernMusicItemViewModel(
++	private val repository: MusicItemRepository,
++	private val musicRepository: ModernMusicRepository,
++) : ViewModel() {
++	private val _state = MutableStateFlow(MusicItemState())
++	val state: StateFlow<MusicItemState> = _state.asStateFlow()
++
++	/** Last focused element, restored when coming back to the page */
++	var lastFocusKey: String? = null
++
++	private var itemId: UUID? = null
++	private var loadJob: Job? = null
++
++	fun load(id: UUID) {
++		if (itemId == id) return
++		itemId = id
++		refresh()
++	}
++
++	fun refresh() {
++		val id = itemId ?: return
++		loadJob?.cancel()
++		loadJob = viewModelScope.launch {
++			try {
++				val content = repository.load(id)
++				_state.update {
++					it.copy(
++						loading = false,
++						failed = false,
++						content = content,
++						favorite = content.item.userData?.isFavorite == true,
++					)
++				}
++			} catch (err: CancellationException) {
++				throw err
++			} catch (err: Exception) {
++				Timber.w(err, "Unable to load music item $id")
++				_state.update { it.copy(loading = false, failed = it.content == null) }
++			}
++		}
++	}
++
++	fun toggleFavorite() {
++		val item = _state.value.content?.item ?: return
++		val favorite = !_state.value.favorite
++		_state.update { it.copy(favorite = favorite) }
++		viewModelScope.launch {
++			runCatching { repository.setFavorite(item.id, favorite) }
++				.onFailure {
++					Timber.w(it, "Unable to change the favorite state")
++					_state.update { state -> state.copy(favorite = !favorite) }
++				}
++		}
++	}
++
++	suspend fun setSongFavorite(song: BaseItemDto, favorite: Boolean): Boolean =
++		runCatching { repository.setFavorite(song.id, favorite) }.isSuccess
++
++	suspend fun stationTracks(source: StationSource): List<BaseItemDto> =
++		runCatching { musicRepository.stationTracks(source) }
++			.onFailure { Timber.w(it, "Unable to start the radio") }
++			.getOrDefault(emptyList())
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicRepository.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicRepository.kt
+index ea5809b..f1605b5 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicRepository.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicRepository.kt
+@@ -5,12 +5,15 @@ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.async
+ import kotlinx.coroutines.awaitAll
+ import kotlinx.coroutines.coroutineScope
++import kotlinx.coroutines.sync.Semaphore
++import kotlinx.coroutines.sync.withPermit
+ import kotlinx.coroutines.withContext
+ import org.jellyfin.androidtv.util.apiclient.JellyfinImage
+ import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
+ import org.jellyfin.androidtv.util.apiclient.getUrl
+ import org.jellyfin.androidtv.util.apiclient.itemImages
+ import org.jellyfin.sdk.api.client.ApiClient
++import org.jellyfin.sdk.api.client.extensions.artistsApi
+ import org.jellyfin.sdk.api.client.extensions.imageApi
+ import org.jellyfin.sdk.api.client.extensions.instantMixApi
+ import org.jellyfin.sdk.api.client.extensions.itemsApi
+@@ -78,12 +81,101 @@ class ModernMusicRepository(
+ 		}
+ 	}
+ 
++	/** Genres of the library with the cover of one of their albums */
++	suspend fun genres(libraryId: UUID): List<MusicCard> = withContext(Dispatchers.IO) {
++		val genres = api.musicGenresApi.getMusicGenres(
++			parentId = libraryId,
++			sortBy = setOf(ItemSortBy.SORT_NAME),
++			limit = MAX_GENRES,
++			enableTotalRecordCount = false,
++		).content.items
++
++		val semaphore = Semaphore(PARALLEL_REQUESTS)
++		coroutineScope {
++			genres.map { genre ->
++				async {
++					val cover = if (genre.itemImages[ImageType.PRIMARY] != null) null else semaphore.withPermit {
++						safe("genre cover") {
++							api.itemsApi.getItems(
++								GetItemsRequest(
++									parentId = libraryId,
++									genreIds = setOf(genre.id),
++									includeItemTypes = setOf(BaseItemKind.MUSIC_ALBUM),
++									recursive = true,
++									imageTypes = setOf(ImageType.PRIMARY),
++									sortBy = setOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
++									sortOrder = setOf(SortOrder.DESCENDING),
++									limit = 1,
++									enableTotalRecordCount = false,
++								)
++							).content.items.firstOrNull()
++						}
++					}
++					genreCard(genre, cover)
++				}
++			}.awaitAll()
++		}
++	}
++
++	/**
++	 * Every station: the personal ones (like on the music page), one per genre and one per artist.
++	 */
++	suspend fun allStations(libraryId: UUID, labels: MusicLabels): StationGroups = withContext(Dispatchers.IO) {
++		coroutineScope {
++			val genresAsync = async {
++				safe("genres") {
++					api.musicGenresApi.getMusicGenres(
++						parentId = libraryId,
++						sortBy = setOf(ItemSortBy.SORT_NAME),
++						limit = MAX_GENRES,
++						enableTotalRecordCount = false,
++					).content.items
++				}.orEmpty()
++			}
++			val artistsAsync = async {
++				safe("artists") {
++					api.artistsApi.getAlbumArtists(
++						parentId = libraryId,
++						sortBy = setOf(ItemSortBy.SORT_NAME),
++						limit = MAX_STATION_ARTISTS,
++						imageTypeLimit = 1,
++						enableTotalRecordCount = false,
++					).content.items
++				}.orEmpty()
++			}
++			val mostPlayed = safe("most played") { mostPlayed(libraryId) }.orEmpty()
++			val topAlbumId = mostPlayed
++				.mapNotNull { it.albumId }
++				.groupingBy { it }
++				.eachCount()
++				.maxByOrNull { it.value }
++				?.key
++
++			StationGroups(
++				forYou = stations(libraryId, mostPlayed, topAlbumId, labels),
++				genres = genresAsync.await().map { genre ->
++					stationCard("genre_${genre.id}", genre.name.orEmpty(), labels.radio, StationSource(genreId = genre.id), imageItemId = null)
++				},
++				artists = artistsAsync.await().map { artist ->
++					stationCard(
++						key = "artist_${artist.id}",
++						title = artist.name.orEmpty(),
++						subtitle = labels.radio,
++						source = StationSource(artistId = artist.id),
++						imageItemId = artist.id.takeIf { artist.itemImages[ImageType.PRIMARY] != null },
++					)
++				},
++			)
++		}
++	}
++
+ 	/** Tracks of a station (instant mix) */
+ 	suspend fun stationTracks(source: StationSource): List<BaseItemDto> = withContext(Dispatchers.IO) {
+ 		when {
+ 			source.genreId != null -> api.instantMixApi.getInstantMixFromMusicGenreById(id = source.genreId, limit = STATION_TRACKS).content.items
+ 			source.artistId != null -> api.instantMixApi.getInstantMixFromArtists(itemId = source.artistId, limit = STATION_TRACKS).content.items
+ 			source.albumId != null -> api.instantMixApi.getInstantMixFromAlbum(itemId = source.albumId, limit = STATION_TRACKS).content.items
++			source.playlistId != null -> api.instantMixApi.getInstantMixFromPlaylist(itemId = source.playlistId, limit = STATION_TRACKS).content.items
+ 			else -> emptyList()
+ 		}
+ 	}
+@@ -279,7 +371,7 @@ class ModernMusicRepository(
+ 	private fun section(type: MusicSectionType, cards: List<MusicCard>) =
+ 		if (cards.isEmpty()) null else MusicSection(type, cards.distinctBy { it.key })
+ 
+-	private fun albumCard(album: BaseItemDto): MusicCard {
++	internal fun albumCard(album: BaseItemDto): MusicCard {
+ 		val image = album.itemImages[ImageType.PRIMARY] ?: album.albumPrimaryImage
+ 		return MusicCard(
+ 			key = album.id.toString(),
+@@ -292,7 +384,7 @@ class ModernMusicRepository(
+ 		)
+ 	}
+ 
+-	private fun trackCard(track: BaseItemDto): MusicCard {
++	internal fun trackCard(track: BaseItemDto): MusicCard {
+ 		val image = track.itemImages[ImageType.PRIMARY] ?: track.albumPrimaryImage
+ 		return MusicCard(
+ 			key = track.id.toString(),
+@@ -305,7 +397,7 @@ class ModernMusicRepository(
+ 		)
+ 	}
+ 
+-	private fun playlistCard(playlist: BaseItemDto): MusicCard {
++	internal fun playlistCard(playlist: BaseItemDto): MusicCard {
+ 		val image = playlist.itemImages[ImageType.PRIMARY]
+ 		return MusicCard(
+ 			key = playlist.id.toString(),
+@@ -318,7 +410,34 @@ class ModernMusicRepository(
+ 		)
+ 	}
+ 
+-	private fun stationCard(key: String, title: String, subtitle: String?, source: StationSource, imageItemId: UUID?) = MusicCard(
++	internal fun artistCard(artist: BaseItemDto): MusicCard {
++		val image = artist.itemImages[ImageType.PRIMARY]
++		return MusicCard(
++			key = artist.id.toString(),
++			kind = MusicCardKind.ARTIST,
++			item = artist,
++			title = artist.name.orEmpty(),
++			subtitle = null,
++			imageUrl = image?.getUrl(api, maxWidth = COVER_WIDTH),
++			backgroundUrl = image?.blurredUrl(),
++		)
++	}
++
++	/** Genre: the cover of one of its albums (genres rarely have images of their own) */
++	internal fun genreCard(genre: BaseItemDto, coverAlbum: BaseItemDto?): MusicCard {
++		val image = genre.itemImages[ImageType.PRIMARY] ?: coverAlbum?.itemImages?.get(ImageType.PRIMARY)
++		return MusicCard(
++			key = genre.id.toString(),
++			kind = MusicCardKind.GENRE,
++			item = genre,
++			title = genre.name.orEmpty(),
++			subtitle = null,
++			imageUrl = image?.getUrl(api, maxWidth = COVER_WIDTH),
++			backgroundUrl = image?.blurredUrl(),
++		)
++	}
++
++	internal fun stationCard(key: String, title: String, subtitle: String?, source: StationSource, imageItemId: UUID?) = MusicCard(
+ 		key = "station_$key",
+ 		kind = MusicCardKind.STATION,
+ 		item = null,
+@@ -347,7 +466,7 @@ class ModernMusicRepository(
+ 		)
+ 	}
+ 
+-	private fun JellyfinImage.blurredUrl(): String = api.imageApi.getItemImageUrl(
++	internal fun JellyfinImage.blurredUrl(): String = api.imageApi.getItemImageUrl(
+ 		itemId = item,
+ 		imageType = type,
+ 		tag = tag,
+@@ -376,6 +495,9 @@ class ModernMusicRepository(
+ 		const val STATION_ARTISTS = 4
+ 		const val STATION_GENRES = 4
+ 		const val STATION_TRACKS = 100
++		const val MAX_GENRES = 150
++		const val MAX_STATION_ARTISTS = 300
++		const val PARALLEL_REQUESTS = 8
+ 
+ 		const val COVER_WIDTH = 360
+ 		const val HERO_COVER_WIDTH = 500
+@@ -386,6 +508,13 @@ class ModernMusicRepository(
+ 	}
+ }
+ 
++/** Stations page: personal stations, one per genre, one per artist */
++data class StationGroups(
++	val forYou: List<MusicCard>,
++	val genres: List<MusicCard>,
++	val artists: List<MusicCard>,
++)
++
+ /**
+  * Translated texts the repository puts on cards (it has no access to resources).
+  */
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt
+index 6cbc89d..fbae2c8 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt
+@@ -100,7 +100,6 @@ import org.jellyfin.androidtv.ui.navigation.NavigationRepository
+ import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
+ import org.jellyfin.androidtv.util.PlaybackHelper
+ import org.jellyfin.sdk.model.api.BaseItemDto
+-import org.jellyfin.sdk.model.api.BaseItemKind
+ import org.koin.compose.koinInject
+ import java.util.UUID
+ import kotlin.math.absoluteValue
+@@ -147,7 +146,8 @@ fun ModernMusicScreen(
+ 		derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < topBarThresholdPx }
+ 	}
+ 
+-	fun openDetails(id: UUID) = navigationRepository.navigate(Destinations.itemDetails(id))
++	// Albums, playlists and artists open the music page of the item (with its songs)
++	fun openDetails(id: UUID) = navigationRepository.navigate(Destinations.modernMusicItem(id))
+ 	fun play(id: UUID) = playbackHelper.retrieveAndPlay(id, false, context)
+ 
+ 	fun playStation(source: StationSource) {
+@@ -492,10 +492,42 @@ private fun QuickLinks(
+ 			navigationRepository.navigate(Destinations.libraryBrowser(library.copy(displayPreferencesId = "${library.id}AR"), "Artist"))
+ 		}
+ 		QuickLink(stringResource(R.string.lbl_genres)) {
+-			navigationRepository.navigate(Destinations.libraryByGenres(library, BaseItemKind.MUSIC_ALBUM.serialName))
++			navigationRepository.navigate(Destinations.modernMusicBrowse(library, MusicBrowseMode.GENRES))
++		}
++		QuickLink(stringResource(R.string.modern_music_stations)) {
++			navigationRepository.navigate(Destinations.modernMusicBrowse(library, MusicBrowseMode.STATIONS))
+ 		}
+ 		QuickLink(stringResource(R.string.modern_music_shuffle), onClick = onShuffle)
+ 		QuickLink(stringResource(R.string.shared_queue_title), onClick = onSharedQueue)
++		// Music only search, with voice search
++		QuickLinkIcon(R.drawable.ic_search, stringResource(R.string.lbl_search)) {
++			navigationRepository.navigate(Destinations.modernSearch(music = true))
++		}
++	}
++}
++
++@Composable
++private fun QuickLinkIcon(
++	icon: Int,
++	contentDescription: String,
++	onClick: () -> Unit,
++) {
++	val interactionSource = remember { MutableInteractionSource() }
++	val focused by interactionSource.collectIsFocusedAsState()
++
++	Box(
++		contentAlignment = Alignment.Center,
++		modifier = Modifier
++			.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
++			.background(if (focused) Color.White else Color.Transparent, CircleShape)
++			.padding(horizontal = 14.dp, vertical = 7.dp),
++	) {
++		Icon(
++			imageVector = ImageVector.vectorResource(icon),
++			contentDescription = contentDescription,
++			tint = if (focused) Color.Black else ModernHomeColors.TextPrimary,
++			modifier = Modifier.size(18.dp),
++		)
+ 	}
+ }
+ 
+@@ -524,7 +556,7 @@ private fun QuickLink(
+ // Rows
+ 
+ @Composable
+-private fun MusicSectionRow(
++internal fun MusicSectionRow(
+ 	title: String,
+ 	cards: List<MusicCard>,
+ 	focusRequesterFor: (MusicCard) -> FocusRequester?,
+@@ -567,7 +599,7 @@ private fun MusicSectionRow(
+ }
+ 
+ @Composable
+-private fun MusicCardView(
++internal fun MusicCardView(
+ 	card: MusicCard,
+ 	focusRequester: FocusRequester?,
+ 	onFocused: () -> Unit,
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicItemRepository.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicItemRepository.kt
+new file mode 100644
+index 0000000..d82c41a
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicItemRepository.kt
+@@ -0,0 +1,222 @@
++package org.jellyfin.androidtv.ui.music.modern
++
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.async
++import kotlinx.coroutines.coroutineScope
++import kotlinx.coroutines.withContext
++import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
++import org.jellyfin.androidtv.util.apiclient.getUrl
++import org.jellyfin.androidtv.util.apiclient.itemImages
++import org.jellyfin.sdk.api.client.ApiClient
++import org.jellyfin.sdk.api.client.extensions.imageApi
++import org.jellyfin.sdk.api.client.extensions.itemsApi
++import org.jellyfin.sdk.api.client.extensions.libraryApi
++import org.jellyfin.sdk.api.client.extensions.playlistsApi
++import org.jellyfin.sdk.api.client.extensions.userLibraryApi
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.jellyfin.sdk.model.api.BaseItemKind
++import org.jellyfin.sdk.model.api.CreatePlaylistDto
++import org.jellyfin.sdk.model.api.ImageType
++import org.jellyfin.sdk.model.api.ItemFields
++import org.jellyfin.sdk.model.api.ItemSortBy
++import org.jellyfin.sdk.model.api.MediaType
++import org.jellyfin.sdk.model.api.SortOrder
++import org.jellyfin.sdk.model.api.request.GetItemsRequest
++import timber.log.Timber
++import java.util.UUID
++
++enum class MusicItemKind {
++	ALBUM,
++	PLAYLIST,
++	ARTIST,
++	GENRE,
++}
++
++/**
++ * Everything the music page of an album, playlist, artist or genre shows.
++ *
++ * @param tracks songs (album and playlist: all of them in order; artist: the most played)
++ * @param albums albums of the artist or the genre
++ * @param similar albums like this one
++ */
++data class MusicItemContent(
++	val item: BaseItemDto,
++	val kind: MusicItemKind,
++	val coverUrl: String?,
++	val backgroundUrl: String?,
++	val tracks: List<BaseItemDto>,
++	val albums: List<MusicCard>,
++	val similar: List<MusicCard>,
++)
++
++/**
++ * Albums, playlists, artists and genres for the modern music pages, plus the actions on songs
++ * (favorites, playlists).
++ */
++class MusicItemRepository(
++	private val api: ApiClient,
++	private val musicRepository: ModernMusicRepository,
++) {
++	suspend fun load(itemId: UUID): MusicItemContent = withContext(Dispatchers.IO) {
++		val item = api.userLibraryApi.getItem(itemId).content
++		val kind = when (item.type) {
++			BaseItemKind.PLAYLIST -> MusicItemKind.PLAYLIST
++			BaseItemKind.MUSIC_ARTIST -> MusicItemKind.ARTIST
++			BaseItemKind.MUSIC_GENRE -> MusicItemKind.GENRE
++			else -> MusicItemKind.ALBUM
++		}
++
++		coroutineScope {
++			val tracksAsync = async {
++				when (kind) {
++					MusicItemKind.ALBUM -> albumTracks(item.id)
++					MusicItemKind.PLAYLIST -> playlistTracks(item.id)
++					MusicItemKind.ARTIST -> artistSongs(item.id)
++					MusicItemKind.GENRE -> emptyList()
++				}
++			}
++			val albumsAsync = async {
++				when (kind) {
++					MusicItemKind.ARTIST -> safe("artist albums") { artistAlbums(item.id) }.orEmpty()
++					MusicItemKind.GENRE -> safe("genre albums") { genreAlbums(item.id) }.orEmpty()
++					else -> emptyList()
++				}.map { musicRepository.albumCard(it) }
++			}
++			val similarAsync = async {
++				if (kind != MusicItemKind.ALBUM) emptyList()
++				else safe("similar albums") {
++					api.libraryApi.getSimilarAlbums(itemId = item.id, limit = SIMILAR_LIMIT).content.items
++				}.orEmpty().map { musicRepository.albumCard(it) }
++			}
++
++			val tracks = tracksAsync.await()
++			val albums = albumsAsync.await()
++			// Playlists and genres have no image of their own most of the time: first album of the content
++			val image = item.itemImages[ImageType.PRIMARY]
++				?: item.albumPrimaryImage
++				?: tracks.firstNotNullOfOrNull { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage }
++				?: albums.firstOrNull()?.item?.itemImages?.get(ImageType.PRIMARY)
++
++			MusicItemContent(
++				item = item,
++				kind = kind,
++				coverUrl = image?.getUrl(api, maxWidth = COVER_WIDTH),
++				backgroundUrl = image?.let {
++					api.imageApi.getItemImageUrl(itemId = it.item, imageType = it.type, tag = it.tag, maxWidth = BLUR_WIDTH, blur = BLUR, quality = 70)
++				},
++				tracks = tracks,
++				albums = albums,
++				similar = similarAsync.await(),
++			)
++		}
++	}
++
++	private suspend fun albumTracks(albumId: UUID) = api.itemsApi.getItems(
++		GetItemsRequest(
++			parentId = albumId,
++			includeItemTypes = setOf(BaseItemKind.AUDIO),
++			recursive = true,
++			sortBy = setOf(ItemSortBy.PARENT_INDEX_NUMBER, ItemSortBy.INDEX_NUMBER, ItemSortBy.SORT_NAME),
++			fields = setOf(ItemFields.MEDIA_SOURCES),
++		)
++	).content.items
++
++	/** Songs of a playlist, in the order of the playlist */
++	private suspend fun playlistTracks(playlistId: UUID) = api.playlistsApi.getPlaylistItems(
++		playlistId = playlistId,
++		limit = PLAYLIST_LIMIT,
++		enableUserData = true,
++	).content.items.filter { it.type == BaseItemKind.AUDIO }
++
++	private suspend fun artistSongs(artistId: UUID) = api.itemsApi.getItems(
++		GetItemsRequest(
++			artistIds = setOf(artistId),
++			includeItemTypes = setOf(BaseItemKind.AUDIO),
++			recursive = true,
++			sortBy = setOf(ItemSortBy.PLAY_COUNT, ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
++			sortOrder = setOf(SortOrder.DESCENDING),
++			limit = ARTIST_SONGS,
++		)
++	).content.items
++
++	private suspend fun artistAlbums(artistId: UUID) = api.itemsApi.getItems(
++		GetItemsRequest(
++			albumArtistIds = setOf(artistId),
++			includeItemTypes = setOf(BaseItemKind.MUSIC_ALBUM),
++			recursive = true,
++			sortBy = setOf(ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME),
++			sortOrder = setOf(SortOrder.DESCENDING),
++			limit = ALBUMS_LIMIT,
++		)
++	).content.items
++
++	private suspend fun genreAlbums(genreId: UUID) = api.itemsApi.getItems(
++		GetItemsRequest(
++			genreIds = setOf(genreId),
++			includeItemTypes = setOf(BaseItemKind.MUSIC_ALBUM),
++			recursive = true,
++			sortBy = setOf(ItemSortBy.SORT_NAME),
++			limit = GENRE_ALBUMS_LIMIT,
++		)
++	).content.items
++
++	// Actions
++
++	suspend fun setFavorite(itemId: UUID, favorite: Boolean) = withContext(Dispatchers.IO) {
++		if (favorite) api.userLibraryApi.markFavoriteItem(itemId)
++		else api.userLibraryApi.unmarkFavoriteItem(itemId)
++		Unit
++	}
++
++	/** Music playlists of the user, for "Add to playlist" */
++	suspend fun playlists(): List<BaseItemDto> = withContext(Dispatchers.IO) {
++		api.itemsApi.getItems(
++			GetItemsRequest(
++				includeItemTypes = setOf(BaseItemKind.PLAYLIST),
++				mediaTypes = setOf(MediaType.AUDIO),
++				recursive = true,
++				sortBy = setOf(ItemSortBy.SORT_NAME),
++				enableTotalRecordCount = false,
++			)
++		).content.items
++	}
++
++	suspend fun addToPlaylist(playlistId: UUID, itemIds: List<UUID>) = withContext(Dispatchers.IO) {
++		api.playlistsApi.addItemToPlaylist(playlistId = playlistId, ids = itemIds)
++		Unit
++	}
++
++	suspend fun createPlaylist(name: String, itemIds: List<UUID>) = withContext(Dispatchers.IO) {
++		api.playlistsApi.createPlaylist(
++			CreatePlaylistDto(
++				name = name,
++				ids = itemIds,
++				mediaType = MediaType.AUDIO,
++				users = emptyList(),
++				isPublic = false,
++			)
++		)
++		Unit
++	}
++
++	private inline fun <T> safe(name: String, block: () -> T): T? = try {
++		block()
++	} catch (err: CancellationException) {
++		throw err
++	} catch (err: Exception) {
++		Timber.w(err, "Unable to load $name")
++		null
++	}
++
++	private companion object {
++		const val COVER_WIDTH = 600
++		const val BLUR_WIDTH = 300
++		const val BLUR = 18
++		const val SIMILAR_LIMIT = 16
++		const val PLAYLIST_LIMIT = 500
++		const val ARTIST_SONGS = 20
++		const val ALBUMS_LIMIT = 60
++		const val GENRE_ALBUMS_LIMIT = 300
++	}
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicModels.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicModels.kt
+index 5f722c0..6535a1f 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicModels.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/MusicModels.kt
+@@ -18,6 +18,8 @@ enum class MusicCardKind {
+ 	TRACK,
+ 	PLAYLIST,
+ 	STATION,
++	ARTIST,
++	GENRE,
+ }
+ 
+ /** Where a station (instant mix) comes from */
+@@ -26,6 +28,8 @@ data class StationSource(
+ 	val artistId: UUID? = null,
+ 	/** "Your mix": songs like an album */
+ 	val albumId: UUID? = null,
++	/** Songs like those of a playlist */
++	val playlistId: UUID? = null,
+ )
+ 
+ data class MusicCard(
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/ModernNowPlayingScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/ModernNowPlayingScreen.kt
+new file mode 100644
+index 0000000..5bf38eb
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/ModernNowPlayingScreen.kt
+@@ -0,0 +1,631 @@
++package org.jellyfin.androidtv.ui.music.nowplaying
++
++import android.os.Bundle
++import android.text.format.DateFormat
++import android.view.LayoutInflater
++import android.view.View
++import android.view.ViewGroup
++import android.widget.Toast
++import androidx.compose.animation.AnimatedVisibility
++import androidx.compose.animation.Crossfade
++import androidx.compose.animation.core.animateDpAsState
++import androidx.compose.animation.core.animateFloatAsState
++import androidx.compose.animation.core.tween
++import androidx.compose.animation.fadeIn
++import androidx.compose.animation.fadeOut
++import androidx.compose.foundation.ExperimentalFoundationApi
++import androidx.compose.foundation.background
++import androidx.compose.foundation.border
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.combinedClickable
++import androidx.compose.foundation.interaction.MutableInteractionSource
++import androidx.compose.foundation.interaction.collectIsFocusedAsState
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.LazyRow
++import androidx.compose.foundation.lazy.itemsIndexed
++import androidx.compose.foundation.lazy.rememberLazyListState
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateMapOf
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.focus.focusRequester
++import androidx.compose.ui.focus.onFocusChanged
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.graphicsLayer
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.res.vectorResource
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextAlign
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.Dp
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import androidx.fragment.app.Fragment
++import androidx.fragment.compose.content
++import coil3.ImageLoader
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.launch
++import org.jellyfin.androidtv.R
++import org.jellyfin.androidtv.ui.base.Icon
++import org.jellyfin.androidtv.ui.base.Text
++import org.jellyfin.androidtv.ui.base.SeekbarColors
++import org.jellyfin.androidtv.ui.composable.LyricsDtoBox
++import org.jellyfin.androidtv.ui.composable.modifier.fadingEdges
++import org.jellyfin.androidtv.ui.composable.rememberPlayerPositionInfo
++import org.jellyfin.androidtv.ui.composable.rememberQueueEntry
++import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
++import org.jellyfin.androidtv.ui.home.modern.CardArtwork
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
++import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
++import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
++import org.jellyfin.androidtv.ui.home.modern.SectionHeader
++import org.jellyfin.androidtv.ui.home.modern.awaitFrames
++import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
++import org.jellyfin.androidtv.ui.music.modern.AddToPlaylistDialog
++import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
++import org.jellyfin.androidtv.ui.music.modern.formatDuration
++import org.jellyfin.androidtv.ui.navigation.Destinations
++import org.jellyfin.androidtv.ui.navigation.NavigationRepository
++import org.jellyfin.androidtv.ui.playback.MediaManager
++import org.jellyfin.androidtv.ui.player.base.PlayerSeekbar
++import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
++import org.jellyfin.androidtv.util.apiclient.getUrl
++import org.jellyfin.androidtv.util.apiclient.itemImages
++import org.jellyfin.androidtv.util.apiclient.parentImages
++import org.jellyfin.playback.core.PlaybackManager
++import org.jellyfin.playback.core.model.PlayState
++import org.jellyfin.playback.core.model.PlaybackOrder
++import org.jellyfin.playback.core.queue.QueueEntry
++import org.jellyfin.playback.core.queue.queue
++import org.jellyfin.playback.jellyfin.lyrics.lyrics
++import org.jellyfin.playback.jellyfin.lyrics.lyricsFlow
++import org.jellyfin.playback.jellyfin.queue.baseItem
++import org.jellyfin.playback.jellyfin.queue.baseItemFlow
++import org.jellyfin.sdk.api.client.ApiClient
++import org.jellyfin.sdk.api.client.extensions.imageApi
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.jellyfin.sdk.model.api.ImageType
++import org.koin.compose.koinInject
++import java.util.Date
++import java.util.UUID
++
++/** Lyrics stay shown or hidden while the app runs (hidden at start) */
++internal object NowPlayingPreferences {
++	var showLyrics by mutableStateOf(false)
++}
++
++/**
++ * "Now playing" in the style of the music page.
++ */
++class ModernNowPlayingFragment : Fragment() {
++	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
++		content { ModernNowPlayingScreen() }
++}
++
++@Composable
++fun ModernNowPlayingScreen() {
++	val api = koinInject<ApiClient>()
++	val playbackManager = koinInject<PlaybackManager>()
++	val mediaManager = koinInject<MediaManager>()
++	val navigationRepository = koinInject<NavigationRepository>()
++	val musicItemRepository = koinInject<MusicItemRepository>()
++	val imageLoader = koinInject<ImageLoader>()
++	val context = LocalContext.current
++	val scope = rememberCoroutineScope()
++
++	val entry by rememberQueueEntry(playbackManager)
++	val item = entry?.run { baseItemFlow.collectAsState(baseItem).value }
++	val lyrics = entry?.run { lyricsFlow.collectAsState(lyrics).value }
++	val playState by playbackManager.state.playState.collectAsState()
++	val playbackOrder by playbackManager.state.playbackOrder.collectAsState()
++	val entries by playbackManager.queue.entries.collectAsState()
++	val entryIndex by playbackManager.queue.entryIndex.collectAsState()
++	val showLyrics = NowPlayingPreferences.showLyrics
++
++	var upcoming by remember { mutableStateOf<List<QueueEntry>>(emptyList()) }
++	var screensaver by remember { mutableStateOf(false) }
++	var menuEntry by remember { mutableStateOf<QueueEntry?>(null) }
++	var lastMenuEntry by remember { mutableStateOf<QueueEntry?>(null) }
++	var playlistItems by remember { mutableStateOf<List<UUID>?>(null) }
++	// Favorite changes made here, before the queue item is refreshed
++	val favorites = remember { mutableStateMapOf<UUID, Boolean>() }
++	val playFocusRequester = remember { FocusRequester() }
++	val backgroundState = remember { mutableStateOf<String?>(null) }
++
++	// Upcoming songs: the queue only knows them once peeked
++	LaunchedEffect(entry, entries, playbackOrder) {
++		upcoming = playbackManager.queue.peekNext(QUEUE_PEEK).toList()
++	}
++
++	val image = item?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
++	val coverUrl = image?.getUrl(api, maxWidth = 640)
++	LaunchedEffect(image) {
++		backgroundState.value = image?.let {
++			api.imageApi.getItemImageUrl(itemId = it.item, imageType = it.type, tag = it.tag, maxWidth = 300, blur = 18, quality = 70)
++		}
++	}
++
++	fun open(id: UUID?) {
++		if (id != null) navigationRepository.navigate(Destinations.modernMusicItem(id))
++	}
++	fun artistId(song: BaseItemDto?) = song?.artistItems?.firstOrNull()?.id ?: song?.albumArtists?.firstOrNull()?.id
++	fun isFavorite(song: BaseItemDto) = favorites[song.id] ?: (song.userData?.isFavorite == true)
++	fun toggleFavorite(song: BaseItemDto) {
++		val favorite = !isFavorite(song)
++		favorites[song.id] = favorite
++		scope.launch {
++			runCatching { musicItemRepository.setFavorite(song.id, favorite) }
++				.onSuccess {
++					Toast.makeText(context, if (favorite) R.string.music_added_favorite else R.string.music_removed_favorite, Toast.LENGTH_SHORT).show()
++				}
++				.onFailure { favorites[song.id] = !favorite }
++		}
++	}
++
++	LaunchedEffect(Unit) {
++		awaitFrames(2)
++		playFocusRequester.tryRequestFocus()
++	}
++
++	Box(
++		modifier = Modifier
++			.fillMaxSize()
++			.background(ModernHomeColors.Background),
++	) {
++		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
++
++		LazyColumn(
++			state = rememberLazyListState(),
++			contentPadding = PaddingValues(top = 22.dp, bottom = 32.dp),
++			modifier = Modifier.fillMaxSize(),
++		) {
++			// Artist and clock, small
++			item(key = "header") {
++				Row(
++					verticalAlignment = Alignment.CenterVertically,
++					modifier = Modifier
++						.fillMaxWidth()
++						.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
++				) {
++					Text(
++						text = stringResource(R.string.music_now_playing).uppercase(),
++						color = ModernHomeColors.Accent,
++						fontSize = 11.sp,
++						fontWeight = FontWeight.Bold,
++						letterSpacing = 1.2.sp,
++					)
++					Spacer(Modifier.width(12.dp))
++					Text(
++						text = item?.artistsText().orEmpty(),
++						color = ModernHomeColors.TextSecondary,
++						fontSize = 14.sp,
++						fontWeight = FontWeight.SemiBold,
++						maxLines = 1,
++						overflow = TextOverflow.Ellipsis,
++						modifier = Modifier.weight(1f),
++					)
++					Clock(fontSize = 14)
++				}
++			}
++
++			item(key = "main") {
++				val coverSize by animateDpAsState(if (showLyrics && lyrics != null) 270.dp else 230.dp, label = "CoverSize")
++				Row(
++					verticalAlignment = Alignment.CenterVertically,
++					modifier = Modifier
++						.fillMaxWidth()
++						.height(if (showLyrics && lyrics != null) 290.dp else 250.dp)
++						.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
++				) {
++					Box(
++						modifier = Modifier
++							.size(coverSize)
++							.clip(RoundedCornerShape(14.dp))
++							.background(ModernHomeColors.CardSurface),
++					) {
++						Crossfade(targetState = coverUrl, label = "NowPlayingCover") { url ->
++							CardArtwork(url = url, fallbackTitle = item?.album ?: item?.name.orEmpty())
++						}
++					}
++					Spacer(Modifier.width(36.dp))
++
++					if (showLyrics && lyrics != null) {
++						Column(modifier = Modifier.weight(1f)) {
++							SongTitle(item, compact = true)
++							Spacer(Modifier.height(8.dp))
++							NowPlayingLyrics(
++								lyrics = lyrics,
++								playbackManager = playbackManager,
++								fontSize = 22,
++								modifier = Modifier
++									.fillMaxWidth()
++									.height(210.dp),
++							)
++						}
++					} else {
++						Column(modifier = Modifier.weight(1f)) {
++							SongTitle(item, compact = false)
++							if (showLyrics && lyrics == null && item != null) {
++								Spacer(Modifier.height(10.dp))
++								Text(stringResource(R.string.music_no_lyrics), color = ModernHomeColors.TextMuted, fontSize = 13.sp)
++							}
++						}
++					}
++				}
++			}
++
++			// Timeline
++			item(key = "timeline") {
++				Timeline(playbackManager)
++			}
++
++			// Buttons under the timeline
++			item(key = "controls") {
++				Row(
++					horizontalArrangement = Arrangement.spacedBy(14.dp),
++					verticalAlignment = Alignment.Top,
++					modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal - 6.dp, vertical = 4.dp),
++				) {
++					ControlButton(R.drawable.ic_previous, stringResource(R.string.lbl_prev_item)) { mediaManager.prevAudioItem() }
++					ControlButton(
++						icon = if (playState == PlayState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
++						label = stringResource(if (playState == PlayState.PLAYING) R.string.lbl_pause else R.string.lbl_play),
++						primary = true,
++						modifier = Modifier.focusRequester(playFocusRequester),
++					) { mediaManager.togglePlayPause() }
++					ControlButton(R.drawable.ic_next, stringResource(R.string.lbl_next_item)) { mediaManager.nextAudioItem() }
++					ControlButton(R.drawable.ic_add, stringResource(R.string.music_add_to_playlist)) { item?.let { playlistItems = listOf(it.id) } }
++					ControlButton(
++						icon = R.drawable.ic_shuffle,
++						label = stringResource(R.string.lbl_shuffle_queue),
++						active = playbackOrder != PlaybackOrder.DEFAULT,
++					) { mediaManager.shuffleAudioQueue() }
++					ControlButton(
++						icon = R.drawable.ic_subtitles,
++						label = stringResource(if (showLyrics) R.string.music_hide_lyrics else R.string.music_show_lyrics),
++						active = showLyrics,
++					) { NowPlayingPreferences.showLyrics = !showLyrics }
++					ControlButton(R.drawable.ic_artist, stringResource(R.string.music_go_to_artist)) { open(artistId(item)) }
++					ControlButton(R.drawable.ic_album, stringResource(R.string.music_go_to_album)) { open(item?.albumId) }
++					ControlButton(R.drawable.ic_photos, stringResource(R.string.music_screensaver)) { screensaver = true }
++				}
++			}
++
++			// Queue: the current song and what comes next
++			item(key = "queue") {
++				val queue = listOfNotNull(entry) + upcoming
++				Row(
++					verticalAlignment = Alignment.CenterVertically,
++					modifier = Modifier
++						.fillMaxWidth()
++						.padding(top = 6.dp, end = ModernHomeDimens.ScreenPaddingHorizontal),
++				) {
++					SectionHeader(stringResource(R.string.current_queue), compact = true, modifier = Modifier.weight(1f))
++					if (entryIndex >= 0) {
++						Text(
++							text = stringResource(R.string.music_queue_position, entryIndex + 1, playbackManager.queue.estimatedSize.coerceAtLeast(entryIndex + 1)),
++							color = ModernHomeColors.TextSecondary,
++							fontSize = 13.sp,
++							fontWeight = FontWeight.SemiBold,
++						)
++					}
++				}
++				LazyRow(
++					horizontalArrangement = Arrangement.spacedBy(16.dp),
++					contentPadding = PaddingValues(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
++				) {
++					itemsIndexed(queue, key = { index, queueEntry -> "${index}_${queueEntry.baseItem?.id}" }) { index, queueEntry ->
++						QueueCard(
++							entry = queueEntry,
++							playing = index == 0 && entry != null,
++							onClick = { if (index > 0) mediaManager.playFrom(queueEntry) },
++							onLongClick = {
++								lastMenuEntry = queueEntry
++								menuEntry = queueEntry
++							},
++						)
++					}
++				}
++			}
++		}
++
++		// Hold OK on a song of the queue
++		val menuSong = lastMenuEntry?.baseItem
++		ModernMenuDialog(
++			visible = menuEntry != null,
++			title = menuSong?.name.orEmpty(),
++			subtitle = menuSong?.let { listOfNotNull(it.artistsText(), it.album).joinToString(" · ") },
++			options = buildList {
++				val queueEntry = lastMenuEntry ?: return@buildList
++				val song = queueEntry.baseItem ?: return@buildList
++				add(ModernMenuOption(stringResource(R.string.music_play_from_here), R.drawable.ic_play) { mediaManager.playFrom(queueEntry) })
++				if (queueEntry != entry) {
++					add(ModernMenuOption(stringResource(R.string.music_remove_from_queue), R.drawable.ic_trash) { mediaManager.removeFromAudioQueue(queueEntry) })
++				}
++				val favorite = isFavorite(song)
++				add(ModernMenuOption(stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite), if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart) {
++					toggleFavorite(song)
++				})
++				song.albumId?.let { albumId -> add(ModernMenuOption(stringResource(R.string.music_go_to_album), R.drawable.ic_album) { open(albumId) }) }
++				artistId(song)?.let { id -> add(ModernMenuOption(stringResource(R.string.music_go_to_artist), R.drawable.ic_artist) { open(id) }) }
++			},
++			onDismissRequest = { menuEntry = null },
++		)
++
++		AddToPlaylistDialog(
++			visible = playlistItems != null,
++			itemIds = playlistItems.orEmpty(),
++			onDismissRequest = { playlistItems = null },
++		)
++
++		AnimatedVisibility(visible = screensaver, enter = fadeIn(tween(600)), exit = fadeOut(tween(400))) {
++			NowPlayingScreensaver(
++				item = item,
++				coverUrl = coverUrl,
++				backgroundUrl = backgroundState.value,
++				lyrics = if (showLyrics) lyrics else null,
++				playbackManager = playbackManager,
++				onExit = { screensaver = false },
++			)
++		}
++	}
++}
++
++@Composable
++private fun SongTitle(item: BaseItemDto?, compact: Boolean) {
++	Text(
++		text = item?.name.orEmpty(),
++		color = ModernHomeColors.TextPrimary,
++		fontSize = if (compact) 22.sp else 32.sp,
++		lineHeight = if (compact) 26.sp else 36.sp,
++		fontWeight = FontWeight.Bold,
++		maxLines = if (compact) 1 else 2,
++		overflow = TextOverflow.Ellipsis,
++	)
++	Spacer(Modifier.height(4.dp))
++	Text(
++		text = item?.artistsText().orEmpty(),
++		color = ModernHomeColors.TextSecondary,
++		fontSize = if (compact) 15.sp else 19.sp,
++		fontWeight = FontWeight.SemiBold,
++		maxLines = 1,
++		overflow = TextOverflow.Ellipsis,
++	)
++	val details = listOfNotNull(item?.album, item?.productionYear?.toString()).joinToString("  ·  ")
++	if (details.isNotEmpty()) {
++		Spacer(Modifier.height(2.dp))
++		Text(text = details, color = ModernHomeColors.TextMuted, fontSize = if (compact) 12.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
++	}
++}
++
++@Composable
++internal fun NowPlayingLyrics(
++	lyrics: org.jellyfin.sdk.model.api.LyricDto,
++	playbackManager: PlaybackManager,
++	fontSize: Int,
++	modifier: Modifier = Modifier,
++) {
++	val playState by playbackManager.state.playState.collectAsState()
++	val positionInfo by rememberPlayerPositionInfo(playbackManager)
++
++	LyricsDtoBox(
++		lyricDto = lyrics,
++		currentTimestamp = positionInfo.active,
++		duration = positionInfo.duration,
++		paused = playState != PlayState.PLAYING,
++		fontSize = fontSize.sp,
++		color = Color.White,
++		modifier = modifier.fadingEdges(vertical = 40.dp),
++	)
++}
++
++@Composable
++private fun Timeline(playbackManager: PlaybackManager) {
++	val positionInfo by rememberPlayerPositionInfo(playbackManager)
++	val ticksPerMs = 10_000L
++
++	Column(modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 8.dp)) {
++		PlayerSeekbar(
++			playbackManager = playbackManager,
++			colors = SeekbarColors(
++				backgroundColor = Color.White.copy(alpha = 0.2f),
++				bufferColor = Color.White.copy(alpha = 0.3f),
++				progressColor = ModernHomeColors.Accent,
++				knobColor = Color.White,
++			),
++			modifier = Modifier
++				.fillMaxWidth()
++				.height(4.dp),
++		)
++		Spacer(Modifier.height(6.dp))
++		Row {
++			Text(
++				text = formatDuration(positionInfo.active.inWholeMilliseconds * ticksPerMs) ?: "0:00",
++				color = ModernHomeColors.TextSecondary,
++				fontSize = 12.sp,
++			)
++			Spacer(Modifier.weight(1f))
++			Text(
++				text = formatDuration(positionInfo.duration.inWholeMilliseconds * ticksPerMs)?.let { total -> total } ?: "",
++				color = ModernHomeColors.TextSecondary,
++				fontSize = 12.sp,
++			)
++		}
++	}
++}
++
++/**
++ * Round button of the controls, with its name under it while focused.
++ */
++@Composable
++private fun ControlButton(
++	icon: Int,
++	label: String,
++	modifier: Modifier = Modifier,
++	primary: Boolean = false,
++	active: Boolean = false,
++	onClick: () -> Unit,
++) {
++	val interactionSource = remember { MutableInteractionSource() }
++	val focused by interactionSource.collectIsFocusedAsState()
++	val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "ControlScale")
++	val size: Dp = if (primary) 56.dp else 46.dp
++
++	Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
++		Box(
++			contentAlignment = Alignment.Center,
++			modifier = modifier
++				.graphicsLayer {
++					scaleX = scale
++					scaleY = scale
++				}
++				.size(size)
++				.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
++				.background(
++					when {
++						focused -> Color.White
++						primary -> Color.White.copy(alpha = 0.9f)
++						active -> ModernHomeColors.Accent.copy(alpha = 0.35f)
++						else -> Color.White.copy(alpha = 0.1f)
++					},
++					CircleShape,
++				)
++				.border(1.dp, if (active && !focused) ModernHomeColors.Accent else Color.Transparent, CircleShape),
++		) {
++			Icon(
++				imageVector = ImageVector.vectorResource(icon),
++				contentDescription = label,
++				tint = if (focused || primary) Color.Black else ModernHomeColors.TextPrimary,
++				modifier = Modifier.size(if (primary) 26.dp else 20.dp),
++			)
++		}
++		Spacer(Modifier.height(6.dp))
++		Text(
++			text = if (focused) label else "",
++			color = ModernHomeColors.TextPrimary,
++			fontSize = 11.sp,
++			fontWeight = FontWeight.SemiBold,
++			textAlign = TextAlign.Center,
++			maxLines = 2,
++			lineHeight = 13.sp,
++		)
++	}
++}
++
++@OptIn(ExperimentalFoundationApi::class)
++@Composable
++private fun QueueCard(
++	entry: QueueEntry,
++	playing: Boolean,
++	onClick: () -> Unit,
++	onLongClick: () -> Unit,
++) {
++	val api = koinInject<ApiClient>()
++	val song = entry.run { baseItemFlow.collectAsState(baseItem).value }
++	val interactionSource = remember { MutableInteractionSource() }
++	val focused by interactionSource.collectIsFocusedAsState()
++	val scale by animateFloatAsState(if (focused) ModernHomeDimens.FocusScale else 1f, label = "QueueScale")
++	val shape = RoundedCornerShape(ModernHomeDimens.CardCornerRadius)
++	val image = song?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
++	val url = remember(image) { image?.getUrl(api, maxWidth = 240) }
++
++	Column(modifier = Modifier.width(112.dp)) {
++		Box(
++			modifier = Modifier
++				.graphicsLayer {
++					scaleX = scale
++					scaleY = scale
++				}
++				.size(112.dp)
++				.combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
++				.clip(shape)
++				.background(ModernHomeColors.CardSurface, shape)
++				.border(
++					width = if (focused || playing) ModernHomeDimens.FocusBorderWidth else 0.dp,
++					color = if (focused) ModernHomeColors.FocusRing else if (playing) ModernHomeColors.Accent else Color.Transparent,
++					shape = shape,
++				),
++		) {
++			CardArtwork(url = url, fallbackTitle = song?.name.orEmpty())
++			if (playing) {
++				Box(
++					contentAlignment = Alignment.Center,
++					modifier = Modifier
++						.align(Alignment.BottomStart)
++						.padding(6.dp)
++						.size(24.dp)
++						.background(ModernHomeColors.Accent, CircleShape),
++				) {
++					Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
++				}
++			}
++		}
++		Spacer(Modifier.height(8.dp))
++		Text(
++			text = song?.name.orEmpty(),
++			color = if (playing) ModernHomeColors.Accent else ModernHomeColors.TextPrimary,
++			fontSize = 12.sp,
++			fontWeight = FontWeight.SemiBold,
++			maxLines = 1,
++			overflow = TextOverflow.Ellipsis,
++		)
++		Text(
++			text = listOfNotNull(song?.artistsText(), song?.album).joinToString(" · "),
++			color = ModernHomeColors.TextMuted,
++			fontSize = 11.sp,
++			maxLines = 2,
++			lineHeight = 13.sp,
++			overflow = TextOverflow.Ellipsis,
++		)
++	}
++}
++
++@Composable
++internal fun Clock(fontSize: Int, color: Color = ModernHomeColors.TextSecondary) {
++	val context = LocalContext.current
++	var now by remember { mutableStateOf(Date()) }
++	LaunchedEffect(Unit) {
++		while (true) {
++			now = Date()
++			delay(CLOCK_TICK_MS)
++		}
++	}
++	Text(
++		text = DateFormat.getTimeFormat(context).format(now),
++		color = color,
++		fontSize = fontSize.sp,
++		fontWeight = FontWeight.SemiBold,
++	)
++}
++
++internal fun BaseItemDto.artistsText(): String? =
++	artists?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: albumArtist
++
++private const val QUEUE_PEEK = 100
++private const val CLOCK_TICK_MS = 15_000L
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/NowPlayingScreensaver.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/NowPlayingScreensaver.kt
+new file mode 100644
+index 0000000..c0658eb
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/nowplaying/NowPlayingScreensaver.kt
+@@ -0,0 +1,227 @@
++package org.jellyfin.androidtv.ui.music.nowplaying
++
++import androidx.activity.compose.BackHandler
++import androidx.compose.animation.Crossfade
++import androidx.compose.animation.core.animateDpAsState
++import androidx.compose.animation.core.tween
++import androidx.compose.foundation.background
++import androidx.compose.foundation.focusable
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxHeight
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.offset
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableIntStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.focus.focusRequester
++import androidx.compose.ui.graphics.Brush
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.input.key.KeyEventType
++import androidx.compose.ui.input.key.onPreviewKeyEvent
++import androidx.compose.ui.input.key.type
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextAlign
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import coil3.ImageLoader
++import coil3.compose.AsyncImage
++import kotlinx.coroutines.delay
++import org.jellyfin.androidtv.ui.base.Text
++import org.jellyfin.androidtv.ui.composable.rememberPlayerProgress
++import org.jellyfin.androidtv.ui.home.modern.CardArtwork
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
++import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
++import org.jellyfin.playback.core.PlaybackManager
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.jellyfin.sdk.model.api.LyricDto
++import org.koin.compose.koinInject
++
++/** Positions the content moves through, so nothing stays at the same place on the TV */
++private val driftOffsets = listOf(0 to 0, 24 to -14, -20 to 12, 14 to 18, -26 to -10)
++private const val DRIFT_MS = 25_000L
++
++/**
++ * Full screen view of the song: cover, name, album and artist over the blurred cover, and the
++ * lyrics (bigger) when they are shown. Any key goes back.
++ */
++@Composable
++internal fun NowPlayingScreensaver(
++	item: BaseItemDto?,
++	coverUrl: String?,
++	backgroundUrl: String?,
++	lyrics: LyricDto?,
++	playbackManager: PlaybackManager,
++	onExit: () -> Unit,
++) {
++	val imageLoader = koinInject<ImageLoader>()
++	val focusRequester = remember { FocusRequester() }
++	val progress by rememberPlayerProgress(playbackManager)
++	var drift by remember { mutableIntStateOf(0) }
++	val (driftX, driftY) = driftOffsets[drift % driftOffsets.size]
++	val offsetX by animateDpAsState(driftX.dp, tween(6_000), label = "DriftX")
++	val offsetY by animateDpAsState(driftY.dp, tween(6_000), label = "DriftY")
++
++	BackHandler(onBack = onExit)
++
++	LaunchedEffect(Unit) {
++		focusRequester.tryRequestFocus()
++		while (true) {
++			delay(DRIFT_MS)
++			drift++
++		}
++	}
++
++	Box(
++		modifier = Modifier
++			.fillMaxSize()
++			.background(Color.Black)
++			.focusRequester(focusRequester)
++			// Any key (released) closes it, Back included
++			.onPreviewKeyEvent { event ->
++				if (event.type == KeyEventType.KeyUp) onExit()
++				true
++			}
++			.focusable(),
++	) {
++		Crossfade(targetState = backgroundUrl, animationSpec = tween(1_200), label = "ScreensaverBackground") { url ->
++			if (url != null) {
++				AsyncImage(
++					model = url,
++					contentDescription = null,
++					imageLoader = imageLoader,
++					contentScale = ContentScale.Crop,
++					modifier = Modifier.fillMaxSize(),
++				)
++			}
++		}
++		Box(
++			modifier = Modifier
++				.fillMaxSize()
++				.background(Brush.verticalGradient(0f to Color(0x80000000), 1f to Color(0xD9000000)))
++		)
++
++		Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 28.dp, end = 48.dp)) {
++			Clock(fontSize = 16, color = Color.White.copy(alpha = 0.7f))
++		}
++
++		Box(
++			modifier = Modifier
++				.fillMaxSize()
++				.offset(offsetX, offsetY)
++				.padding(horizontal = 72.dp, vertical = 56.dp),
++			contentAlignment = Alignment.Center,
++		) {
++			if (lyrics != null) {
++				Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
++					Column(modifier = Modifier.width(340.dp)) {
++						Cover(coverUrl, item, size = 320)
++						Spacer(Modifier.height(20.dp))
++						SongInfo(item, align = TextAlign.Start, large = false)
++					}
++					Spacer(Modifier.width(56.dp))
++					NowPlayingLyrics(
++						lyrics = lyrics,
++						playbackManager = playbackManager,
++						fontSize = 30,
++						modifier = Modifier
++							.weight(1f)
++							.fillMaxHeight(),
++					)
++				}
++			} else {
++				Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
++					Cover(coverUrl, item, size = 340)
++					Spacer(Modifier.height(28.dp))
++					SongInfo(item, align = TextAlign.Center, large = true)
++				}
++			}
++		}
++
++		// Progress of the song, thin line at the bottom
++		Box(
++			modifier = Modifier
++				.align(Alignment.BottomStart)
++				.fillMaxWidth()
++				.height(3.dp)
++				.background(Color.White.copy(alpha = 0.12f)),
++		) {
++			Box(
++				modifier = Modifier
++					.fillMaxHeight()
++					.fillMaxWidth(progress.coerceIn(0f, 1f))
++					.background(ModernHomeColors.Accent),
++			)
++		}
++	}
++}
++
++@Composable
++private fun Cover(url: String?, item: BaseItemDto?, size: Int) {
++	Box(
++		modifier = Modifier
++			.size(size.dp)
++			.clip(RoundedCornerShape(18.dp))
++			.background(ModernHomeColors.CardSurface),
++	) {
++		Crossfade(targetState = url, animationSpec = tween(800), label = "ScreensaverCover") { coverUrl ->
++			CardArtwork(url = coverUrl, fallbackTitle = item?.album ?: item?.name.orEmpty())
++		}
++	}
++}
++
++@Composable
++private fun SongInfo(item: BaseItemDto?, align: TextAlign, large: Boolean) {
++	Column(horizontalAlignment = if (align == TextAlign.Center) Alignment.CenterHorizontally else Alignment.Start) {
++		Text(
++			text = item?.name.orEmpty(),
++			color = Color.White,
++			fontSize = if (large) 36.sp else 26.sp,
++			lineHeight = if (large) 40.sp else 30.sp,
++			fontWeight = FontWeight.Bold,
++			textAlign = align,
++			maxLines = 2,
++			overflow = TextOverflow.Ellipsis,
++		)
++		Spacer(Modifier.height(6.dp))
++		Text(
++			text = item?.artistsText().orEmpty(),
++			color = Color.White.copy(alpha = 0.85f),
++			fontSize = if (large) 22.sp else 18.sp,
++			fontWeight = FontWeight.SemiBold,
++			textAlign = align,
++			maxLines = 1,
++			overflow = TextOverflow.Ellipsis,
++		)
++		val album = item?.album
++		if (album != null) {
++			Spacer(Modifier.height(4.dp))
++			Text(
++				text = album,
++				color = Color.White.copy(alpha = 0.6f),
++				fontSize = if (large) 17.sp else 15.sp,
++				textAlign = align,
++				maxLines = 1,
++				overflow = TextOverflow.Ellipsis,
++			)
++		}
++	}
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueDialog.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueDialog.kt
+index 498b5a0..6dd47c7 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueDialog.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueDialog.kt
+@@ -108,6 +108,18 @@ fun SharedQueueDialog(
+ 						maxLines = 1,
+ 						overflow = TextOverflow.Ellipsis,
+ 					)
++					Spacer(Modifier.height(6.dp))
++					Text(
++						text = stringResource(R.string.shared_queue_links),
++						color = ModernHomeColors.TextSecondary,
++						fontSize = 13.sp,
++					)
++					Spacer(Modifier.height(4.dp))
++					Text(
++						text = stringResource(R.string.shared_queue_troubleshoot),
++						color = ModernHomeColors.TextMuted,
++						fontSize = 12.sp,
++					)
+ 					Spacer(Modifier.height(16.dp))
+ 
+ 					Text(
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueServer.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueServer.kt
+index 0ec555b..854aa15 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueServer.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/share/SharedQueueServer.kt
+@@ -1,6 +1,7 @@
+ package org.jellyfin.androidtv.ui.music.share
+ 
+ import android.content.Context
++import android.net.ConnectivityManager
+ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Dispatchers
+@@ -98,7 +99,7 @@ class SharedQueueServer(
+ 		}
+ 		serverSocket = socket
+ 		token = newToken()
+-		val address = lanAddress()
++		val address = lanAddress(context)
+ 		_state.update {
+ 			SharedQueueState(
+ 				running = true,
+@@ -191,6 +192,12 @@ class SharedQueueServer(
+ 					output.respondJson(buildJsonObject { put("ok", added) })
+ 				}
+ 
++				// Link shared from Spotify, Apple Music or YouTube Music
++				method == "POST" && path == "/api/link" -> {
++					val name = query["by"].orEmpty().trim().take(MAX_NAME_LENGTH).ifEmpty { "Guest" }
++					output.respondJson(addLink(query["url"].orEmpty(), name))
++				}
++
+ 				method == "GET" && path == "/img" -> {
+ 					val id = query["id"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+ 					val image = id?.let { image(it) }
+@@ -314,6 +321,78 @@ class SharedQueueServer(
+ 		addedBy?.let { put("by", it) }
+ 	}
+ 
++	/**
++	 * A link from a streaming app: find the same song (or album) in the library and add it.
++	 * Returns {ok, name, artist} or {ok: false, reason: "link" | "missing" | "full"}.
++	 */
++	private suspend fun addLink(text: String, addedBy: String): JsonObject {
++		fun failure(reason: String, linked: LinkedMusic? = null) = buildJsonObject {
++			put("ok", false)
++			put("reason", reason)
++			linked?.let {
++				put("name", it.title)
++				it.artist?.let { artist -> put("artist", artist) }
++			}
++		}
++
++		val linked = StreamingLinkResolver.resolve(text) ?: return failure("link")
++		val match = findInLibrary(linked) ?: return failure("missing", linked)
++		if (!add(match.id, addedBy)) return failure("full", linked)
++
++		return buildJsonObject {
++			put("ok", true)
++			put("name", match.name.orEmpty())
++			(match.albumArtist ?: match.artists?.firstOrNull())?.let { put("artist", it) }
++		}
++	}
++
++	/** Best match of a song or album in the library: same name, and same artist when known */
++	private suspend fun findInLibrary(linked: LinkedMusic): BaseItemDto? {
++		val title = StreamingLinkResolver.cleanTitle(linked.title)
++		val searchTerm = title.substringBefore(" (").substringBefore(" - ").substringBefore(" feat").trim().ifEmpty { title }
++		val candidates = api.itemsApi.getItems(
++			GetItemsRequest(
++				searchTerm = searchTerm,
++				includeItemTypes = setOf(if (linked.isAlbum) BaseItemKind.MUSIC_ALBUM else BaseItemKind.AUDIO),
++				recursive = true,
++				limit = LINK_CANDIDATES,
++				enableUserData = false,
++				enableImages = false,
++			)
++		).content.items
++
++		val wantedTitle = StreamingLinkResolver.normalize(title)
++		val wantedArtist = linked.artist?.let { StreamingLinkResolver.normalize(it) }?.takeIf { it.isNotEmpty() }
++
++		fun score(item: BaseItemDto): Int {
++			val name = StreamingLinkResolver.normalize(item.name.orEmpty())
++			var score = when {
++				name == wantedTitle -> 4
++				name.startsWith(wantedTitle) || wantedTitle.startsWith(name) -> 2
++				wantedTitle in name || name in wantedTitle -> 1
++				else -> 0
++			}
++			if (score == 0) return 0
++
++			if (wantedArtist != null) {
++				val artists = (item.artists.orEmpty() + listOfNotNull(item.albumArtist)).map { StreamingLinkResolver.normalize(it) }
++				score += when {
++					artists.any { it == wantedArtist } -> 4
++					artists.any { it.isNotEmpty() && (wantedArtist in it || it in wantedArtist) } -> 2
++					// Another artist with the same song name: only when nothing better shows up
++					else -> -1
++				}
++			}
++			return score
++		}
++
++		return candidates
++			.map { it to score(it) }
++			.filter { (_, score) -> score >= MIN_LINK_SCORE }
++			.maxByOrNull { (_, score) -> score }
++			?.first
++	}
++
+ 	/** Add a song, or every song of an album, at the end of the queue */
+ 	private suspend fun add(id: UUID, addedBy: String): Boolean {
+ 		if (_state.value.guestSongs.size >= MAX_GUEST_SONGS) return false
+@@ -388,20 +467,42 @@ class SharedQueueServer(
+ 		private const val SEARCH_ALBUMS = 8
+ 		private const val MAX_ALBUM_SONGS = 60
+ 		private const val MAX_GUEST_SONGS = 150
++		private const val LINK_CANDIDATES = 40
++		private const val MIN_LINK_SCORE = 3
+ 		private const val IMAGE_SIZE = 200
+ 		private const val TOKEN_LENGTH = 6
+ 		private const val TOKEN_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"
+ 
+-		/** IPv4 address of the TV on the home network (Wi-Fi or Ethernet) */
+-		fun lanAddress(): InetAddress? = runCatching {
+-			NetworkInterface.getNetworkInterfaces().toList()
+-				.filter { it.isUp && !it.isLoopback && !it.isVirtual }
+-				.flatMap { it.inetAddresses.toList() }
+-				.filterIsInstance<Inet4Address>()
+-				.filter { !it.isLoopbackAddress }
+-				// Home networks first (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+-				.sortedByDescending { it.isSiteLocalAddress }
+-				.firstOrNull()
+-		}.getOrNull()
++		/** Interfaces that are not the home network (Wi-Fi Direct for screen mirroring, VPNs...) */
++		private val ignoredInterfaces = listOf("p2p", "dummy", "tun", "ppp", "rmnet", "ccmni", "ap", "swlan")
++
++		/**
++		 * IPv4 address of the TV on the home network: the one of the network Android uses (Wi-Fi or
++		 * Ethernet). Looking at every interface picked the Wi-Fi Direct address (192.168.49.1) on
++		 * some Fire TVs, which phones can't reach.
++		 */
++		fun lanAddress(context: Context): InetAddress? {
++			val activeAddress = runCatching {
++				val connectivity = context.getSystemService(ConnectivityManager::class.java)
++				val network = connectivity?.activeNetwork
++				network?.let { connectivity.getLinkProperties(it) }
++					?.linkAddresses
++					?.map { it.address }
++					?.filterIsInstance<Inet4Address>()
++					?.firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
++			}.getOrNull()
++			if (activeAddress != null) return activeAddress
++
++			return runCatching {
++				NetworkInterface.getNetworkInterfaces().toList()
++					.filter { it.isUp && !it.isLoopback && !it.isVirtual }
++					.filter { network -> ignoredInterfaces.none { network.name.startsWith(it) } }
++					// Wi-Fi and Ethernet first
++					.sortedByDescending { it.name.startsWith("wlan") || it.name.startsWith("eth") }
++					.flatMap { it.inetAddresses.toList() }
++					.filterIsInstance<Inet4Address>()
++					.firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress && it.isSiteLocalAddress }
++			}.getOrNull()
++		}
+ 	}
+ }
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/share/StreamingLinkResolver.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/share/StreamingLinkResolver.kt
+new file mode 100644
+index 0000000..15e4594
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/share/StreamingLinkResolver.kt
+@@ -0,0 +1,191 @@
++package org.jellyfin.androidtv.ui.music.share
++
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.withContext
++import kotlinx.serialization.json.Json
++import kotlinx.serialization.json.jsonObject
++import kotlinx.serialization.json.jsonPrimitive
++import timber.log.Timber
++import java.net.HttpURLConnection
++import java.net.URL
++import java.net.URLEncoder
++import java.text.Normalizer
++
++/** Song (or album) named by a link from a streaming app */
++data class LinkedMusic(
++	val title: String,
++	val artist: String?,
++	val isAlbum: Boolean,
++)
++
++/**
++ * Reads what a Spotify, Apple Music or YouTube (Music) link points to: the name of the song and
++ * its artist, taken from the public page of the link. The song is then looked up in the Jellyfin
++ * library: the TV can only play music from the library.
++ */
++object StreamingLinkResolver {
++	private val urlPattern = Regex("""https?://\S+""")
++	private val metaPattern = Regex("""<meta\s+[^>]*?(?:property|name)\s*=\s*"([^"]+)"[^>]*?content\s*=\s*"([^"]*)"""", RegexOption.IGNORE_CASE)
++	private val metaReversedPattern = Regex("""<meta\s+[^>]*?content\s*=\s*"([^"]*)"[^>]*?(?:property|name)\s*=\s*"([^"]+)"""", RegexOption.IGNORE_CASE)
++	private val titlePattern = Regex("""<title[^>]*>([^<]+)</title>""", RegexOption.IGNORE_CASE)
++
++	/** First link in a shared text ("Listen to X on Spotify: https://...") */
++	fun findUrl(text: String): String? = urlPattern.find(text)?.value?.trimEnd('.', ',', ')', '"', '\'')
++
++	suspend fun resolve(text: String): LinkedMusic? = withContext(Dispatchers.IO) {
++		val url = findUrl(text) ?: return@withContext null
++		val host = runCatching { URL(url).host.lowercase() }.getOrNull() ?: return@withContext null
++
++		try {
++			when {
++				"spotify" in host || host == "spoti.fi" -> spotify(url)
++				"apple.com" in host -> appleMusic(url)
++				"youtube" in host || host == "youtu.be" -> youtube(url)
++				else -> null
++			}
++		} catch (err: Exception) {
++			Timber.w(err, "Unable to read the link $url")
++			null
++		}
++	}
++
++	// Spotify
++
++	private fun spotify(url: String): LinkedMusic? {
++		val (finalUrl, html) = download(url) ?: return null
++		val meta = meta(html)
++		val isAlbum = "/album/" in finalUrl
++		val title = meta["og:title"]?.decodeHtml()?.takeIf { it.isNotBlank() } ?: return null
++
++		// "Blinding Lights - song and lyrics by The Weeknd | Spotify", "After Hours - Album by The Weeknd | Spotify"
++		val pageTitle = titlePattern.find(html)?.groupValues?.get(1)?.decodeHtml().orEmpty()
++		val artist = meta["music:musician_description"]?.decodeHtml()
++			?: Regex("""\bby (.+?) \| Spotify""").find(pageTitle)?.groupValues?.get(1)
++			// "The Weeknd · Song · 2019"
++			?: meta["og:description"]?.decodeHtml()?.split('·')?.map { it.trim() }?.firstOrNull { it.isNotEmpty() && it != "Song" && it != "Album" }
++
++		return LinkedMusic(title, artist, isAlbum)
++	}
++
++	// Apple Music
++
++	private fun appleMusic(url: String): LinkedMusic? {
++		val isAlbum = "?i=" !in url && "&i=" !in url && "/song/" !in url
++		val (_, html) = download(url) ?: return null
++		val meta = meta(html)
++		val ogTitle = (meta["og:title"] ?: meta["apple:title"])?.decodeHtml()?.replace("‎", "")?.trim() ?: return null
++
++		val patterns = listOf(
++			// "Blinding Lights – Song by The Weeknd – Apple Music"
++			Regex("""^(.+?)\s+[-–]\s+(?:Song|Single|Album|EP)\s+(?:by|de|von|di)\s+(.+?)\s+[-–]\s+Apple Music$""", RegexOption.IGNORE_CASE),
++			// "Blinding Lights by The Weeknd on Apple Music"
++			Regex("""^(.+?)\s+by\s+(.+?)\s+on Apple Music$""", RegexOption.IGNORE_CASE),
++		)
++		for (pattern in patterns) {
++			val match = pattern.find(ogTitle) ?: continue
++			return LinkedMusic(match.groupValues[1].trim(), match.groupValues[2].trim(), isAlbum)
++		}
++
++		return LinkedMusic(ogTitle.substringBefore(" - Apple Music").trim(), null, isAlbum)
++	}
++
++	// YouTube / YouTube Music
++
++	private fun youtube(url: String): LinkedMusic? {
++		// oEmbed only knows www.youtube.com links
++		val videoId = Regex("""[?&]v=([\w-]{6,})""").find(url)?.groupValues?.get(1)
++			?: Regex("""youtu\.be/([\w-]{6,})""").find(url)?.groupValues?.get(1)
++			?: return null
++		val watchUrl = "https://www.youtube.com/watch?v=$videoId"
++		val (_, body) = download("https://www.youtube.com/oembed?format=json&url=" + URLEncoder.encode(watchUrl, "UTF-8")) ?: return null
++		val json = Json.parseToJsonElement(body).jsonObject
++		val rawTitle = json["title"]?.jsonPrimitive?.content ?: return null
++		val author = json["author_name"]?.jsonPrimitive?.content
++			?.removeSuffix(" - Topic")
++			?.replace(Regex("VEVO$", RegexOption.IGNORE_CASE), "")
++			?.trim()
++
++		val title = cleanTitle(rawTitle)
++		// "The Weeknd - Blinding Lights"
++		val dash = title.indexOf(" - ")
++		return if (dash > 0) {
++			LinkedMusic(title.substring(dash + 3).trim(), title.substring(0, dash).trim(), isAlbum = false)
++		} else {
++			LinkedMusic(title, author, isAlbum = false)
++		}
++	}
++
++	// Helpers
++
++	/** Final url and body of a page (follows redirects of short links like spotify.link) */
++	private fun download(url: String): Pair<String, String>? {
++		var current = url
++		repeat(MAX_REDIRECTS) {
++			val connection = URL(current).openConnection() as HttpURLConnection
++			connection.instanceFollowRedirects = false
++			connection.connectTimeout = TIMEOUT_MS
++			connection.readTimeout = TIMEOUT_MS
++			connection.setRequestProperty("User-Agent", USER_AGENT)
++			connection.setRequestProperty("Accept-Language", "en")
++			try {
++				val status = connection.responseCode
++				if (status in 300..399) {
++					current = connection.getHeaderField("Location")?.let { URL(URL(current), it).toString() } ?: return null
++					return@repeat
++				}
++				if (status !in 200..299) return null
++				val body = connection.inputStream.use { stream -> String(stream.readNBytesCompat(MAX_PAGE_BYTES), Charsets.UTF_8) }
++				return current to body
++			} finally {
++				connection.disconnect()
++			}
++		}
++		return null
++	}
++
++	private fun java.io.InputStream.readNBytesCompat(max: Int): ByteArray {
++		val buffer = java.io.ByteArrayOutputStream()
++		val chunk = ByteArray(16 * 1024)
++		while (buffer.size() < max) {
++			val read = read(chunk)
++			if (read < 0) break
++			buffer.write(chunk, 0, minOf(read, max - buffer.size()))
++		}
++		return buffer.toByteArray()
++	}
++
++	private fun meta(html: String): Map<String, String> {
++		val values = HashMap<String, String>()
++		metaPattern.findAll(html).forEach { values.putIfAbsent(it.groupValues[1].lowercase(), it.groupValues[2]) }
++		metaReversedPattern.findAll(html).forEach { values.putIfAbsent(it.groupValues[2].lowercase(), it.groupValues[1]) }
++		return values
++	}
++
++	private fun String.decodeHtml(): String = replace("&amp;", "&")
++		.replace("&quot;", "\"")
++		.replace("&#39;", "'")
++		.replace("&#x27;", "'")
++		.replace("&apos;", "'")
++		.replace("&lt;", "<")
++		.replace("&gt;", ">")
++		.trim()
++
++	/** "Song (Official Video) [4K]" → "Song" */
++	fun cleanTitle(title: String): String = title
++		.replace(Regex("""\s*[(\[][^)\]]*(official|video|audio|lyric|visuali[sz]er|remaster|live|hd|4k|explicit|clip)[^)\]]*[)\]]""", RegexOption.IGNORE_CASE), "")
++		.replace(Regex("""\s+[-–]\s+(remaster(ed)?|official).*$""", RegexOption.IGNORE_CASE), "")
++		.trim()
++
++	/** Lowercase letters and digits only, without accents ("Café del Mar!" → "cafedelmar") */
++	fun normalize(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD)
++		.replace(Regex("""\p{M}+"""), "")
++		.lowercase()
++		.replace(Regex("""\(.*?\)|\[.*?]"""), "")
++		.replace(Regex("""\b(feat|ft)\b.*$"""), "")
++		.filter { it.isLetterOrDigit() }
++
++	private const val TIMEOUT_MS = 6_000
++	private const val MAX_REDIRECTS = 5
++	private const val MAX_PAGE_BYTES = 1_500_000
++	private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/navigation/Destinations.kt b/app/src/main/java/org/jellyfin/androidtv/ui/navigation/Destinations.kt
+index 1b1b12b..8dfb812 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/navigation/Destinations.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/navigation/Destinations.kt
+@@ -18,7 +18,12 @@ import org.jellyfin.androidtv.ui.home.HomeFragment
+ import org.jellyfin.androidtv.ui.itemdetail.FullDetailsFragment
+ import org.jellyfin.androidtv.ui.itemdetail.ItemListFragment
+ import org.jellyfin.androidtv.ui.itemdetail.MusicFavoritesListFragment
++import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseFragment
+ import org.jellyfin.androidtv.ui.music.modern.ModernMusicFragment
++import org.jellyfin.androidtv.ui.music.modern.MusicBrowseMode
++import org.jellyfin.androidtv.ui.music.nowplaying.ModernNowPlayingFragment
++import org.jellyfin.androidtv.ui.search.modern.ModernSearchFragment
++import org.jellyfin.androidtv.ui.music.modern.ModernMusicItemFragment
+ import org.jellyfin.androidtv.ui.livetv.LiveTvGuideFragment
+ import org.jellyfin.androidtv.ui.playback.AudioNowPlayingFragment
+ import org.jellyfin.androidtv.ui.playback.CustomPlaybackOverlayFragment
+@@ -28,7 +33,9 @@ import org.jellyfin.androidtv.ui.player.photo.PhotoPlayerFragment
+ import org.jellyfin.androidtv.ui.player.video.VideoPlayerFragment
+ import org.jellyfin.androidtv.ui.search.SearchFragment
+ import org.jellyfin.sdk.model.api.BaseItemDto
++import org.jellyfin.sdk.model.api.BaseItemKind
+ import org.jellyfin.sdk.model.api.ItemSortBy
++import org.jellyfin.sdk.model.api.MediaType
+ import org.jellyfin.sdk.model.api.SeriesTimerInfoDto
+ import org.jellyfin.sdk.model.api.SortOrder
+ import org.koin.java.KoinJavaComponent
+@@ -92,6 +99,36 @@ object Destinations {
+ 		putString(Extras.Folder, Json.encodeToString(item))
+ 	}
+ 
++	/** Grid of genres or of every station of a music library */
++	fun modernMusicBrowse(library: BaseItemDto, mode: MusicBrowseMode) = fragmentDestination<ModernMusicBrowseFragment> {
++		putString(Extras.Folder, Json.encodeToString(library))
++		putString(ModernMusicBrowseFragment.ARGUMENT_MODE, mode.name)
++	}
++
++	/** Search with poster badges and voice input; [music] limits it to music */
++	fun modernSearch(music: Boolean = false) = fragmentDestination<ModernSearchFragment> {
++		putBoolean(ModernSearchFragment.ARGUMENT_MUSIC, music)
++	}
++
++	/** Album, playlist, artist or genre in the style of the music page */
++	fun modernMusicItem(item: UUID) = fragmentDestination<ModernMusicItemFragment> {
++		putString(ModernMusicItemFragment.ARGUMENT_ITEM_ID, item.toString())
++	}
++
++	/** Album or playlist: the modern music page for music, the list of items otherwise */
++	fun albumOrPlaylist(item: BaseItemDto): Destination.Fragment =
++		if (isModernMusicItem(item)) modernMusicItem(item.id) else itemList(item.id)
++
++	/** True for the items shown by [modernMusicItem] when the modern music page is enabled */
++	fun isModernMusicItem(item: BaseItemDto): Boolean {
++		if (!preference(UserPreferences.modernMusicEnabled)) return false
++		return when (item.type) {
++			BaseItemKind.MUSIC_ALBUM, BaseItemKind.MUSIC_ARTIST, BaseItemKind.MUSIC_GENRE -> true
++			BaseItemKind.PLAYLIST -> item.mediaType == MediaType.AUDIO
++			else -> false
++		}
++	}
++
+ 	// TODO only pass item id instead of complete JSON to browsing destinations
+ 	fun librarySuggestions(item: BaseItemDto) =
+ 		fragmentDestination<SuggestedMoviesFragment> {
+@@ -155,7 +192,11 @@ object Destinations {
+ 	}
+ 
+ 	// Playback
+-	val nowPlaying = fragmentDestination<AudioNowPlayingFragment>()
++	/** "Now playing": the modern screen when the modern music page is enabled */
++	val nowPlaying: Destination.Fragment
++		get() = if (preference(UserPreferences.modernMusicEnabled)) modernNowPlaying else legacyNowPlaying
++	private val legacyNowPlaying = fragmentDestination<AudioNowPlayingFragment>()
++	private val modernNowPlaying = fragmentDestination<ModernNowPlayingFragment>()
+ 
+ 	fun photoPlayer(
+ 		item: UUID,
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchScreen.kt
+new file mode 100644
+index 0000000..8a71fa9
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchScreen.kt
+@@ -0,0 +1,403 @@
++package org.jellyfin.androidtv.ui.search.modern
++
++import android.os.Bundle
++import android.view.LayoutInflater
++import android.view.View
++import android.view.ViewGroup
++import androidx.compose.foundation.background
++import androidx.compose.foundation.border
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.interaction.MutableInteractionSource
++import androidx.compose.foundation.interaction.collectIsFocusedAsState
++import androidx.compose.foundation.layout.Box
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.lazy.itemsIndexed
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.foundation.text.BasicTextField
++import androidx.compose.foundation.text.KeyboardActions
++import androidx.compose.foundation.text.KeyboardOptions
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.rememberCoroutineScope
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.focus.focusRequester
++import androidx.compose.ui.focus.onFocusChanged
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.SolidColor
++import androidx.compose.ui.graphics.vector.ImageVector
++import androidx.compose.ui.input.key.Key
++import androidx.compose.ui.input.key.KeyEventType
++import androidx.compose.ui.input.key.key
++import androidx.compose.ui.input.key.onPreviewKeyEvent
++import androidx.compose.ui.input.key.type
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.platform.LocalSoftwareKeyboardController
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.res.vectorResource
++import androidx.compose.ui.text.TextStyle
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.input.ImeAction
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import androidx.fragment.app.Fragment
++import androidx.fragment.compose.content
++import coil3.ImageLoader
++import kotlinx.coroutines.launch
++import org.jellyfin.androidtv.R
++import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
++import org.jellyfin.androidtv.ui.base.Icon
++import org.jellyfin.androidtv.ui.base.Text
++import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
++import org.jellyfin.androidtv.ui.home.modern.CardStyle
++import org.jellyfin.androidtv.ui.home.modern.HomeCard
++import org.jellyfin.androidtv.ui.home.modern.HomeSection
++import org.jellyfin.androidtv.ui.home.modern.HomeSectionRow
++import org.jellyfin.androidtv.ui.home.modern.HomeSectionType
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
++import org.jellyfin.androidtv.ui.home.modern.PosterActionsDialogs
++import org.jellyfin.androidtv.ui.home.modern.awaitFrames
++import org.jellyfin.androidtv.ui.home.modern.menuTarget
++import org.jellyfin.androidtv.ui.home.modern.rememberPosterActionsState
++import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
++import org.jellyfin.androidtv.ui.music.modern.MusicCard
++import org.jellyfin.androidtv.ui.music.modern.MusicCardKind
++import org.jellyfin.androidtv.ui.music.modern.MusicSectionRow
++import org.jellyfin.androidtv.ui.navigation.Destinations
++import org.jellyfin.androidtv.ui.navigation.NavigationRepository
++import org.jellyfin.androidtv.ui.search.composable.SearchVoiceInput
++import org.jellyfin.androidtv.util.PlaybackHelper
++import org.jellyfin.androidtv.util.speech.rememberSpeechRecognizerAvailability
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.jellyfin.sdk.model.api.BaseItemKind
++import org.koin.androidx.viewmodel.ext.android.viewModel
++import org.koin.compose.koinInject
++
++/**
++ * Search in the style of the modern screens: posters with every badge, and voice input.
++ */
++class ModernSearchFragment : Fragment() {
++	companion object {
++		const val ARGUMENT_MUSIC = "Music"
++	}
++
++	private val viewModel by viewModel<ModernSearchViewModel>()
++
++	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
++		viewModel.musicOnly = arguments?.getBoolean(ARGUMENT_MUSIC) == true
++		return content { ModernSearchScreen(viewModel) }
++	}
++}
++
++@Composable
++fun ModernSearchScreen(viewModel: ModernSearchViewModel) {
++	val state by viewModel.state.collectAsState()
++	val context = LocalContext.current
++	val scope = rememberCoroutineScope()
++	val navigationRepository = koinInject<NavigationRepository>()
++	val playbackHelper = koinInject<PlaybackHelper>()
++	val imageLoader = koinInject<ImageLoader>()
++	val posterActions = rememberPosterActionsState()
++	val fieldFocusRequester = remember { FocusRequester() }
++	val backgroundState = remember { mutableStateOf<String?>(null) }
++	val voiceAvailable = rememberSpeechRecognizerAvailability()
++	// The field opens the keyboard (and the voice input of the remote) right away the first time
++	var startEditing by remember { mutableStateOf(state.query.isEmpty()) }
++
++	fun openDetails(item: BaseItemDto, targetId: java.util.UUID) {
++		val destination = when (item.type) {
++			BaseItemKind.BOX_SET -> Destinations.collectionBrowser(item)
++			else -> Destinations.itemDetails(targetId)
++		}
++		navigationRepository.navigate(destination)
++	}
++
++	fun play(item: BaseItemDto) {
++		scope.launch {
++			val playableId = viewModel.resolvePlayableId(item)
++			if (playableId != null) playbackHelper.retrieveAndPlay(playableId, false, context)
++		}
++	}
++
++	fun onPosterClick(card: HomeCard) = openDetails(card.item, card.targetId)
++	fun onPosterPlay(card: HomeCard) {
++		val playId = card.playId
++		if (playId != null) playbackHelper.retrieveAndPlay(playId, false, context) else play(card.item)
++	}
++
++	fun onMusicClick(card: MusicCard) {
++		val item = card.item ?: return
++		when (card.kind) {
++			MusicCardKind.TRACK -> playbackHelper.retrieveAndPlay(item.id, false, context)
++			else -> navigationRepository.navigate(Destinations.modernMusicItem(item.id))
++		}
++	}
++
++	// Coming back to the page: the search box (the first time the keyboard opens by itself)
++	LaunchedEffect(Unit) {
++		if (startEditing) return@LaunchedEffect
++		awaitFrames(2)
++		fieldFocusRequester.tryRequestFocus()
++	}
++
++	Box(
++		modifier = Modifier
++			.fillMaxSize()
++			.background(ModernHomeColors.Background),
++	) {
++		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
++
++		LazyColumn(
++			contentPadding = PaddingValues(top = 36.dp, bottom = 80.dp),
++			modifier = Modifier.fillMaxSize(),
++		) {
++			item(key = "field") {
++				Row(
++					verticalAlignment = Alignment.CenterVertically,
++					modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
++				) {
++					SearchField(
++						query = state.query,
++						hint = stringResource(if (viewModel.musicOnly) R.string.search_hint_music else R.string.search_hint),
++						startEditing = startEditing,
++						onEditingStarted = { startEditing = false },
++						onQueryChange = { viewModel.setQuery(it) },
++						onSubmit = { viewModel.setQuery(state.query, immediate = true) },
++						focusRequester = fieldFocusRequester,
++						modifier = Modifier.weight(1f),
++					)
++					if (voiceAvailable) {
++						Spacer(Modifier.width(14.dp))
++						SearchVoiceInput(
++							onQueryChange = { viewModel.setQuery(it) },
++							onQuerySubmit = { viewModel.setQuery(viewModel.state.value.query, immediate = true) },
++						)
++					}
++				}
++				Text(
++					text = stringResource(R.string.search_voice_hint),
++					color = ModernHomeColors.TextMuted,
++					fontSize = 12.sp,
++					modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal + 4.dp, top = 8.dp, bottom = 4.dp),
++				)
++			}
++
++			itemsIndexed(state.groups, key = { index, group -> "${group.title}_$index" }) { _, group ->
++				when (group) {
++					is SearchGroup.Posters -> HomeSectionRow(
++						section = HomeSection(HomeSectionType.FAVORITES, CardStyle.POSTER, group.cards),
++						title = stringResource(group.title),
++						initialCardIndex = 0,
++						focusRequesterFor = { _, _ -> null },
++						onCardClick = ::onPosterClick,
++						onCardLongClick = { card -> posterActions.open(card.menuTarget()) },
++						onCardPlay = ::onPosterPlay,
++						onCardFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
++						modifier = Modifier.padding(top = ModernHomeDimens.SectionSpacing),
++					)
++
++					is SearchGroup.Music -> MusicSectionRow(
++						title = stringResource(group.title),
++						cards = group.cards,
++						focusRequesterFor = { null },
++						onFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
++						onClick = ::onMusicClick,
++						onLongClick = { card ->
++							val item = card.item
++							val albumId = item?.albumId
++							if (card.kind == MusicCardKind.TRACK && albumId != null) navigationRepository.navigate(Destinations.modernMusicItem(albumId))
++							else onMusicClick(card)
++						},
++						onPlay = { card -> card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
++					)
++				}
++			}
++		}
++
++		when {
++			state.searching -> CircularProgressIndicator(
++				color = ModernHomeColors.Accent,
++				modifier = Modifier
++					.align(Alignment.Center)
++					.size(44.dp),
++			)
++
++			state.searched && state.groups.isEmpty() -> Text(
++				text = stringResource(R.string.search_no_results, state.query.trim()),
++				color = ModernHomeColors.TextSecondary,
++				fontSize = 16.sp,
++				modifier = Modifier.align(Alignment.Center),
++			)
++		}
++
++		PosterActionsDialogs(
++			state = posterActions,
++			onPlay = ::play,
++			onOpen = { id -> navigationRepository.navigate(Destinations.itemDetails(id)) },
++			onChanged = { viewModel.setQuery(viewModel.state.value.query, immediate = true) },
++		)
++	}
++}
++
++/**
++ * Search box. OK opens the keyboard of the TV: on Fire TV, hold the microphone button of the
++ * remote while the keyboard is open to dictate the search.
++ */
++@Composable
++private fun SearchField(
++	query: String,
++	hint: String,
++	startEditing: Boolean,
++	onEditingStarted: () -> Unit,
++	onQueryChange: (String) -> Unit,
++	onSubmit: () -> Unit,
++	focusRequester: FocusRequester,
++	modifier: Modifier = Modifier,
++) {
++	val keyboard = LocalSoftwareKeyboardController.current
++	var editing by remember { mutableStateOf(startEditing) }
++	// Back on the box after typing (not when the focus left the text field on its own)
++	var refocusBox by remember { mutableStateOf(false) }
++	val textFocusRequester = remember { FocusRequester() }
++	val interactionSource = remember { MutableInteractionSource() }
++	val focused by interactionSource.collectIsFocusedAsState()
++	val shape = RoundedCornerShape(16.dp)
++
++	fun stopEditing(refocus: Boolean) {
++		keyboard?.hide()
++		refocusBox = refocus
++		editing = false
++	}
++
++	LaunchedEffect(editing, refocusBox) {
++		if (editing) {
++			onEditingStarted()
++			awaitFrames(1)
++			textFocusRequester.tryRequestFocus()
++			// Some keyboards (Amazon) don't open by themselves when the field gets the focus
++			keyboard?.show()
++		} else if (refocusBox) {
++			refocusBox = false
++			awaitFrames(1)
++			focusRequester.tryRequestFocus()
++		}
++	}
++
++	Box(modifier = modifier) {
++		if (editing) {
++			BasicTextField(
++				value = query,
++				onValueChange = onQueryChange,
++				singleLine = true,
++				textStyle = TextStyle(color = Color.White, fontSize = 20.sp),
++				cursorBrush = SolidColor(Color.White),
++				keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search, autoCorrectEnabled = false, showKeyboardOnFocus = true),
++				keyboardActions = KeyboardActions {
++					stopEditing(refocus = true)
++					onSubmit()
++				},
++				decorationBox = { inner ->
++					SearchBoxFrame(style = SearchBoxStyle.EDITING, shape = shape) {
++						Box {
++							if (query.isEmpty()) Text(text = hint, color = ModernHomeColors.TextMuted, fontSize = 20.sp, maxLines = 1)
++							inner()
++						}
++					}
++				},
++				modifier = Modifier
++					.fillMaxWidth()
++					.focusRequester(textFocusRequester)
++					.onFocusChanged { if (!it.isFocused && editing) stopEditing(refocus = false) }
++					// Up/down without the keyboard: back to the box, then the results
++					.onPreviewKeyEvent { event ->
++						if ((event.key == Key.DirectionDown || event.key == Key.DirectionUp) && event.type == KeyEventType.KeyDown) {
++							stopEditing(refocus = true)
++							true
++						} else false
++					},
++			)
++		} else {
++			Box(
++				modifier = Modifier
++					.fillMaxWidth()
++					.focusRequester(focusRequester)
++					.clickable(interactionSource = interactionSource, indication = null) { editing = true }
++					.onPreviewKeyEvent { event ->
++						// Search key of some remotes
++						if (event.key == Key.Search && event.type == KeyEventType.KeyDown) {
++							editing = true
++							true
++						} else false
++					},
++			) {
++				SearchBoxFrame(style = if (focused) SearchBoxStyle.FOCUSED else SearchBoxStyle.IDLE, shape = shape) {
++					Text(
++						text = query.ifEmpty { hint },
++						color = when {
++							focused && query.isNotEmpty() -> Color.Black
++							focused -> Color.Black.copy(alpha = 0.6f)
++							query.isEmpty() -> ModernHomeColors.TextMuted
++							else -> ModernHomeColors.TextPrimary
++						},
++						fontSize = 20.sp,
++						maxLines = 1,
++						overflow = TextOverflow.Ellipsis,
++					)
++				}
++			}
++		}
++	}
++}
++
++private enum class SearchBoxStyle { IDLE, FOCUSED, EDITING }
++
++@Composable
++private fun SearchBoxFrame(
++	style: SearchBoxStyle,
++	shape: RoundedCornerShape,
++	content: @Composable () -> Unit,
++) {
++	val focused = style == SearchBoxStyle.FOCUSED
++	Row(
++		verticalAlignment = Alignment.CenterVertically,
++		modifier = Modifier
++			.fillMaxWidth()
++			.background(
++				when (style) {
++					SearchBoxStyle.FOCUSED -> Color.White
++					SearchBoxStyle.EDITING -> Color.White.copy(alpha = 0.16f)
++					SearchBoxStyle.IDLE -> Color.White.copy(alpha = 0.1f)
++				},
++				shape,
++			)
++			.border(if (style == SearchBoxStyle.EDITING) 2.dp else 1.dp, if (style == SearchBoxStyle.EDITING) ModernHomeColors.Accent else ModernHomeColors.GlassBorder, shape)
++			.padding(horizontal = 20.dp, vertical = 14.dp),
++	) {
++		Icon(
++			imageVector = ImageVector.vectorResource(R.drawable.ic_search),
++			contentDescription = null,
++			tint = if (focused) Color.Black else ModernHomeColors.TextSecondary,
++			modifier = Modifier.size(22.dp),
++		)
++		Spacer(Modifier.width(14.dp))
++		Column(modifier = Modifier.weight(1f)) { content() }
++	}
++}
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchViewModel.kt b/app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchViewModel.kt
+new file mode 100644
+index 0000000..953a7f6
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/search/modern/ModernSearchViewModel.kt
+@@ -0,0 +1,116 @@
++package org.jellyfin.androidtv.ui.search.modern
++
++import androidx.lifecycle.ViewModel
++import androidx.lifecycle.viewModelScope
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.async
++import kotlinx.coroutines.coroutineScope
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.flow.MutableStateFlow
++import kotlinx.coroutines.flow.StateFlow
++import kotlinx.coroutines.flow.asStateFlow
++import kotlinx.coroutines.flow.update
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++import org.jellyfin.androidtv.R
++import org.jellyfin.androidtv.ui.home.modern.HomeCard
++import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
++import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
++import org.jellyfin.androidtv.ui.music.modern.MusicCard
++import org.jellyfin.androidtv.ui.search.SearchRepository
++import org.jellyfin.sdk.model.api.BaseItemDto
++import org.jellyfin.sdk.model.api.BaseItemKind
++import timber.log.Timber
++import java.util.UUID
++
++/** A row of results: posters (films, series...) or music cards */
++sealed interface SearchGroup {
++	val title: Int
++
++	data class Posters(override val title: Int, val cards: List<HomeCard>) : SearchGroup
++	data class Music(override val title: Int, val cards: List<MusicCard>) : SearchGroup
++}
++
++data class SearchState(
++	val query: String = "",
++	val searching: Boolean = false,
++	val searched: Boolean = false,
++	val groups: List<SearchGroup> = emptyList(),
++)
++
++class ModernSearchViewModel(
++	private val searchRepository: SearchRepository,
++	private val homeRepository: ModernHomeRepository,
++	private val musicRepository: ModernMusicRepository,
++) : ViewModel() {
++	private val _state = MutableStateFlow(SearchState())
++	val state: StateFlow<SearchState> = _state.asStateFlow()
++
++	var musicOnly = false
++	var lastFocusKey: String? = null
++	private var searchJob: Job? = null
++
++	fun setQuery(query: String, immediate: Boolean = false) {
++		_state.update { it.copy(query = query) }
++		searchJob?.cancel()
++		val term = query.trim()
++		if (term.length < MIN_QUERY_LENGTH) {
++			_state.update { it.copy(searching = false, searched = false, groups = emptyList()) }
++			return
++		}
++
++		searchJob = viewModelScope.launch {
++			if (!immediate) delay(DEBOUNCE_MS)
++			_state.update { it.copy(searching = true) }
++			val groups = try {
++				search(term)
++			} catch (err: CancellationException) {
++				throw err
++			} catch (err: Exception) {
++				Timber.w(err, "Search failed")
++				emptyList()
++			}
++			_state.update { it.copy(searching = false, searched = true, groups = groups) }
++		}
++	}
++
++	suspend fun resolvePlayableId(item: BaseItemDto): UUID? = homeRepository.resolvePlayableId(item)
++
++	private suspend fun search(term: String): List<SearchGroup> = coroutineScope {
++		suspend fun find(vararg types: BaseItemKind): List<BaseItemDto> =
++			searchRepository.search(term, types.toList()).getOrDefault(emptyList())
++
++		val video = if (musicOnly) null else listOf(
++			R.string.lbl_movies to async { find(BaseItemKind.MOVIE) },
++			R.string.lbl_tv_series to async { find(BaseItemKind.SERIES) },
++			R.string.lbl_episodes to async { find(BaseItemKind.EPISODE) },
++			R.string.lbl_collections to async { find(BaseItemKind.BOX_SET) },
++			R.string.lbl_people to async { find(BaseItemKind.PERSON) },
++		)
++		val songs = async { find(BaseItemKind.AUDIO) }
++		val albums = async { find(BaseItemKind.MUSIC_ALBUM) }
++		val artists = async { find(BaseItemKind.MUSIC_ARTIST) }
++		val playlists = async { if (musicOnly) find(BaseItemKind.PLAYLIST).filter { it.mediaType == org.jellyfin.sdk.model.api.MediaType.AUDIO } else emptyList() }
++
++		val videoGroups = video.orEmpty().mapNotNull { (title, items) ->
++			val cards = withContext(Dispatchers.IO) { homeRepository.posterCards(items.await()) }
++			if (cards.isEmpty()) null else SearchGroup.Posters(title, cards)
++		}
++		val musicGroups = listOf(
++			SearchGroup.Music(R.string.lbl_songs, songs.await().map { musicRepository.trackCard(it) }),
++			SearchGroup.Music(R.string.lbl_albums, albums.await().map { musicRepository.albumCard(it) }),
++			SearchGroup.Music(R.string.lbl_artists, artists.await().map { musicRepository.artistCard(it) }),
++			SearchGroup.Music(R.string.lbl_playlists, playlists.await().map { musicRepository.playlistCard(it) }),
++		).filter { it.cards.isNotEmpty() }
++
++		// Music page: songs first. Everywhere else films and series first
++		if (musicOnly) musicGroups else videoGroups + musicGroups
++	}
++
++	private companion object {
++		const val MIN_QUERY_LENGTH = 2
++		const val DEBOUNCE_MS = 450L
++	}
++}
+diff --git a/app/src/main/res/raw/shared_queue.html b/app/src/main/res/raw/shared_queue.html
+index 1d83579..6cbb627 100644
+--- a/app/src/main/res/raw/shared_queue.html
++++ b/app/src/main/res/raw/shared_queue.html
+@@ -43,6 +43,14 @@
+   .empty { color: var(--muted); font-size: 14px; padding: 10px 4px; }
+   .name { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--muted); font-size: 14px; }
+   .name input { padding: 8px 12px; font-size: 14px; width: auto; flex: 1; }
++  .link { margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
++  .link p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
++  .link .line { display: flex; gap: 8px; }
++  .link input { flex: 1; padding: 12px 14px; font-size: 15px; }
++  .link button { flex: none; padding: 0 16px; border-radius: 12px; border: none; background: var(--accent); color: #000; font-weight: 700; font-size: 15px; }
++  .link button:disabled { background: var(--card-2); color: var(--muted); }
++  .apps { display: flex; gap: 6px; margin-bottom: 8px; }
++  .apps span { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--card-2); color: var(--soft); }
+   .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(120px);
+            background: #fff; color: #000; padding: 12px 18px; border-radius: 999px; font-weight: 600; transition: transform .25s ease;
+            max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@@ -63,6 +71,12 @@
+ 
+ <label class="name"><span id="t-you">Your name</span><input id="name" maxlength="24" autocomplete="nickname"></label>
+ 
++<section class="link">
++  <div class="apps"><span>Spotify</span><span>Apple Music</span><span>YouTube Music</span></div>
++  <p id="t-link-hint">Share → Copy link in the app, then paste it here. It plays if the song is in the library.</p>
++  <div class="line"><input id="link" type="url" inputmode="url" autocomplete="off" enterkeyhint="go"><button id="link-add">+</button></div>
++</section>
++
+ <div class="search"><input id="q" type="search" autocomplete="off" enterkeyhint="search"></div>
+ 
+ <div id="results"></div>
+@@ -79,12 +93,18 @@
+     title: "Cola compartida", now: "Sonando ahora", you: "Tu nombre", search: "Busca una canción o un álbum",
+     next: "Próximas de los invitados", songs: "Canciones", albums: "Álbumes", none: "Sin resultados",
+     emptyQueue: "Nadie ha añadido canciones todavía", added: "Añadida a la cola", full: "No se ha podido añadir",
+-    nothing: "No suena nada", guest: "Invitado", lost: "Vuelve a escanear el código QR de la tele"
++    nothing: "No suena nada", guest: "Invitado", lost: "Vuelve a escanear el código QR de la tele",
++    linkHint: "En la app: Compartir → Copiar enlace, y pégalo aquí. Suena si la canción está en la biblioteca.",
++    linkPlaceholder: "Pega un enlace", linkBad: "Ese enlace no es de una canción o un álbum",
++    linkMissing: "No está en la biblioteca", linkWorking: "Buscando…"
+   } : {
+     title: "Shared queue", now: "Now playing", you: "Your name", search: "Search for a song or an album",
+     next: "Up next from guests", songs: "Songs", albums: "Albums", none: "No results",
+     emptyQueue: "Nobody added songs yet", added: "Added to the queue", full: "Could not add it",
+-    nothing: "Nothing is playing", guest: "Guest", lost: "Scan the QR code on the TV again"
++    nothing: "Nothing is playing", guest: "Guest", lost: "Scan the QR code on the TV again",
++    linkHint: "In the app: Share → Copy link, then paste it here. It plays if the song is in the library.",
++    linkPlaceholder: "Paste a link", linkBad: "That link is not a song or an album",
++    linkMissing: "Not in the library", linkWorking: "Looking for it…"
+   };
+   var key = new URLSearchParams(location.search).get("k") || "";
+   var $ = function (id) { return document.getElementById(id); };
+@@ -95,6 +115,35 @@
+   $("t-you").textContent = T.you;
+   $("t-next").textContent = T.next;
+   $("q").placeholder = T.search;
++  $("t-link-hint").textContent = T.linkHint;
++  $("link").placeholder = T.linkPlaceholder;
++
++  function addLink() {
++    var text = $("link").value.trim();
++    if (!text) return;
++    var button = $("link-add");
++    button.disabled = true;
++    toast(T.linkWorking);
++    var by = $("name").value.trim() || T.guest;
++    api("/api/link", { url: text, by: by }, "POST").then(function (result) {
++      button.disabled = false;
++      if (result.ok) {
++        toast(T.added + ": " + result.name);
++        $("link").value = "";
++        refresh();
++      } else if (result.reason === "missing") {
++        toast(T.linkMissing + ": " + [result.name, result.artist].filter(Boolean).join(" · "));
++      } else if (result.reason === "full") {
++        toast(T.full);
++      } else {
++        toast(T.linkBad);
++      }
++    }).catch(function () { button.disabled = false; });
++  }
++  $("link-add").onclick = addLink;
++  $("link").addEventListener("keydown", function (event) { if (event.key === "Enter") addLink(); });
++  // Pasting a shared text is enough
++  $("link").addEventListener("paste", function () { setTimeout(addLink, 50); });
+ 
+   var name = "";
+   try { name = localStorage.getItem("sharedQueueName") || ""; } catch (e) {}
+diff --git a/app/src/main/res/values-es/strings_modern_home.xml b/app/src/main/res/values-es/strings_modern_home.xml
+index 6d589c6..ea0cd74 100644
+--- a/app/src/main/res/values-es/strings_modern_home.xml
++++ b/app/src/main/res/values-es/strings_modern_home.xml
+@@ -219,4 +219,53 @@
+     <string name="shared_queue_nobody">Nadie ha añadido canciones todavía</string>
+     <string name="shared_queue_song">%1$s · %2$s</string>
+     <string name="shared_queue_no_network">La tele no está conectada a la red de casa. Conéctala por Wi-Fi o cable.</string>
++    <string name="shared_queue_links">Pueden buscar en la biblioteca o pegar un enlace de Spotify, Apple Music o YouTube Music (Compartir → Copiar enlace). Se añaden las canciones que tengas en tu biblioteca.</string>
++    <string name="shared_queue_troubleshoot">¿No abre la página? El móvil tiene que estar en el mismo Wi-Fi que la tele (no en una red de invitados) y la dirección tiene que empezar por los números de arriba.</string>
++
++    <!-- Páginas de música: álbumes, listas, artistas, géneros, reproduciendo -->
++    <string name="music_add_to_playlist">Añadir a una lista</string>
++    <string name="music_new_playlist">Nueva lista</string>
++    <string name="music_create">Crear</string>
++    <string name="music_added_to_playlist">Añadida a %1$s</string>
++    <string name="music_no_playlists">Aún no tienes listas</string>
++    <string name="music_popular_songs">Canciones populares</string>
++    <string name="music_songs">Canciones</string>
++    <string name="music_disc">Disco %1$d</string>
++    <string name="music_play_from_here">Reproducir desde aquí</string>
++    <string name="music_add_to_queue">Añadir a la cola</string>
++    <string name="music_added_to_queue">Añadida a la cola</string>
++    <string name="music_remove_from_queue">Quitar de la cola</string>
++    <string name="music_add_favorite">Añadir a favoritos</string>
++    <string name="music_remove_favorite">Quitar de favoritos</string>
++    <string name="music_added_favorite">Añadida a favoritos</string>
++    <string name="music_removed_favorite">Quitada de favoritos</string>
++    <string name="music_favorite">Favorito</string>
++    <string name="music_go_to_album">Ir al álbum</string>
++    <string name="music_go_to_artist">Ir al artista</string>
++    <string name="music_type_album">Álbum</string>
++    <string name="music_type_playlist">Lista</string>
++    <string name="music_type_artist">Artista</string>
++    <string name="music_type_genre">Género</string>
++    <string name="music_stations_for_you">Para ti</string>
++    <string name="music_nothing_here">Aquí no hay nada todavía</string>
++    <string name="music_now_playing">Reproduciendo</string>
++    <string name="music_no_lyrics">Esta canción no tiene letra</string>
++    <string name="music_show_lyrics">Mostrar letra</string>
++    <string name="music_hide_lyrics">Ocultar letra</string>
++    <string name="music_screensaver">Salvapantallas</string>
++    <string name="music_queue_position">%1$d / %2$d</string>
++    <plurals name="music_song_count">
++        <item quantity="one">%d canción</item>
++        <item quantity="other">%d canciones</item>
++    </plurals>
++    <plurals name="music_album_count">
++        <item quantity="one">%d álbum</item>
++        <item quantity="other">%d álbumes</item>
++    </plurals>
++
++    <!-- Búsqueda moderna -->
++    <string name="search_hint">Películas, series, personas, música…</string>
++    <string name="search_hint_music">Canciones, álbumes, artistas, listas…</string>
++    <string name="search_voice_hint">Pulsa OK para escribir. Con el teclado abierto, mantén pulsado el botón del micrófono del mando y di lo que buscas</string>
++    <string name="search_no_results">Sin resultados para \"%1$s\"</string>
+ </resources>
+diff --git a/app/src/main/res/values/strings_modern_home.xml b/app/src/main/res/values/strings_modern_home.xml
+index 88bb298..e0247ac 100644
+--- a/app/src/main/res/values/strings_modern_home.xml
++++ b/app/src/main/res/values/strings_modern_home.xml
+@@ -219,4 +219,53 @@
+     <string name="shared_queue_nobody">Nobody added songs yet</string>
+     <string name="shared_queue_song">%1$s · %2$s</string>
+     <string name="shared_queue_no_network">The TV is not connected to the home network. Connect it to Wi-Fi or Ethernet.</string>
++    <string name="shared_queue_links">They can search the library or paste a link from Spotify, Apple Music or YouTube Music (Share → Copy link). Songs that are in your library get added.</string>
++    <string name="shared_queue_troubleshoot">Does the page not open? The phone has to be on the same Wi-Fi as the TV (not a guest network) and the address has to start with the numbers shown above.</string>
++
++    <!-- Music pages: albums, playlists, artists, genres, now playing -->
++    <string name="music_add_to_playlist">Add to playlist</string>
++    <string name="music_new_playlist">New playlist</string>
++    <string name="music_create">Create</string>
++    <string name="music_added_to_playlist">Added to %1$s</string>
++    <string name="music_no_playlists">No playlists yet</string>
++    <string name="music_popular_songs">Popular songs</string>
++    <string name="music_songs">Songs</string>
++    <string name="music_disc">Disc %1$d</string>
++    <string name="music_play_from_here">Play from here</string>
++    <string name="music_add_to_queue">Add to queue</string>
++    <string name="music_added_to_queue">Added to the queue</string>
++    <string name="music_remove_from_queue">Remove from queue</string>
++    <string name="music_add_favorite">Add to favourites</string>
++    <string name="music_remove_favorite">Remove from favourites</string>
++    <string name="music_added_favorite">Added to favourites</string>
++    <string name="music_removed_favorite">Removed from favourites</string>
++    <string name="music_favorite">Favourite</string>
++    <string name="music_go_to_album">Go to album</string>
++    <string name="music_go_to_artist">Go to artist</string>
++    <string name="music_type_album">Album</string>
++    <string name="music_type_playlist">Playlist</string>
++    <string name="music_type_artist">Artist</string>
++    <string name="music_type_genre">Genre</string>
++    <string name="music_stations_for_you">For you</string>
++    <string name="music_nothing_here">Nothing here yet</string>
++    <string name="music_now_playing">Now playing</string>
++    <string name="music_no_lyrics">This song has no lyrics</string>
++    <string name="music_show_lyrics">Show lyrics</string>
++    <string name="music_hide_lyrics">Hide lyrics</string>
++    <string name="music_screensaver">Screensaver</string>
++    <string name="music_queue_position">%1$d / %2$d</string>
++    <plurals name="music_song_count">
++        <item quantity="one">%d song</item>
++        <item quantity="other">%d songs</item>
++    </plurals>
++    <plurals name="music_album_count">
++        <item quantity="one">%d album</item>
++        <item quantity="other">%d albums</item>
++    </plurals>
++
++    <!-- Modern search -->
++    <string name="search_hint">Films, series, people, music…</string>
++    <string name="search_hint_music">Songs, albums, artists, playlists…</string>
++    <string name="search_voice_hint">Press OK to type. With the keyboard open, hold the microphone button of the remote to say what you are looking for</string>
++    <string name="search_no_results">No results for \"%1$s\"</string>
+ </resources>
+diff --git a/docs/MODERN_HOME.md b/docs/MODERN_HOME.md
+index eb0ad8f..8275ad3 100644
+--- a/docs/MODERN_HOME.md
++++ b/docs/MODERN_HOME.md
+@@ -111,6 +111,34 @@ Las recomendaciones y las radios salen del propio servidor de Jellyfin, sin serv
+ Se desactiva en Ajustes → Personalización → Inicio → **Página de música moderna** (vuelve la página clásica).
+ El código está en `app/src/main/java/org/jellyfin/androidtv/ui/music/modern/`.
+ 
++### Álbumes, listas, artistas y géneros
++
++Al abrir un álbum, una lista de reproducción, un artista o un género (desde la página de Música, la búsqueda,
++"Ir al álbum/artista"...) se muestra una página con el mismo estilo:
++
++- Portada grande, tipo, nombre, artista, año, número de canciones y duración, sobre la portada difuminada.
++- Botones: Reproducir, Aleatorio, Radio (mezcla instantánea), Favorito e Ir al artista (álbumes).
++- **Las canciones**: OK reproduce desde esa canción, el botón play/pausa también. Mantener OK:
++  Reproducir desde aquí, Añadir a la cola, Añadir a una lista, Favoritos, Ir al álbum, Ir al artista.
++- Artistas: sus álbumes en cuadrícula y sus canciones más escuchadas. Géneros: sus álbumes y la radio del género.
++- Álbumes: "More like this" con álbumes parecidos.
++
++En la barra de accesos de Música: Álbumes, Artistas del álbum, Artistas, **Géneros** (cuadrícula de géneros
++con portada), **Radios** (todas: para ti, una por género y una por artista), Aleatorio, Cola compartida y
++la **lupa** para buscar solo música.
++
++### Reproduciendo ahora
++
++- Arriba, pequeños: "Reproduciendo", el artista y la hora.
++- Portada y canción, álbum y artista. La letra está **oculta por defecto**; con el botón de letra se muestra
++  más grande (y la portada crece un poco). Se recuerda mientras la app está abierta.
++- Botones bajo la barra de tiempo: Anterior, Reproducir/Pausa, Siguiente, Añadir a una lista, Aleatorio,
++  Letra, Ir al artista, Ir al álbum y **Salvapantallas**. El nombre del botón aparece al enfocarlo.
++- **Salvapantallas**: portada, canción, álbum y artista sobre la portada difuminada; con la letra activada,
++  la letra grande al lado. Se mueve un poco cada 25 s para no marcar la pantalla. Cualquier botón lo cierra.
++- **Cola**: portadas con canción y artista · álbum debajo, y la posición ("3 / 24"). OK salta a esa canción;
++  mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista.
++
+ ### Cola compartida (como una "fiesta")
+ 
+ En la página de Música → **Cola compartida** → *Empezar a compartir*. La tele muestra un código QR:
+@@ -118,11 +146,27 @@ cualquiera en el mismo Wi-Fi lo escanea con la cámara del móvil, busca cancion
+ al final de la cola. No necesitan app ni cuenta de Jellyfin; la web la sirve la propia tele
+ (puerto 8765) y usa tu sesión.
+ 
++- También pueden **pegar un enlace** de Spotify, Apple Music o YouTube Music (en la app: Compartir →
++  Copiar enlace). La tele lee el nombre de la canción (o del álbum) y su artista y busca la misma en tu
++  biblioteca de Jellyfin: solo puede sonar música que tengas en el servidor.
+ - Si no sonaba nada, empieza a sonar lo que añadan; si tenías la música en pausa, sigue en pausa.
++- Si la página no abre: el móvil tiene que estar en el mismo Wi-Fi que la tele (no en la red de invitados,
++  que suele aislar los dispositivos). La dirección usa ahora la IP de la red activa de la tele; antes podía
++  salir la de Wi-Fi Direct (192.168.49.1), que los móviles no alcanzan.
+ - La web muestra lo que suena y lo que han añadido los invitados (con su nombre).
+ - El enlace lleva un código que cambia cada vez que empiezas a compartir. *Dejar de compartir* lo corta.
+ - La página es `app/src/main/res/raw/shared_queue.html`.
+ 
++## Búsqueda
++
++La lupa de la barra abre la búsqueda nueva: películas, series, episodios, colecciones, personas y música, con
++los pósters con todas las etiquetas (4K/1080p, Dolby Vision, HDR, Atmos y banderas de idioma).
++
++- **Por voz**: pulsa OK en el cuadro de búsqueda para abrir el teclado y, con el teclado abierto, **mantén
++  pulsado el botón del micrófono** del mando del Fire TV y di lo que buscas. Si el dispositivo tiene
++  reconocimiento de voz de Android, sale además un botón de micrófono al lado.
++- El botón del micrófono con el teclado cerrado abre Alexa (eso lo controla el sistema, no la app).
++
+ ## Menú de los pósters (mantener OK)
+ 
+ Mantén OK sobre cualquier póster del inicio o de la Watchlist:
+@@ -277,6 +321,8 @@ Todo está en `app/src/main/java/org/jellyfin/androidtv/ui/home/modern/`:
+ | `../../playback/modern/` | Controles del reproductor, menús, miniaturas y desfase de subtítulos |
+ | `../../music/modern/` | Página de música: media bar, radios y recomendaciones |
+ | `../../music/share/` | Cola compartida (servidor web de la tele y código QR) |
++| `../../music/nowplaying/` | Reproduciendo ahora y su salvapantallas |
++| `../../search/modern/` | Búsqueda con etiquetas y voz |
+ | `../../collections/` | Colecciones por idioma de audio y sus pósters |
+ | `PosterActions.kt` / `IdentifyDialog.kt` | Menú de los pósters e Identificar |
+ 
+-- 
+2.43.0
+

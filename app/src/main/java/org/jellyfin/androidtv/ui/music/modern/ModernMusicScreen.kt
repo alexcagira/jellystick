@@ -74,11 +74,14 @@ import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
 import org.jellyfin.androidtv.ui.base.Icon
 import org.jellyfin.androidtv.ui.base.Text
+import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
 import org.jellyfin.androidtv.ui.home.modern.CardArtwork
 import org.jellyfin.androidtv.ui.home.modern.FocusableCardSurface
 import org.jellyfin.androidtv.ui.home.modern.HeroButton
@@ -89,13 +92,14 @@ import org.jellyfin.androidtv.ui.home.modern.ModernTopBar
 import org.jellyfin.androidtv.ui.home.modern.NoAutoScrollBringIntoViewSpec
 import org.jellyfin.androidtv.ui.home.modern.SectionHeader
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
+import org.jellyfin.androidtv.ui.home.modern.rememberSmoothListScroller
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
+import org.jellyfin.androidtv.ui.music.share.SharedQueueDialog
 import org.jellyfin.androidtv.ui.navigation.Destinations
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository
 import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
 import org.jellyfin.androidtv.util.PlaybackHelper
 import org.jellyfin.sdk.model.api.BaseItemDto
-import org.jellyfin.sdk.model.api.BaseItemKind
 import org.koin.compose.koinInject
 import java.util.UUID
 import kotlin.math.absoluteValue
@@ -124,14 +128,17 @@ fun ModernMusicScreen(
 	val imageLoader = koinInject<ImageLoader>()
 
 	val listState = rememberLazyListState()
+	val scroller = rememberSmoothListScroller(listState)
 	val heroFocusRequester = remember { FocusRequester() }
 	val linksFocusRequester = remember { FocusRequester() }
 	val restoreFocusRequester = remember { FocusRequester() }
 	val restoreKey = remember { viewModel.lastFocusKey }
 	var initialFocusDone by remember { mutableStateOf(false) }
+	var showSharedQueue by remember { mutableStateOf(false) }
 	var heroIndex by remember { mutableIntStateOf(0) }
-	var backgroundUrl by remember { mutableStateOf<String?>(null) }
-	var pendingBackgroundUrl by remember { mutableStateOf<String?>(null) }
+	// Out of the composition so focus moves don't recompose the whole page
+	val backgroundUrlState = remember { mutableStateOf<String?>(null) }
+	val pendingBackgroundUrl = remember { MutableStateFlow<String?>(null) }
 
 	val currentSlide = state.hero.getOrNull(heroIndex.coerceIn(0, (state.hero.size - 1).coerceAtLeast(0)))
 	val topBarThresholdPx = with(density) { 40.dp.toPx() }
@@ -139,7 +146,8 @@ fun ModernMusicScreen(
 		derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < topBarThresholdPx }
 	}
 
-	fun openDetails(id: UUID) = navigationRepository.navigate(Destinations.itemDetails(id))
+	// Albums, playlists and artists open the music page of the item (with its songs)
+	fun openDetails(id: UUID) = navigationRepository.navigate(Destinations.modernMusicItem(id))
 	fun play(id: UUID) = playbackHelper.retrieveAndPlay(id, false, context)
 
 	fun playStation(source: StationSource) {
@@ -173,12 +181,17 @@ fun ModernMusicScreen(
 
 	// Ambient background: the current slide while the media bar is visible, otherwise the focused card
 	LaunchedEffect(currentSlide, showTopBar) {
-		if (showTopBar && currentSlide != null) backgroundUrl = currentSlide.backgroundUrl
+		if (showTopBar && currentSlide != null) {
+			pendingBackgroundUrl.value = null
+			backgroundUrlState.value = currentSlide.backgroundUrl
+		}
 	}
-	LaunchedEffect(pendingBackgroundUrl) {
-		val url = pendingBackgroundUrl ?: return@LaunchedEffect
-		delay(BACKGROUND_DELAY_MS)
-		backgroundUrl = url
+	LaunchedEffect(Unit) {
+		pendingBackgroundUrl.collectLatest { url ->
+			if (url == null) return@collectLatest
+			delay(BACKGROUND_DELAY_MS)
+			backgroundUrlState.value = url
+		}
 	}
 
 	// Initial focus: the card that was focused before, otherwise "Play" in the media bar
@@ -208,33 +221,7 @@ fun ModernMusicScreen(
 	) {
 		val heroHeight = maxHeight * HERO_HEIGHT_FRACTION
 
-		Crossfade(
-			targetState = backgroundUrl,
-			animationSpec = tween(durationMillis = 800),
-			label = "MusicBackground",
-			modifier = Modifier.fillMaxSize(),
-		) { url ->
-			if (url != null) {
-				AsyncImage(
-					model = url,
-					contentDescription = null,
-					imageLoader = imageLoader,
-					contentScale = ContentScale.Crop,
-					modifier = Modifier.fillMaxSize(),
-				)
-			}
-		}
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(
-					Brush.verticalGradient(
-						0f to ModernHomeColors.AmbientScrimTop,
-						0.45f to ModernHomeColors.AmbientScrimMiddle,
-						1f to ModernHomeColors.AmbientScrimBottom,
-					)
-				)
-		)
+		AmbientBackground(urlState = backgroundUrlState, imageLoader = imageLoader)
 
 		CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScrollBringIntoViewSpec) {
 			LazyColumn(
@@ -256,8 +243,8 @@ fun ModernMusicScreen(
 							onOpen = { openDetails(currentSlide.album.id) },
 							modifier = Modifier.onFocusChanged {
 								if (it.hasFocus) {
-									pendingBackgroundUrl = null
-									scope.launch { listState.animateScrollToItem(0) }
+									pendingBackgroundUrl.value = null
+									scope.launch { scroller.scrollToItem(0) }
 								}
 							},
 						)
@@ -276,8 +263,9 @@ fun ModernMusicScreen(
 								if (tracks.isNotEmpty()) playbackLauncher.launch(context, tracks)
 							}
 						},
+						onSharedQueue = { showSharedQueue = true },
 						modifier = Modifier.onFocusChanged {
-							if (it.hasFocus) scope.launch { listState.animateScrollToItem(if (state.hero.isEmpty()) 0 else 1) }
+							if (it.hasFocus) scope.launch { scroller.scrollToItem(if (state.hero.isEmpty()) 0 else 1) }
 						},
 					)
 				}
@@ -290,19 +278,24 @@ fun ModernMusicScreen(
 							focusRequesterFor = { card -> if (focusKey(section, card) == restoreKey) restoreFocusRequester else null },
 							onFocused = { card ->
 								viewModel.lastFocusKey = focusKey(section, card)
-								pendingBackgroundUrl = card.backgroundUrl
+								pendingBackgroundUrl.value = card.backgroundUrl
 							},
 							onClick = ::onCardClick,
 							onLongClick = ::onCardLongClick,
 							onPlay = ::onCardPlay,
 							modifier = Modifier.onFocusChanged { focusState ->
-								if (focusState.hasFocus) scope.launch { listState.animateScrollToItem(sectionIndex + 2) }
+								if (focusState.hasFocus) scope.launch { scroller.scrollToItem(sectionIndex + 2) }
 							},
 						)
 					}
 				}
 			}
 		}
+
+		SharedQueueDialog(
+			visible = showSharedQueue,
+			onDismissRequest = { showSharedQueue = false },
+		)
 
 		if (state.loading) {
 			CircularProgressIndicator(
@@ -475,6 +468,7 @@ private fun QuickLinks(
 	library: BaseItemDto,
 	firstFocusRequester: FocusRequester,
 	onShuffle: () -> Unit,
+	onSharedQueue: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val navigationRepository = koinInject<NavigationRepository>()
@@ -498,9 +492,42 @@ private fun QuickLinks(
 			navigationRepository.navigate(Destinations.libraryBrowser(library.copy(displayPreferencesId = "${library.id}AR"), "Artist"))
 		}
 		QuickLink(stringResource(R.string.lbl_genres)) {
-			navigationRepository.navigate(Destinations.libraryByGenres(library, BaseItemKind.MUSIC_ALBUM.serialName))
+			navigationRepository.navigate(Destinations.modernMusicBrowse(library, MusicBrowseMode.GENRES))
+		}
+		QuickLink(stringResource(R.string.modern_music_stations)) {
+			navigationRepository.navigate(Destinations.modernMusicBrowse(library, MusicBrowseMode.STATIONS))
 		}
 		QuickLink(stringResource(R.string.modern_music_shuffle), onClick = onShuffle)
+		QuickLink(stringResource(R.string.shared_queue_title), onClick = onSharedQueue)
+		// Music only search, with voice search
+		QuickLinkIcon(R.drawable.ic_search, stringResource(R.string.lbl_search)) {
+			navigationRepository.navigate(Destinations.modernSearch(music = true))
+		}
+	}
+}
+
+@Composable
+private fun QuickLinkIcon(
+	icon: Int,
+	contentDescription: String,
+	onClick: () -> Unit,
+) {
+	val interactionSource = remember { MutableInteractionSource() }
+	val focused by interactionSource.collectIsFocusedAsState()
+
+	Box(
+		contentAlignment = Alignment.Center,
+		modifier = Modifier
+			.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+			.background(if (focused) Color.White else Color.Transparent, CircleShape)
+			.padding(horizontal = 14.dp, vertical = 7.dp),
+	) {
+		Icon(
+			imageVector = ImageVector.vectorResource(icon),
+			contentDescription = contentDescription,
+			tint = if (focused) Color.Black else ModernHomeColors.TextPrimary,
+			modifier = Modifier.size(18.dp),
+		)
 	}
 }
 
@@ -529,7 +556,7 @@ private fun QuickLink(
 // Rows
 
 @Composable
-private fun MusicSectionRow(
+internal fun MusicSectionRow(
 	title: String,
 	cards: List<MusicCard>,
 	focusRequesterFor: (MusicCard) -> FocusRequester?,
@@ -572,7 +599,7 @@ private fun MusicSectionRow(
 }
 
 @Composable
-private fun MusicCardView(
+internal fun MusicCardView(
 	card: MusicCard,
 	focusRequester: FocusRequester?,
 	onFocused: () -> Unit,

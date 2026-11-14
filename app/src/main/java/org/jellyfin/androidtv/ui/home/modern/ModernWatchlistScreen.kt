@@ -81,6 +81,7 @@ fun ModernWatchlistScreen(
 	val restoreKey = remember { viewModel.lastFocusKey }
 	var initialFocusDone by remember { mutableStateOf(false) }
 	var backgroundUrl by remember { mutableStateOf<String?>(null) }
+	val posterActions = rememberPosterActionsState()
 
 	val topBarThresholdPx = with(density) { 40.dp.toPx() }
 	val showTopBar by remember {
@@ -188,6 +189,7 @@ fun ModernWatchlistScreen(
 							card.backgroundUrl?.let { backgroundUrl = it }
 						},
 						onClick = { openDetails(card.targetId) },
+						onLongClick = { posterActions.open(card.menuTarget()) },
 						onPlay = { play(card) },
 					)
 				}
@@ -237,6 +239,19 @@ fun ModernWatchlistScreen(
 				onMoveLibrary = viewModel::moveLibrary,
 			)
 		}
+
+		PosterActionsDialogs(
+			state = posterActions,
+			onPlay = { item ->
+				scope.launch {
+					val playableId = viewModel.resolvePlayableId(item)
+					if (playableId != null) playbackHelper.retrieveAndPlay(playableId, false, context)
+					else openDetails(item.id)
+				}
+			},
+			onOpen = ::openDetails,
+			onChanged = viewModel::refresh,
+		)
 	}
 }
 
@@ -278,6 +293,7 @@ private fun WatchlistCard(
 	focusRequester: FocusRequester?,
 	onFocused: () -> Unit,
 	onClick: () -> Unit,
+	onLongClick: () -> Unit,
 	onPlay: () -> Unit,
 ) {
 	val typeLabel = when (card.item.type) {
@@ -290,7 +306,7 @@ private fun WatchlistCard(
 		PosterCard(
 			card = card,
 			onClick = onClick,
-			onLongClick = onClick,
+			onLongClick = onLongClick,
 			onFocused = onFocused,
 			focusRequester = focusRequester,
 			onPlay = onPlay,

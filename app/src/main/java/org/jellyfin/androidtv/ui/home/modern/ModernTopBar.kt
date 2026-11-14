@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -100,89 +102,121 @@ internal fun ModernTopBar(
 	// Library being moved with left/right
 	var movingLibraryId by remember { mutableStateOf<java.util.UUID?>(null) }
 
-	ToolbarLayout(
+	// Music playing: bubble under the buttons on the right, Down from those buttons goes to it
+	val musicPlaying = rememberMusicPlaying()
+	val bubbleFocusRequester = remember { FocusRequester() }
+	var endButtonsFocused by remember { mutableStateOf(false) }
+
+	Column(
+		horizontalAlignment = Alignment.End,
 		modifier = modifier
 			.fillMaxWidth()
 			.padding(
 				start = ModernHomeDimens.ScreenPaddingHorizontal,
 				end = ModernHomeDimens.ScreenPaddingHorizontal,
 				top = ModernHomeDimens.ScreenPaddingTop,
-			)
-			// Down always leaves the bar (to the hero buttons), whatever is below it
-			.onPreviewKeyEvent { event ->
-				movingLibraryId == null && event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && onNavigateDown()
-			}
-			.focusRestorer()
-			.focusGroup(),
-		start = {
-			Logo(modifier = Modifier.height(28.dp))
-		},
-		center = {
-			NavigationPill(glassBackdrop = glassBackdrop) {
-				NavigationPillButton(
-					text = stringResource(R.string.lbl_home),
-					icon = R.drawable.ic_house,
-					active = homeActive,
-					onClick = {
-						if (!homeActive) navigationRepository.reset(Destinations.home, clearHistory = true)
-					},
-				)
-
-				for (library in libraries) {
-					// Keyed so the focus follows the library when it moves
-					key(library.id) {
-						NavigationPillButton(
-							text = library.name.orEmpty(),
-							icon = library.collectionType.navigationIcon,
-							active = false,
-							moving = movingLibraryId == library.id,
-							onClick = {
-								if (movingLibraryId == library.id) movingLibraryId = null
-								else itemLauncher.launchUserView(library)
-							},
-							// Hold OK: move or hide the library
-							onLongClick = if (onHideLibrary != null || onMoveLibrary != null) {
-								{
-									libraryMenu = library
-									lastLibraryMenu = library
-								}
-							} else null,
-							onMove = { offset -> onMoveLibrary?.invoke(library, offset) },
-							onMoveDone = { movingLibraryId = null },
-						)
-					}
+			),
+	) {
+		ToolbarLayout(
+			modifier = Modifier
+				.fillMaxWidth()
+				// Down always leaves the bar (to the hero buttons), whatever is below it
+				.onPreviewKeyEvent { event ->
+					if (movingLibraryId != null || event.key != Key.DirectionDown) return@onPreviewKeyEvent false
+					if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+					if (endButtonsFocused && musicPlaying && bubbleFocusRequester.tryRequestFocus()) true
+					else onNavigateDown()
 				}
+				.focusRestorer()
+				.focusGroup(),
+			start = {
+				Logo(modifier = Modifier.height(28.dp))
+			},
+			center = {
+				NavigationPill(glassBackdrop = glassBackdrop) {
+					NavigationPillButton(
+						text = stringResource(R.string.lbl_home),
+						icon = R.drawable.ic_house,
+						active = homeActive,
+						onClick = {
+							if (!homeActive) navigationRepository.reset(Destinations.home, clearHistory = true)
+						},
+					)
 
-				NavigationPillButton(
-					text = null,
-					icon = R.drawable.ic_search,
-					active = false,
-					onClick = { navigationRepository.navigate(Destinations.search()) },
-				)
-			}
-		},
-		end = {
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(10.dp),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				CircleIconButton(
-					icon = if (watchlistActive) R.drawable.ic_watchlist_added else R.drawable.ic_watchlist,
-					contentDescription = stringResource(R.string.modern_home_watchlist),
-					glassBackdrop = glassBackdrop,
-					active = watchlistActive,
-					onClick = { if (!watchlistActive) navigationRepository.navigate(Destinations.modernWatchlist) },
-				)
-				CircleIconButton(
-					icon = R.drawable.ic_settings,
-					contentDescription = stringResource(R.string.lbl_settings),
-					glassBackdrop = glassBackdrop,
-					onClick = { settingsViewModel.show() },
-				)
-				UserButton()
-			}
-		},
-	)
+					for (library in libraries) {
+						// Keyed so the focus follows the library when it moves
+						key(library.id) {
+							NavigationPillButton(
+								text = library.name.orEmpty(),
+								icon = library.collectionType.navigationIcon,
+								active = false,
+								moving = movingLibraryId == library.id,
+								onClick = {
+									if (movingLibraryId == library.id) movingLibraryId = null
+									else itemLauncher.launchUserView(library)
+								},
+								// Hold OK: move or hide the library
+								onLongClick = if (onHideLibrary != null || onMoveLibrary != null) {
+									{
+										libraryMenu = library
+										lastLibraryMenu = library
+									}
+								} else null,
+								onMove = { offset -> onMoveLibrary?.invoke(library, offset) },
+								onMoveDone = { movingLibraryId = null },
+							)
+						}
+					}
+
+					NavigationPillButton(
+						text = null,
+						icon = R.drawable.ic_search,
+						active = false,
+						onClick = { navigationRepository.navigate(Destinations.modernSearch()) },
+					)
+				}
+			},
+			end = {
+				Row(
+					horizontalArrangement = Arrangement.spacedBy(10.dp),
+					verticalAlignment = Alignment.CenterVertically,
+					modifier = Modifier.onFocusChanged { endButtonsFocused = it.hasFocus },
+				) {
+					CircleIconButton(
+						icon = if (watchlistActive) R.drawable.ic_watchlist_added else R.drawable.ic_watchlist,
+						contentDescription = stringResource(R.string.modern_home_watchlist),
+						glassBackdrop = glassBackdrop,
+						active = watchlistActive,
+						onClick = { if (!watchlistActive) navigationRepository.navigate(Destinations.modernWatchlist) },
+					)
+					CircleIconButton(
+						icon = R.drawable.ic_settings,
+						contentDescription = stringResource(R.string.lbl_settings),
+						glassBackdrop = glassBackdrop,
+						onClick = { settingsViewModel.show() },
+					)
+					UserButton()
+				}
+			},
+		)
+
+		ModernNowPlayingBubble(
+			glassBackdrop = glassBackdrop,
+			focusRequester = bubbleFocusRequester,
+			modifier = Modifier.onPreviewKeyEvent { event ->
+				// Down: to the page, like the rest of the bar. Left/right stay on the bubble
+				when (event.key) {
+					Key.DirectionDown -> {
+						if (event.type == KeyEventType.KeyDown) onNavigateDown()
+						true
+					}
+
+					Key.DirectionLeft, Key.DirectionRight -> true
+					else -> false
+				}
+			},
+		)
+	}
 
 	val menuLibrary = lastLibraryMenu
 	ModernMenuDialog(

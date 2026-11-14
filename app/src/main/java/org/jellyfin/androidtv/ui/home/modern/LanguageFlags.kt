@@ -89,6 +89,16 @@ internal fun LanguageFlag(
 	}
 }
 
+/**
+ * Draw a flag over the whole drawing area (used for the generated collection posters).
+ * Returns false when there is no drawing for that flag.
+ */
+internal fun DrawScope.drawFlag(flag: String): Boolean {
+	val painter = flagPainters[flag] ?: return false
+	painter()
+	return true
+}
+
 // Flags, simplified so they stay recognizable at a few dp
 
 private val flagPainters: Map<String, DrawScope.() -> Unit> = mapOf(

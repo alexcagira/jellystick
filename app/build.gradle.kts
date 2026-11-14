@@ -193,6 +193,9 @@ dependencies {
 	// Licenses
 	implementation(libs.aboutlibraries)
 
+	// QR codes (shared music queue)
+	implementation(libs.zxing.core)
+
 	// Logging
 	implementation(libs.timber)
 	implementation(libs.slf4j.timber)

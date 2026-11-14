@@ -1,7 +1,14 @@
 package org.jellyfin.androidtv.ui.home.modern
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,18 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,7 @@ import org.jellyfin.androidtv.ui.base.Text
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.ceil
 
 private val badgeShape = RoundedCornerShape(4.dp)
 
@@ -82,36 +86,53 @@ private fun ResolutionBadge(
 	scale: Float,
 ) {
 	val density = LocalDensity.current
-	val textMeasurer = rememberTextMeasurer()
-	val style = TextStyle(
-		fontSize = (8.5f * scale).sp,
-		fontWeight = FontWeight.ExtraBold,
-		letterSpacing = 0.sp,
-	)
-	val layout = remember(text, style, textMeasurer) { textMeasurer.measure(text, style) }
-	val width = with(density) { layout.size.width.toDp() } + (3.5f * scale).dp * 2
+	val bitmap = remember(text, scale, density) { ResolutionBadgeCache.get(text, scale, density.density, density.fontScale) }
 
 	Box(
 		modifier = Modifier
-			.size(width, (13 * scale).dp)
-			// Offscreen layer so the text can punch a hole in the white block
-			.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-			.drawBehind {
-				drawRoundRect(
-					color = Color.White.copy(alpha = 0.95f),
-					cornerRadius = CornerRadius(3.dp.toPx() * scale),
-				)
-				drawText(
-					textLayoutResult = layout,
-					color = Color.Black,
-					topLeft = Offset(
-						x = (size.width - layout.size.width) / 2f,
-						y = (size.height - layout.size.height) / 2f,
-					),
-					blendMode = BlendMode.DstOut,
-				)
-			},
+			.size(with(density) { bitmap.width.toDp() }, with(density) { bitmap.height.toDp() })
+			.drawBehind { drawImage(bitmap) },
 	)
+}
+
+/**
+ * White block with the text cut out, drawn once per resolution label ("4K", "1080p"...) and shared
+ * by every poster. Drawing it per poster needed an offscreen layer each, which made scrolling the
+ * home rows stutter on the Fire TV.
+ */
+private object ResolutionBadgeCache {
+	private val bitmaps = HashMap<String, ImageBitmap>()
+
+	fun get(text: String, scale: Float, density: Float, fontScale: Float): ImageBitmap =
+		bitmaps.getOrPut("$text|$scale|$density|$fontScale") { draw(text, scale, density, fontScale) }
+
+	private fun draw(text: String, scale: Float, density: Float, fontScale: Float): ImageBitmap {
+		val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+			textSize = 8.5f * scale * density * fontScale
+			typeface = badgeTypeface
+			textAlign = Paint.Align.CENTER
+			xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+		}
+		val width = ceil(textPaint.measureText(text) + 3.5f * scale * density * 2).toInt().coerceAtLeast(1)
+		val height = ceil(13 * scale * density).toInt().coerceAtLeast(1)
+		val radius = 3 * scale * density
+
+		val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+		val canvas = Canvas(bitmap)
+		val blockPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF2FFFFFF.toInt() }
+		canvas.drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), radius, radius, blockPaint)
+
+		val metrics = textPaint.fontMetrics
+		val baseline = height / 2f - (metrics.ascent + metrics.descent) / 2f
+		canvas.drawText(text, width / 2f, baseline, textPaint)
+
+		return bitmap.asImageBitmap()
+	}
+
+	private val badgeTypeface: Typeface by lazy {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Typeface.create(Typeface.DEFAULT, 800, false)
+		else Typeface.create("sans-serif-black", Typeface.NORMAL)
+	}
 }
 
 @Composable

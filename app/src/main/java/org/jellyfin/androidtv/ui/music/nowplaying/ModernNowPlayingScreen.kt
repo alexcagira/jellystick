@@ -1,0 +1,631 @@
+package org.jellyfin.androidtv.ui.music.nowplaying
+
+import android.os.Bundle
+import android.text.format.DateFormat
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.fragment.app.Fragment
+import androidx.fragment.compose.content
+import coil3.ImageLoader
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.ui.base.Icon
+import org.jellyfin.androidtv.ui.base.Text
+import org.jellyfin.androidtv.ui.base.SeekbarColors
+import org.jellyfin.androidtv.ui.composable.LyricsDtoBox
+import org.jellyfin.androidtv.ui.composable.modifier.fadingEdges
+import org.jellyfin.androidtv.ui.composable.rememberPlayerPositionInfo
+import org.jellyfin.androidtv.ui.composable.rememberQueueEntry
+import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
+import org.jellyfin.androidtv.ui.home.modern.CardArtwork
+import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
+import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
+import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
+import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
+import org.jellyfin.androidtv.ui.home.modern.SectionHeader
+import org.jellyfin.androidtv.ui.home.modern.awaitFrames
+import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
+import org.jellyfin.androidtv.ui.music.modern.AddToPlaylistDialog
+import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
+import org.jellyfin.androidtv.ui.music.modern.formatDuration
+import org.jellyfin.androidtv.ui.navigation.Destinations
+import org.jellyfin.androidtv.ui.navigation.NavigationRepository
+import org.jellyfin.androidtv.ui.playback.MediaManager
+import org.jellyfin.androidtv.ui.player.base.PlayerSeekbar
+import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
+import org.jellyfin.androidtv.util.apiclient.getUrl
+import org.jellyfin.androidtv.util.apiclient.itemImages
+import org.jellyfin.androidtv.util.apiclient.parentImages
+import org.jellyfin.playback.core.PlaybackManager
+import org.jellyfin.playback.core.model.PlayState
+import org.jellyfin.playback.core.model.PlaybackOrder
+import org.jellyfin.playback.core.queue.QueueEntry
+import org.jellyfin.playback.core.queue.queue
+import org.jellyfin.playback.jellyfin.lyrics.lyrics
+import org.jellyfin.playback.jellyfin.lyrics.lyricsFlow
+import org.jellyfin.playback.jellyfin.queue.baseItem
+import org.jellyfin.playback.jellyfin.queue.baseItemFlow
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.imageApi
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.ImageType
+import org.koin.compose.koinInject
+import java.util.Date
+import java.util.UUID
+
+/** Lyrics stay shown or hidden while the app runs (hidden at start) */
+internal object NowPlayingPreferences {
+	var showLyrics by mutableStateOf(false)
+}
+
+/**
+ * "Now playing" in the style of the music page.
+ */
+class ModernNowPlayingFragment : Fragment() {
+	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
+		content { ModernNowPlayingScreen() }
+}
+
+@Composable
+fun ModernNowPlayingScreen() {
+	val api = koinInject<ApiClient>()
+	val playbackManager = koinInject<PlaybackManager>()
+	val mediaManager = koinInject<MediaManager>()
+	val navigationRepository = koinInject<NavigationRepository>()
+	val musicItemRepository = koinInject<MusicItemRepository>()
+	val imageLoader = koinInject<ImageLoader>()
+	val context = LocalContext.current
+	val scope = rememberCoroutineScope()
+
+	val entry by rememberQueueEntry(playbackManager)
+	val item = entry?.run { baseItemFlow.collectAsState(baseItem).value }
+	val lyrics = entry?.run { lyricsFlow.collectAsState(lyrics).value }
+	val playState by playbackManager.state.playState.collectAsState()
+	val playbackOrder by playbackManager.state.playbackOrder.collectAsState()
+	val entries by playbackManager.queue.entries.collectAsState()
+	val entryIndex by playbackManager.queue.entryIndex.collectAsState()
+	val showLyrics = NowPlayingPreferences.showLyrics
+
+	var upcoming by remember { mutableStateOf<List<QueueEntry>>(emptyList()) }
+	var screensaver by remember { mutableStateOf(false) }
+	var menuEntry by remember { mutableStateOf<QueueEntry?>(null) }
+	var lastMenuEntry by remember { mutableStateOf<QueueEntry?>(null) }
+	var playlistItems by remember { mutableStateOf<List<UUID>?>(null) }
+	// Favorite changes made here, before the queue item is refreshed
+	val favorites = remember { mutableStateMapOf<UUID, Boolean>() }
+	val playFocusRequester = remember { FocusRequester() }
+	val backgroundState = remember { mutableStateOf<String?>(null) }
+
+	// Upcoming songs: the queue only knows them once peeked
+	LaunchedEffect(entry, entries, playbackOrder) {
+		upcoming = playbackManager.queue.peekNext(QUEUE_PEEK).toList()
+	}
+
+	val image = item?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
+	val coverUrl = image?.getUrl(api, maxWidth = 640)
+	LaunchedEffect(image) {
+		backgroundState.value = image?.let {
+			api.imageApi.getItemImageUrl(itemId = it.item, imageType = it.type, tag = it.tag, maxWidth = 300, blur = 18, quality = 70)
+		}
+	}
+
+	fun open(id: UUID?) {
+		if (id != null) navigationRepository.navigate(Destinations.modernMusicItem(id))
+	}
+	fun artistId(song: BaseItemDto?) = song?.artistItems?.firstOrNull()?.id ?: song?.albumArtists?.firstOrNull()?.id
+	fun isFavorite(song: BaseItemDto) = favorites[song.id] ?: (song.userData?.isFavorite == true)
+	fun toggleFavorite(song: BaseItemDto) {
+		val favorite = !isFavorite(song)
+		favorites[song.id] = favorite
+		scope.launch {
+			runCatching { musicItemRepository.setFavorite(song.id, favorite) }
+				.onSuccess {
+					Toast.makeText(context, if (favorite) R.string.music_added_favorite else R.string.music_removed_favorite, Toast.LENGTH_SHORT).show()
+				}
+				.onFailure { favorites[song.id] = !favorite }
+		}
+	}
+
+	LaunchedEffect(Unit) {
+		awaitFrames(2)
+		playFocusRequester.tryRequestFocus()
+	}
+
+	Box(
+		modifier = Modifier
+			.fillMaxSize()
+			.background(ModernHomeColors.Background),
+	) {
+		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
+
+		LazyColumn(
+			state = rememberLazyListState(),
+			contentPadding = PaddingValues(top = 22.dp, bottom = 32.dp),
+			modifier = Modifier.fillMaxSize(),
+		) {
+			// Artist and clock, small
+			item(key = "header") {
+				Row(
+					verticalAlignment = Alignment.CenterVertically,
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
+				) {
+					Text(
+						text = stringResource(R.string.music_now_playing).uppercase(),
+						color = ModernHomeColors.Accent,
+						fontSize = 11.sp,
+						fontWeight = FontWeight.Bold,
+						letterSpacing = 1.2.sp,
+					)
+					Spacer(Modifier.width(12.dp))
+					Text(
+						text = item?.artistsText().orEmpty(),
+						color = ModernHomeColors.TextSecondary,
+						fontSize = 14.sp,
+						fontWeight = FontWeight.SemiBold,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						modifier = Modifier.weight(1f),
+					)
+					Clock(fontSize = 14)
+				}
+			}
+
+			item(key = "main") {
+				val coverSize by animateDpAsState(if (showLyrics && lyrics != null) 270.dp else 230.dp, label = "CoverSize")
+				Row(
+					verticalAlignment = Alignment.CenterVertically,
+					modifier = Modifier
+						.fillMaxWidth()
+						.height(if (showLyrics && lyrics != null) 290.dp else 250.dp)
+						.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
+				) {
+					Box(
+						modifier = Modifier
+							.size(coverSize)
+							.clip(RoundedCornerShape(14.dp))
+							.background(ModernHomeColors.CardSurface),
+					) {
+						Crossfade(targetState = coverUrl, label = "NowPlayingCover") { url ->
+							CardArtwork(url = url, fallbackTitle = item?.album ?: item?.name.orEmpty())
+						}
+					}
+					Spacer(Modifier.width(36.dp))
+
+					if (showLyrics && lyrics != null) {
+						Column(modifier = Modifier.weight(1f)) {
+							SongTitle(item, compact = true)
+							Spacer(Modifier.height(8.dp))
+							NowPlayingLyrics(
+								lyrics = lyrics,
+								playbackManager = playbackManager,
+								fontSize = 22,
+								modifier = Modifier
+									.fillMaxWidth()
+									.height(210.dp),
+							)
+						}
+					} else {
+						Column(modifier = Modifier.weight(1f)) {
+							SongTitle(item, compact = false)
+							if (showLyrics && lyrics == null && item != null) {
+								Spacer(Modifier.height(10.dp))
+								Text(stringResource(R.string.music_no_lyrics), color = ModernHomeColors.TextMuted, fontSize = 13.sp)
+							}
+						}
+					}
+				}
+			}
+
+			// Timeline
+			item(key = "timeline") {
+				Timeline(playbackManager)
+			}
+
+			// Buttons under the timeline
+			item(key = "controls") {
+				Row(
+					horizontalArrangement = Arrangement.spacedBy(14.dp),
+					verticalAlignment = Alignment.Top,
+					modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal - 6.dp, vertical = 4.dp),
+				) {
+					ControlButton(R.drawable.ic_previous, stringResource(R.string.lbl_prev_item)) { mediaManager.prevAudioItem() }
+					ControlButton(
+						icon = if (playState == PlayState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
+						label = stringResource(if (playState == PlayState.PLAYING) R.string.lbl_pause else R.string.lbl_play),
+						primary = true,
+						modifier = Modifier.focusRequester(playFocusRequester),
+					) { mediaManager.togglePlayPause() }
+					ControlButton(R.drawable.ic_next, stringResource(R.string.lbl_next_item)) { mediaManager.nextAudioItem() }
+					ControlButton(R.drawable.ic_add, stringResource(R.string.music_add_to_playlist)) { item?.let { playlistItems = listOf(it.id) } }
+					ControlButton(
+						icon = R.drawable.ic_shuffle,
+						label = stringResource(R.string.lbl_shuffle_queue),
+						active = playbackOrder != PlaybackOrder.DEFAULT,
+					) { mediaManager.shuffleAudioQueue() }
+					ControlButton(
+						icon = R.drawable.ic_subtitles,
+						label = stringResource(if (showLyrics) R.string.music_hide_lyrics else R.string.music_show_lyrics),
+						active = showLyrics,
+					) { NowPlayingPreferences.showLyrics = !showLyrics }
+					ControlButton(R.drawable.ic_artist, stringResource(R.string.music_go_to_artist)) { open(artistId(item)) }
+					ControlButton(R.drawable.ic_album, stringResource(R.string.music_go_to_album)) { open(item?.albumId) }
+					ControlButton(R.drawable.ic_photos, stringResource(R.string.music_screensaver)) { screensaver = true }
+				}
+			}
+
+			// Queue: the current song and what comes next
+			item(key = "queue") {
+				val queue = listOfNotNull(entry) + upcoming
+				Row(
+					verticalAlignment = Alignment.CenterVertically,
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(top = 6.dp, end = ModernHomeDimens.ScreenPaddingHorizontal),
+				) {
+					SectionHeader(stringResource(R.string.current_queue), compact = true, modifier = Modifier.weight(1f))
+					if (entryIndex >= 0) {
+						Text(
+							text = stringResource(R.string.music_queue_position, entryIndex + 1, playbackManager.queue.estimatedSize.coerceAtLeast(entryIndex + 1)),
+							color = ModernHomeColors.TextSecondary,
+							fontSize = 13.sp,
+							fontWeight = FontWeight.SemiBold,
+						)
+					}
+				}
+				LazyRow(
+					horizontalArrangement = Arrangement.spacedBy(16.dp),
+					contentPadding = PaddingValues(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
+				) {
+					itemsIndexed(queue, key = { index, queueEntry -> "${index}_${queueEntry.baseItem?.id}" }) { index, queueEntry ->
+						QueueCard(
+							entry = queueEntry,
+							playing = index == 0 && entry != null,
+							onClick = { if (index > 0) mediaManager.playFrom(queueEntry) },
+							onLongClick = {
+								lastMenuEntry = queueEntry
+								menuEntry = queueEntry
+							},
+						)
+					}
+				}
+			}
+		}
+
+		// Hold OK on a song of the queue
+		val menuSong = lastMenuEntry?.baseItem
+		ModernMenuDialog(
+			visible = menuEntry != null,
+			title = menuSong?.name.orEmpty(),
+			subtitle = menuSong?.let { listOfNotNull(it.artistsText(), it.album).joinToString(" · ") },
+			options = buildList {
+				val queueEntry = lastMenuEntry ?: return@buildList
+				val song = queueEntry.baseItem ?: return@buildList
+				add(ModernMenuOption(stringResource(R.string.music_play_from_here), R.drawable.ic_play) { mediaManager.playFrom(queueEntry) })
+				if (queueEntry != entry) {
+					add(ModernMenuOption(stringResource(R.string.music_remove_from_queue), R.drawable.ic_trash) { mediaManager.removeFromAudioQueue(queueEntry) })
+				}
+				val favorite = isFavorite(song)
+				add(ModernMenuOption(stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite), if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart) {
+					toggleFavorite(song)
+				})
+				song.albumId?.let { albumId -> add(ModernMenuOption(stringResource(R.string.music_go_to_album), R.drawable.ic_album) { open(albumId) }) }
+				artistId(song)?.let { id -> add(ModernMenuOption(stringResource(R.string.music_go_to_artist), R.drawable.ic_artist) { open(id) }) }
+			},
+			onDismissRequest = { menuEntry = null },
+		)
+
+		AddToPlaylistDialog(
+			visible = playlistItems != null,
+			itemIds = playlistItems.orEmpty(),
+			onDismissRequest = { playlistItems = null },
+		)
+
+		AnimatedVisibility(visible = screensaver, enter = fadeIn(tween(600)), exit = fadeOut(tween(400))) {
+			NowPlayingScreensaver(
+				item = item,
+				coverUrl = coverUrl,
+				backgroundUrl = backgroundState.value,
+				lyrics = if (showLyrics) lyrics else null,
+				playbackManager = playbackManager,
+				onExit = { screensaver = false },
+			)
+		}
+	}
+}
+
+@Composable
+private fun SongTitle(item: BaseItemDto?, compact: Boolean) {
+	Text(
+		text = item?.name.orEmpty(),
+		color = ModernHomeColors.TextPrimary,
+		fontSize = if (compact) 22.sp else 32.sp,
+		lineHeight = if (compact) 26.sp else 36.sp,
+		fontWeight = FontWeight.Bold,
+		maxLines = if (compact) 1 else 2,
+		overflow = TextOverflow.Ellipsis,
+	)
+	Spacer(Modifier.height(4.dp))
+	Text(
+		text = item?.artistsText().orEmpty(),
+		color = ModernHomeColors.TextSecondary,
+		fontSize = if (compact) 15.sp else 19.sp,
+		fontWeight = FontWeight.SemiBold,
+		maxLines = 1,
+		overflow = TextOverflow.Ellipsis,
+	)
+	val details = listOfNotNull(item?.album, item?.productionYear?.toString()).joinToString("  ·  ")
+	if (details.isNotEmpty()) {
+		Spacer(Modifier.height(2.dp))
+		Text(text = details, color = ModernHomeColors.TextMuted, fontSize = if (compact) 12.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+	}
+}
+
+@Composable
+internal fun NowPlayingLyrics(
+	lyrics: org.jellyfin.sdk.model.api.LyricDto,
+	playbackManager: PlaybackManager,
+	fontSize: Int,
+	modifier: Modifier = Modifier,
+) {
+	val playState by playbackManager.state.playState.collectAsState()
+	val positionInfo by rememberPlayerPositionInfo(playbackManager)
+
+	LyricsDtoBox(
+		lyricDto = lyrics,
+		currentTimestamp = positionInfo.active,
+		duration = positionInfo.duration,
+		paused = playState != PlayState.PLAYING,
+		fontSize = fontSize.sp,
+		color = Color.White,
+		modifier = modifier.fadingEdges(vertical = 40.dp),
+	)
+}
+
+@Composable
+private fun Timeline(playbackManager: PlaybackManager) {
+	val positionInfo by rememberPlayerPositionInfo(playbackManager)
+	val ticksPerMs = 10_000L
+
+	Column(modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 8.dp)) {
+		PlayerSeekbar(
+			playbackManager = playbackManager,
+			colors = SeekbarColors(
+				backgroundColor = Color.White.copy(alpha = 0.2f),
+				bufferColor = Color.White.copy(alpha = 0.3f),
+				progressColor = ModernHomeColors.Accent,
+				knobColor = Color.White,
+			),
+			modifier = Modifier
+				.fillMaxWidth()
+				.height(4.dp),
+		)
+		Spacer(Modifier.height(6.dp))
+		Row {
+			Text(
+				text = formatDuration(positionInfo.active.inWholeMilliseconds * ticksPerMs) ?: "0:00",
+				color = ModernHomeColors.TextSecondary,
+				fontSize = 12.sp,
+			)
+			Spacer(Modifier.weight(1f))
+			Text(
+				text = formatDuration(positionInfo.duration.inWholeMilliseconds * ticksPerMs)?.let { total -> total } ?: "",
+				color = ModernHomeColors.TextSecondary,
+				fontSize = 12.sp,
+			)
+		}
+	}
+}
+
+/**
+ * Round button of the controls, with its name under it while focused.
+ */
+@Composable
+private fun ControlButton(
+	icon: Int,
+	label: String,
+	modifier: Modifier = Modifier,
+	primary: Boolean = false,
+	active: Boolean = false,
+	onClick: () -> Unit,
+) {
+	val interactionSource = remember { MutableInteractionSource() }
+	val focused by interactionSource.collectIsFocusedAsState()
+	val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "ControlScale")
+	val size: Dp = if (primary) 56.dp else 46.dp
+
+	Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
+		Box(
+			contentAlignment = Alignment.Center,
+			modifier = modifier
+				.graphicsLayer {
+					scaleX = scale
+					scaleY = scale
+				}
+				.size(size)
+				.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+				.background(
+					when {
+						focused -> Color.White
+						primary -> Color.White.copy(alpha = 0.9f)
+						active -> ModernHomeColors.Accent.copy(alpha = 0.35f)
+						else -> Color.White.copy(alpha = 0.1f)
+					},
+					CircleShape,
+				)
+				.border(1.dp, if (active && !focused) ModernHomeColors.Accent else Color.Transparent, CircleShape),
+		) {
+			Icon(
+				imageVector = ImageVector.vectorResource(icon),
+				contentDescription = label,
+				tint = if (focused || primary) Color.Black else ModernHomeColors.TextPrimary,
+				modifier = Modifier.size(if (primary) 26.dp else 20.dp),
+			)
+		}
+		Spacer(Modifier.height(6.dp))
+		Text(
+			text = if (focused) label else "",
+			color = ModernHomeColors.TextPrimary,
+			fontSize = 11.sp,
+			fontWeight = FontWeight.SemiBold,
+			textAlign = TextAlign.Center,
+			maxLines = 2,
+			lineHeight = 13.sp,
+		)
+	}
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun QueueCard(
+	entry: QueueEntry,
+	playing: Boolean,
+	onClick: () -> Unit,
+	onLongClick: () -> Unit,
+) {
+	val api = koinInject<ApiClient>()
+	val song = entry.run { baseItemFlow.collectAsState(baseItem).value }
+	val interactionSource = remember { MutableInteractionSource() }
+	val focused by interactionSource.collectIsFocusedAsState()
+	val scale by animateFloatAsState(if (focused) ModernHomeDimens.FocusScale else 1f, label = "QueueScale")
+	val shape = RoundedCornerShape(ModernHomeDimens.CardCornerRadius)
+	val image = song?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
+	val url = remember(image) { image?.getUrl(api, maxWidth = 240) }
+
+	Column(modifier = Modifier.width(112.dp)) {
+		Box(
+			modifier = Modifier
+				.graphicsLayer {
+					scaleX = scale
+					scaleY = scale
+				}
+				.size(112.dp)
+				.combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
+				.clip(shape)
+				.background(ModernHomeColors.CardSurface, shape)
+				.border(
+					width = if (focused || playing) ModernHomeDimens.FocusBorderWidth else 0.dp,
+					color = if (focused) ModernHomeColors.FocusRing else if (playing) ModernHomeColors.Accent else Color.Transparent,
+					shape = shape,
+				),
+		) {
+			CardArtwork(url = url, fallbackTitle = song?.name.orEmpty())
+			if (playing) {
+				Box(
+					contentAlignment = Alignment.Center,
+					modifier = Modifier
+						.align(Alignment.BottomStart)
+						.padding(6.dp)
+						.size(24.dp)
+						.background(ModernHomeColors.Accent, CircleShape),
+				) {
+					Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+				}
+			}
+		}
+		Spacer(Modifier.height(8.dp))
+		Text(
+			text = song?.name.orEmpty(),
+			color = if (playing) ModernHomeColors.Accent else ModernHomeColors.TextPrimary,
+			fontSize = 12.sp,
+			fontWeight = FontWeight.SemiBold,
+			maxLines = 1,
+			overflow = TextOverflow.Ellipsis,
+		)
+		Text(
+			text = listOfNotNull(song?.artistsText(), song?.album).joinToString(" · "),
+			color = ModernHomeColors.TextMuted,
+			fontSize = 11.sp,
+			maxLines = 2,
+			lineHeight = 13.sp,
+			overflow = TextOverflow.Ellipsis,
+		)
+	}
+}
+
+@Composable
+internal fun Clock(fontSize: Int, color: Color = ModernHomeColors.TextSecondary) {
+	val context = LocalContext.current
+	var now by remember { mutableStateOf(Date()) }
+	LaunchedEffect(Unit) {
+		while (true) {
+			now = Date()
+			delay(CLOCK_TICK_MS)
+		}
+	}
+	Text(
+		text = DateFormat.getTimeFormat(context).format(now),
+		color = color,
+		fontSize = fontSize.sp,
+		fontWeight = FontWeight.SemiBold,
+	)
+}
+
+internal fun BaseItemDto.artistsText(): String? =
+	artists?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: albumArtist
+
+private const val QUEUE_PEEK = 100
+private const val CLOCK_TICK_MS = 15_000L

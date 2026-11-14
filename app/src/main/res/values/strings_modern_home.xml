@@ -157,4 +157,115 @@
     <string name="modern_music_radio">Radio</string>
     <string name="modern_music_open_album">Go to album</string>
     <string name="modern_music_shuffle">Shuffle</string>
+
+    <!-- Poster menu, identify -->
+    <string name="modern_menu_play_now">Play Now</string>
+    <string name="modern_menu_mark_unwatched">Mark as unwatched</string>
+    <string name="modern_menu_identify">Identify</string>
+    <string name="modern_menu_file_info">File Info</string>
+    <string name="modern_menu_failed">That did not work, try again</string>
+    <string name="modern_identify_title">Identify</string>
+    <string name="modern_identify_name">Name</string>
+    <string name="modern_identify_year">Year</string>
+    <string name="modern_identify_id">IMDb or TMDb ID</string>
+    <string name="modern_identify_search">Search</string>
+    <string name="modern_identify_searching">Searching…</string>
+    <string name="modern_identify_applying">Updating the metadata…</string>
+    <string name="modern_identify_no_results">No matches. Try another name, the year, or the IMDb/TMDb ID</string>
+    <string name="modern_identify_done">Identified as %1$s. The new info shows up in a few seconds</string>
+    <string name="modern_identify_failed">Could not identify it. Only administrators can change the metadata</string>
+
+    <!-- Collections by audio language -->
+    <string name="language_collections_filter">Filter by audio language</string>
+    <string name="language_collections_title">Collections by audio language</string>
+    <string name="language_collections_hint">Pick a language to make a collection with every title that has it. It shows up in Collections and gets the new titles by itself every day.</string>
+    <string name="language_collections_reading">Reading the library…</string>
+    <string name="language_collections_scanning">Reading the audio tracks… %1$d of %2$d</string>
+    <string name="language_collections_none">No audio languages found. The audio tracks of the files need a language.</string>
+    <string name="language_collections_created_badge">Collection made</string>
+    <string name="language_collections_name">Name</string>
+    <string name="language_collections_poster">Poster</string>
+    <string name="language_collections_poster_generated">Flag</string>
+    <string name="language_collections_poster_keep">Current</string>
+    <string name="language_collections_create">Create collection</string>
+    <string name="language_collections_update">Update collection</string>
+    <string name="language_collections_creating">Creating the collection…</string>
+    <string name="language_collections_updating">Updating the collection…</string>
+    <string name="language_collections_created">\"%1$s\" is ready. You will find it in Collections</string>
+    <string name="language_collections_updated">\"%1$s\" is up to date</string>
+    <string name="language_collections_poster_failed">The collection is ready, but its poster could not be changed: only administrators can change images</string>
+    <string name="language_collections_failed">The collection could not be made. Your user needs permission to manage collections</string>
+    <string name="language_collections_default_name_movies">%1$s Films</string>
+    <string name="language_collections_default_name_series">%1$s TV Shows</string>
+    <string name="language_collections_kind_movies">Films</string>
+    <string name="language_collections_kind_series">TV Shows</string>
+    <plurals name="language_collections_count_movies">
+        <item quantity="one">%d film</item>
+        <item quantity="other">%d films</item>
+    </plurals>
+    <plurals name="language_collections_count_series">
+        <item quantity="one">%d show</item>
+        <item quantity="other">%d shows</item>
+    </plurals>
+
+    <!-- Shared music queue -->
+    <string name="shared_queue_title">Shared queue</string>
+    <string name="shared_queue_description">Let everyone at home add songs from their phone, with no app or account. They only need to be on the same Wi-Fi as the TV.</string>
+    <string name="shared_queue_start">Start sharing</string>
+    <string name="shared_queue_stop">Stop sharing</string>
+    <string name="shared_queue_done">Done</string>
+    <string name="shared_queue_scan">Scan with the phone camera</string>
+    <string name="shared_queue_added">Added from phones</string>
+    <string name="shared_queue_nobody">Nobody added songs yet</string>
+    <string name="shared_queue_song">%1$s · %2$s</string>
+    <string name="shared_queue_no_network">The TV is not connected to the home network. Connect it to Wi-Fi or Ethernet.</string>
+    <string name="shared_queue_links">They can search the library or paste a link from Spotify, Apple Music or YouTube Music (Share → Copy link). Songs that are in your library get added.</string>
+    <string name="shared_queue_troubleshoot">Does the page not open? The phone has to be on the same Wi-Fi as the TV (not a guest network) and the address has to start with the numbers shown above.</string>
+
+    <!-- Music pages: albums, playlists, artists, genres, now playing -->
+    <string name="music_add_to_playlist">Add to playlist</string>
+    <string name="music_new_playlist">New playlist</string>
+    <string name="music_create">Create</string>
+    <string name="music_added_to_playlist">Added to %1$s</string>
+    <string name="music_no_playlists">No playlists yet</string>
+    <string name="music_popular_songs">Popular songs</string>
+    <string name="music_songs">Songs</string>
+    <string name="music_disc">Disc %1$d</string>
+    <string name="music_play_from_here">Play from here</string>
+    <string name="music_add_to_queue">Add to queue</string>
+    <string name="music_added_to_queue">Added to the queue</string>
+    <string name="music_remove_from_queue">Remove from queue</string>
+    <string name="music_add_favorite">Add to favourites</string>
+    <string name="music_remove_favorite">Remove from favourites</string>
+    <string name="music_added_favorite">Added to favourites</string>
+    <string name="music_removed_favorite">Removed from favourites</string>
+    <string name="music_favorite">Favourite</string>
+    <string name="music_go_to_album">Go to album</string>
+    <string name="music_go_to_artist">Go to artist</string>
+    <string name="music_type_album">Album</string>
+    <string name="music_type_playlist">Playlist</string>
+    <string name="music_type_artist">Artist</string>
+    <string name="music_type_genre">Genre</string>
+    <string name="music_stations_for_you">For you</string>
+    <string name="music_nothing_here">Nothing here yet</string>
+    <string name="music_now_playing">Now playing</string>
+    <string name="music_no_lyrics">This song has no lyrics</string>
+    <string name="music_show_lyrics">Show lyrics</string>
+    <string name="music_hide_lyrics">Hide lyrics</string>
+    <string name="music_screensaver">Screensaver</string>
+    <string name="music_queue_position">%1$d / %2$d</string>
+    <plurals name="music_song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <plurals name="music_album_count">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+
+    <!-- Modern search -->
+    <string name="search_hint">Films, series, people, music…</string>
+    <string name="search_hint_music">Songs, albums, artists, playlists…</string>
+    <string name="search_voice_hint">Press OK to type. With the keyboard open, hold the microphone button of the remote to say what you are looking for</string>
+    <string name="search_no_results">No results for \"%1$s\"</string>
 </resources>

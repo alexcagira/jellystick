@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06080d">
+<title>Shared queue</title>
+<style>
+  :root {
+    --bg: #06080d;
+    --card: #121722;
+    --card-2: #1a2436;
+    --text: #ffffff;
+    --muted: #8c97a8;
+    --soft: #c7ceda;
+    --accent: #41b6e6;
+    --line: rgba(255, 255, 255, 0.08);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding: max(16px, env(safe-area-inset-top)) 16px 96px; max-width: 640px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .now { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 18px;
+         background: linear-gradient(135deg, var(--card-2), var(--card)); border: 1px solid var(--line); }
+  .now img { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; background: var(--card-2); flex: none; }
+  .label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); }
+  .title { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grow { min-width: 0; flex: 1; }
+  .search { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 16px 0 10px; }
+  input { width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); outline: none;
+          background: var(--card); color: var(--text); font-size: 16px; }
+  input:focus { border-color: var(--accent); }
+  h2 { font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--soft); margin: 20px 0 8px; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  .row img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--card-2); flex: none; }
+  .add { flex: none; width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--accent); color: #000;
+         font-size: 24px; line-height: 40px; font-weight: 700; cursor: pointer; }
+  .add:disabled { background: var(--card-2); color: var(--muted); }
+  .by { color: var(--accent); font-size: 12px; font-weight: 600; flex: none; }
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 4px; }
+  .name { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--muted); font-size: 14px; }
+  .name input { padding: 8px 12px; font-size: 14px; width: auto; flex: 1; }
+  .link { margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+  .link p { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+  .link .line { display: flex; gap: 8px; }
+  .link input { flex: 1; padding: 12px 14px; font-size: 15px; }
+  .link button { flex: none; padding: 0 16px; border-radius: 12px; border: none; background: var(--accent); color: #000; font-weight: 700; font-size: 15px; }
+  .link button:disabled { background: var(--card-2); color: var(--muted); }
+  .apps { display: flex; gap: 6px; margin-bottom: 8px; }
+  .apps span { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--card-2); color: var(--soft); }
+  .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(120px);
+           background: #fff; color: #000; padding: 12px 18px; border-radius: 999px; font-weight: 600; transition: transform .25s ease;
+           max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<header><span class="dot"></span><h1 id="t-title">Shared queue</h1></header>
+
+<section class="now" id="now">
+  <img id="now-img" alt="">
+  <div class="grow">
+    <div class="label" id="t-now">Now playing</div>
+    <div class="title" id="now-title">—</div>
+    <div class="sub" id="now-artist"></div>
+  </div>
+</section>
+
+<label class="name"><span id="t-you">Your name</span><input id="name" maxlength="24" autocomplete="nickname"></label>
+
+<section class="link">
+  <div class="apps"><span>Spotify</span><span>Apple Music</span><span>YouTube Music</span></div>
+  <p id="t-link-hint">Share → Copy link in the app, then paste it here. It plays if the song is in the library.</p>
+  <div class="line"><input id="link" type="url" inputmode="url" autocomplete="off" enterkeyhint="go"><button id="link-add">+</button></div>
+</section>
+
+<div class="search"><input id="q" type="search" autocomplete="off" enterkeyhint="search"></div>
+
+<div id="results"></div>
+
+<h2 id="t-next">Up next from guests</h2>
+<div id="queue"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var es = (navigator.language || "en").toLowerCase().indexOf("es") === 0;
+  var T = es ? {
+    title: "Cola compartida", now: "Sonando ahora", you: "Tu nombre", search: "Busca una canción o un álbum",
+    next: "Próximas de los invitados", songs: "Canciones", albums: "Álbumes", none: "Sin resultados",
+    emptyQueue: "Nadie ha añadido canciones todavía", added: "Añadida a la cola", full: "No se ha podido añadir",
+    nothing: "No suena nada", guest: "Invitado", lost: "Vuelve a escanear el código QR de la tele",
+    linkHint: "En la app: Compartir → Copiar enlace, y pégalo aquí. Suena si la canción está en la biblioteca.",
+    linkPlaceholder: "Pega un enlace", linkBad: "Ese enlace no es de una canción o un álbum",
+    linkMissing: "No está en la biblioteca", linkWorking: "Buscando…"
+  } : {
+    title: "Shared queue", now: "Now playing", you: "Your name", search: "Search for a song or an album",
+    next: "Up next from guests", songs: "Songs", albums: "Albums", none: "No results",
+    emptyQueue: "Nobody added songs yet", added: "Added to the queue", full: "Could not add it",
+    nothing: "Nothing is playing", guest: "Guest", lost: "Scan the QR code on the TV again",
+    linkHint: "In the app: Share → Copy link, then paste it here. It plays if the song is in the library.",
+    linkPlaceholder: "Paste a link", linkBad: "That link is not a song or an album",
+    linkMissing: "Not in the library", linkWorking: "Looking for it…"
+  };
+  var key = new URLSearchParams(location.search).get("k") || "";
+  var $ = function (id) { return document.getElementById(id); };
+
+  document.title = T.title;
+  $("t-title").textContent = T.title;
+  $("t-now").textContent = T.now;
+  $("t-you").textContent = T.you;
+  $("t-next").textContent = T.next;
+  $("q").placeholder = T.search;
+  $("t-link-hint").textContent = T.linkHint;
+  $("link").placeholder = T.linkPlaceholder;
+
+  function addLink() {
+    var text = $("link").value.trim();
+    if (!text) return;
+    var button = $("link-add");
+    button.disabled = true;
+    toast(T.linkWorking);
+    var by = $("name").value.trim() || T.guest;
+    api("/api/link", { url: text, by: by }, "POST").then(function (result) {
+      button.disabled = false;
+      if (result.ok) {
+        toast(T.added + ": " + result.name);
+        $("link").value = "";
+        refresh();
+      } else if (result.reason === "missing") {
+        toast(T.linkMissing + ": " + [result.name, result.artist].filter(Boolean).join(" · "));
+      } else if (result.reason === "full") {
+        toast(T.full);
+      } else {
+        toast(T.linkBad);
+      }
+    }).catch(function () { button.disabled = false; });
+  }
+  $("link-add").onclick = addLink;
+  $("link").addEventListener("keydown", function (event) { if (event.key === "Enter") addLink(); });
+  // Pasting a shared text is enough
+  $("link").addEventListener("paste", function () { setTimeout(addLink, 50); });
+
+  var name = "";
+  try { name = localStorage.getItem("sharedQueueName") || ""; } catch (e) {}
+  $("name").value = name;
+  $("name").addEventListener("change", function () {
+    try { localStorage.setItem("sharedQueueName", $("name").value.trim()); } catch (e) {}
+  });
+
+  function api(path, params, method) {
+    var query = new URLSearchParams(params || {});
+    query.set("k", key);
+    return fetch(path + "?" + query.toString(), { method: method || "GET", cache: "no-store" }).then(function (response) {
+      if (response.status === 403) { toast(T.lost); throw new Error("forbidden"); }
+      return response.json();
+    });
+  }
+
+  function image(id) { return "/img?k=" + encodeURIComponent(key) + "&id=" + encodeURIComponent(id); }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function row(item, button, by) {
+    var line = el("div", "row");
+    var cover = el("img");
+    cover.loading = "lazy";
+    cover.alt = "";
+    cover.src = image(item.image);
+    line.appendChild(cover);
+    var text = el("div", "grow");
+    text.appendChild(el("div", "title", item.name));
+    text.appendChild(el("div", "sub", [item.artist, item.album].filter(Boolean).join(" · ")));
+    line.appendChild(text);
+    if (by) line.appendChild(el("span", "by", by));
+    if (button) line.appendChild(button);
+    return line;
+  }
+
+  function addButton(item) {
+    var button = el("button", "add", "+");
+    button.setAttribute("aria-label", T.added);
+    button.onclick = function () {
+      button.disabled = true;
+      var by = $("name").value.trim() || T.guest;
+      api("/api/add", { id: item.id, by: by }, "POST").then(function (result) {
+        toast(result.ok ? T.added + ": " + item.name : T.full);
+        if (result.ok) { button.textContent = "✓"; refresh(); } else { button.disabled = false; }
+      }).catch(function () { button.disabled = false; });
+    };
+    return button;
+  }
+
+  function section(title, items) {
+    var box = el("div");
+    box.appendChild(el("h2", null, title));
+    items.forEach(function (item) { box.appendChild(row(item, addButton(item))); });
+    return box;
+  }
+
+  var searchTimer = null;
+  var searchId = 0;
+  $("q").addEventListener("input", function () {
+    clearTimeout(searchTimer);
+    var term = $("q").value.trim();
+    if (term.length < 2) { $("results").innerHTML = ""; return; }
+    searchTimer = setTimeout(function () {
+      var id = ++searchId;
+      api("/api/search", { q: term }).then(function (result) {
+        if (id !== searchId) return;
+        var results = $("results");
+        results.innerHTML = "";
+        if (!result.songs.length && !result.albums.length) { results.appendChild(el("div", "empty", T.none)); return; }
+        if (result.songs.length) results.appendChild(section(T.songs, result.songs));
+        if (result.albums.length) results.appendChild(section(T.albums, result.albums));
+      });
+    }, 300);
+  });
+
+  function refresh() {
+    api("/api/state").then(function (state) {
+      var now = state.nowPlaying;
+      $("now-title").textContent = now ? now.name : T.nothing;
+      $("now-artist").textContent = now ? (now.artist || "") : "";
+      if (now) $("now-img").src = image(now.image); else $("now-img").removeAttribute("src");
+
+      var queue = $("queue");
+      queue.innerHTML = "";
+      if (!state.guestSongs.length) queue.appendChild(el("div", "empty", T.emptyQueue));
+      state.guestSongs.forEach(function (song) { queue.appendChild(row(song, null, song.by)); });
+    }).catch(function () {});
+  }
+
+  var toastTimer = null;
+  function toast(text) {
+    var node = $("toast");
+    node.textContent = text;
+    node.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { node.classList.remove("show"); }, 2200);
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+})();
+</script>
+</body>
+</html>

@@ -5,12 +5,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.util.apiclient.JellyfinImage
 import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
 import org.jellyfin.androidtv.util.apiclient.getUrl
 import org.jellyfin.androidtv.util.apiclient.itemImages
 import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.artistsApi
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.api.client.extensions.instantMixApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
@@ -78,12 +81,101 @@ class ModernMusicRepository(
 		}
 	}
 
+	/** Genres of the library with the cover of one of their albums */
+	suspend fun genres(libraryId: UUID): List<MusicCard> = withContext(Dispatchers.IO) {
+		val genres = api.musicGenresApi.getMusicGenres(
+			parentId = libraryId,
+			sortBy = setOf(ItemSortBy.SORT_NAME),
+			limit = MAX_GENRES,
+			enableTotalRecordCount = false,
+		).content.items
+
+		val semaphore = Semaphore(PARALLEL_REQUESTS)
+		coroutineScope {
+			genres.map { genre ->
+				async {
+					val cover = if (genre.itemImages[ImageType.PRIMARY] != null) null else semaphore.withPermit {
+						safe("genre cover") {
+							api.itemsApi.getItems(
+								GetItemsRequest(
+									parentId = libraryId,
+									genreIds = setOf(genre.id),
+									includeItemTypes = setOf(BaseItemKind.MUSIC_ALBUM),
+									recursive = true,
+									imageTypes = setOf(ImageType.PRIMARY),
+									sortBy = setOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
+									sortOrder = setOf(SortOrder.DESCENDING),
+									limit = 1,
+									enableTotalRecordCount = false,
+								)
+							).content.items.firstOrNull()
+						}
+					}
+					genreCard(genre, cover)
+				}
+			}.awaitAll()
+		}
+	}
+
+	/**
+	 * Every station: the personal ones (like on the music page), one per genre and one per artist.
+	 */
+	suspend fun allStations(libraryId: UUID, labels: MusicLabels): StationGroups = withContext(Dispatchers.IO) {
+		coroutineScope {
+			val genresAsync = async {
+				safe("genres") {
+					api.musicGenresApi.getMusicGenres(
+						parentId = libraryId,
+						sortBy = setOf(ItemSortBy.SORT_NAME),
+						limit = MAX_GENRES,
+						enableTotalRecordCount = false,
+					).content.items
+				}.orEmpty()
+			}
+			val artistsAsync = async {
+				safe("artists") {
+					api.artistsApi.getAlbumArtists(
+						parentId = libraryId,
+						sortBy = setOf(ItemSortBy.SORT_NAME),
+						limit = MAX_STATION_ARTISTS,
+						imageTypeLimit = 1,
+						enableTotalRecordCount = false,
+					).content.items
+				}.orEmpty()
+			}
+			val mostPlayed = safe("most played") { mostPlayed(libraryId) }.orEmpty()
+			val topAlbumId = mostPlayed
+				.mapNotNull { it.albumId }
+				.groupingBy { it }
+				.eachCount()
+				.maxByOrNull { it.value }
+				?.key
+
+			StationGroups(
+				forYou = stations(libraryId, mostPlayed, topAlbumId, labels),
+				genres = genresAsync.await().map { genre ->
+					stationCard("genre_${genre.id}", genre.name.orEmpty(), labels.radio, StationSource(genreId = genre.id), imageItemId = null)
+				},
+				artists = artistsAsync.await().map { artist ->
+					stationCard(
+						key = "artist_${artist.id}",
+						title = artist.name.orEmpty(),
+						subtitle = labels.radio,
+						source = StationSource(artistId = artist.id),
+						imageItemId = artist.id.takeIf { artist.itemImages[ImageType.PRIMARY] != null },
+					)
+				},
+			)
+		}
+	}
+
 	/** Tracks of a station (instant mix) */
 	suspend fun stationTracks(source: StationSource): List<BaseItemDto> = withContext(Dispatchers.IO) {
 		when {
 			source.genreId != null -> api.instantMixApi.getInstantMixFromMusicGenreById(id = source.genreId, limit = STATION_TRACKS).content.items
 			source.artistId != null -> api.instantMixApi.getInstantMixFromArtists(itemId = source.artistId, limit = STATION_TRACKS).content.items
 			source.albumId != null -> api.instantMixApi.getInstantMixFromAlbum(itemId = source.albumId, limit = STATION_TRACKS).content.items
+			source.playlistId != null -> api.instantMixApi.getInstantMixFromPlaylist(itemId = source.playlistId, limit = STATION_TRACKS).content.items
 			else -> emptyList()
 		}
 	}
@@ -279,7 +371,7 @@ class ModernMusicRepository(
 	private fun section(type: MusicSectionType, cards: List<MusicCard>) =
 		if (cards.isEmpty()) null else MusicSection(type, cards.distinctBy { it.key })
 
-	private fun albumCard(album: BaseItemDto): MusicCard {
+	internal fun albumCard(album: BaseItemDto): MusicCard {
 		val image = album.itemImages[ImageType.PRIMARY] ?: album.albumPrimaryImage
 		return MusicCard(
 			key = album.id.toString(),
@@ -292,7 +384,7 @@ class ModernMusicRepository(
 		)
 	}
 
-	private fun trackCard(track: BaseItemDto): MusicCard {
+	internal fun trackCard(track: BaseItemDto): MusicCard {
 		val image = track.itemImages[ImageType.PRIMARY] ?: track.albumPrimaryImage
 		return MusicCard(
 			key = track.id.toString(),
@@ -305,7 +397,7 @@ class ModernMusicRepository(
 		)
 	}
 
-	private fun playlistCard(playlist: BaseItemDto): MusicCard {
+	internal fun playlistCard(playlist: BaseItemDto): MusicCard {
 		val image = playlist.itemImages[ImageType.PRIMARY]
 		return MusicCard(
 			key = playlist.id.toString(),
@@ -318,7 +410,34 @@ class ModernMusicRepository(
 		)
 	}
 
-	private fun stationCard(key: String, title: String, subtitle: String?, source: StationSource, imageItemId: UUID?) = MusicCard(
+	internal fun artistCard(artist: BaseItemDto): MusicCard {
+		val image = artist.itemImages[ImageType.PRIMARY]
+		return MusicCard(
+			key = artist.id.toString(),
+			kind = MusicCardKind.ARTIST,
+			item = artist,
+			title = artist.name.orEmpty(),
+			subtitle = null,
+			imageUrl = image?.getUrl(api, maxWidth = COVER_WIDTH),
+			backgroundUrl = image?.blurredUrl(),
+		)
+	}
+
+	/** Genre: the cover of one of its albums (genres rarely have images of their own) */
+	internal fun genreCard(genre: BaseItemDto, coverAlbum: BaseItemDto?): MusicCard {
+		val image = genre.itemImages[ImageType.PRIMARY] ?: coverAlbum?.itemImages?.get(ImageType.PRIMARY)
+		return MusicCard(
+			key = genre.id.toString(),
+			kind = MusicCardKind.GENRE,
+			item = genre,
+			title = genre.name.orEmpty(),
+			subtitle = null,
+			imageUrl = image?.getUrl(api, maxWidth = COVER_WIDTH),
+			backgroundUrl = image?.blurredUrl(),
+		)
+	}
+
+	internal fun stationCard(key: String, title: String, subtitle: String?, source: StationSource, imageItemId: UUID?) = MusicCard(
 		key = "station_$key",
 		kind = MusicCardKind.STATION,
 		item = null,
@@ -347,7 +466,7 @@ class ModernMusicRepository(
 		)
 	}
 
-	private fun JellyfinImage.blurredUrl(): String = api.imageApi.getItemImageUrl(
+	internal fun JellyfinImage.blurredUrl(): String = api.imageApi.getItemImageUrl(
 		itemId = item,
 		imageType = type,
 		tag = tag,
@@ -376,6 +495,9 @@ class ModernMusicRepository(
 		const val STATION_ARTISTS = 4
 		const val STATION_GENRES = 4
 		const val STATION_TRACKS = 100
+		const val MAX_GENRES = 150
+		const val MAX_STATION_ARTISTS = 300
+		const val PARALLEL_REQUESTS = 8
 
 		const val COVER_WIDTH = 360
 		const val HERO_COVER_WIDTH = 500
@@ -385,6 +507,13 @@ class ModernMusicRepository(
 		const val HERO_BLUR = 12
 	}
 }
+
+/** Stations page: personal stations, one per genre, one per artist */
+data class StationGroups(
+	val forYou: List<MusicCard>,
+	val genres: List<MusicCard>,
+	val artists: List<MusicCard>,
+)
 
 /**
  * Translated texts the repository puts on cards (it has no access to resources).

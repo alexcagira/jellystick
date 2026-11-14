@@ -18,6 +18,8 @@ enum class MusicCardKind {
 	TRACK,
 	PLAYLIST,
 	STATION,
+	ARTIST,
+	GENRE,
 }
 
 /** Where a station (instant mix) comes from */
@@ -26,6 +28,8 @@ data class StationSource(
 	val artistId: UUID? = null,
 	/** "Your mix": songs like an album */
 	val albumId: UUID? = null,
+	/** Songs like those of a playlist */
+	val playlistId: UUID? = null,
 )
 
 data class MusicCard(

@@ -18,7 +18,12 @@ import org.jellyfin.androidtv.ui.home.HomeFragment
 import org.jellyfin.androidtv.ui.itemdetail.FullDetailsFragment
 import org.jellyfin.androidtv.ui.itemdetail.ItemListFragment
 import org.jellyfin.androidtv.ui.itemdetail.MusicFavoritesListFragment
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseFragment
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicFragment
+import org.jellyfin.androidtv.ui.music.modern.MusicBrowseMode
+import org.jellyfin.androidtv.ui.music.nowplaying.ModernNowPlayingFragment
+import org.jellyfin.androidtv.ui.search.modern.ModernSearchFragment
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicItemFragment
 import org.jellyfin.androidtv.ui.livetv.LiveTvGuideFragment
 import org.jellyfin.androidtv.ui.playback.AudioNowPlayingFragment
 import org.jellyfin.androidtv.ui.playback.CustomPlaybackOverlayFragment
@@ -28,7 +33,9 @@ import org.jellyfin.androidtv.ui.player.photo.PhotoPlayerFragment
 import org.jellyfin.androidtv.ui.player.video.VideoPlayerFragment
 import org.jellyfin.androidtv.ui.search.SearchFragment
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.MediaType
 import org.jellyfin.sdk.model.api.SeriesTimerInfoDto
 import org.jellyfin.sdk.model.api.SortOrder
 import org.koin.java.KoinJavaComponent
@@ -90,6 +97,36 @@ object Destinations {
 	// TODO only pass item id instead of complete JSON to browsing destinations
 	fun modernMusic(item: BaseItemDto) = fragmentDestination<ModernMusicFragment> {
 		putString(Extras.Folder, Json.encodeToString(item))
+	}
+
+	/** Grid of genres or of every station of a music library */
+	fun modernMusicBrowse(library: BaseItemDto, mode: MusicBrowseMode) = fragmentDestination<ModernMusicBrowseFragment> {
+		putString(Extras.Folder, Json.encodeToString(library))
+		putString(ModernMusicBrowseFragment.ARGUMENT_MODE, mode.name)
+	}
+
+	/** Search with poster badges and voice input; [music] limits it to music */
+	fun modernSearch(music: Boolean = false) = fragmentDestination<ModernSearchFragment> {
+		putBoolean(ModernSearchFragment.ARGUMENT_MUSIC, music)
+	}
+
+	/** Album, playlist, artist or genre in the style of the music page */
+	fun modernMusicItem(item: UUID) = fragmentDestination<ModernMusicItemFragment> {
+		putString(ModernMusicItemFragment.ARGUMENT_ITEM_ID, item.toString())
+	}
+
+	/** Album or playlist: the modern music page for music, the list of items otherwise */
+	fun albumOrPlaylist(item: BaseItemDto): Destination.Fragment =
+		if (isModernMusicItem(item)) modernMusicItem(item.id) else itemList(item.id)
+
+	/** True for the items shown by [modernMusicItem] when the modern music page is enabled */
+	fun isModernMusicItem(item: BaseItemDto): Boolean {
+		if (!preference(UserPreferences.modernMusicEnabled)) return false
+		return when (item.type) {
+			BaseItemKind.MUSIC_ALBUM, BaseItemKind.MUSIC_ARTIST, BaseItemKind.MUSIC_GENRE -> true
+			BaseItemKind.PLAYLIST -> item.mediaType == MediaType.AUDIO
+			else -> false
+		}
 	}
 
 	// TODO only pass item id instead of complete JSON to browsing destinations
@@ -155,7 +192,11 @@ object Destinations {
 	}
 
 	// Playback
-	val nowPlaying = fragmentDestination<AudioNowPlayingFragment>()
+	/** "Now playing": the modern screen when the modern music page is enabled */
+	val nowPlaying: Destination.Fragment
+		get() = if (preference(UserPreferences.modernMusicEnabled)) modernNowPlaying else legacyNowPlaying
+	private val legacyNowPlaying = fragmentDestination<AudioNowPlayingFragment>()
+	private val modernNowPlaying = fragmentDestination<ModernNowPlayingFragment>()
 
 	fun photoPlayer(
 		item: UUID,

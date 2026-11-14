@@ -90,7 +90,8 @@ public class ItemLauncher {
 
                     case MUSIC_ALBUM:
                     case PLAYLIST:
-                        navigationRepository.getValue().navigate(Destinations.INSTANCE.itemList(baseItem.getId()));
+                        // Music: the modern album/playlist page when enabled
+                        navigationRepository.getValue().navigate(Destinations.INSTANCE.albumOrPlaylist(baseItem));
                         return;
 
                     case AUDIO:

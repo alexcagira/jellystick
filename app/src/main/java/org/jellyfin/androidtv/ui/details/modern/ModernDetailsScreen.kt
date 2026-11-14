@@ -45,10 +45,14 @@ import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
 import org.jellyfin.androidtv.ui.base.Text
+import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
+import org.jellyfin.androidtv.ui.home.modern.rememberSmoothListScroller
 import org.jellyfin.androidtv.ui.home.modern.GlassBackdrop
 import org.jellyfin.androidtv.ui.home.modern.HomeCard
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
@@ -159,13 +163,15 @@ fun ModernDetailsScreen(
 	val themeMusicPlayer = koinInject<ThemeMusicPlayer>()
 
 	val listState = rememberLazyListState()
+	val scroller = rememberSmoothListScroller(listState)
 	val primaryFocusRequester = remember { FocusRequester() }
 	val restoreFocusRequester = remember { FocusRequester() }
 	// Snapshot of the last focused element when this screen was (re)created
 	val restoreIndex = remember { viewModel.lastFocusIndex }
 	val restoreKey = remember { viewModel.lastFocusKey }
 	var initialFocusDone by remember { mutableStateOf(false) }
-	var backgroundUrl by remember { mutableStateOf<String?>(null) }
+	// Out of the composition so focus moves don't recompose the whole page
+	val backgroundUrlState = remember { mutableStateOf<String?>(null) }
 	var showMediaInfo by remember { mutableStateOf(false) }
 	// Item shown in the media info dialog (the page item, or an episode held with OK)
 	var mediaInfoItem by remember { mutableStateOf<BaseItemDto?>(null) }
@@ -216,21 +222,23 @@ fun ModernDetailsScreen(
 	}
 
 	// Background of the focused card, applied once the focus rests a moment
-	var pendingBackgroundUrl by remember { mutableStateOf<String?>(null) }
-	LaunchedEffect(pendingBackgroundUrl) {
-		val url = pendingBackgroundUrl ?: return@LaunchedEffect
-		delay(300)
-		backgroundUrl = url
+	val pendingBackgroundUrl = remember { MutableStateFlow<String?>(null) }
+	LaunchedEffect(Unit) {
+		pendingBackgroundUrl.collectLatest { url ->
+			if (url == null) return@collectLatest
+			delay(300)
+			backgroundUrlState.value = url
+		}
 	}
 
 	fun rememberFocus(index: Int, key: String, card: HomeCard?) {
 		viewModel.lastFocusIndex = index
 		viewModel.lastFocusKey = key
-		card?.backgroundUrl?.let { pendingBackgroundUrl = it }
+		card?.backgroundUrl?.let { pendingBackgroundUrl.value = it }
 	}
 
 	LaunchedEffect(state.backgroundUrl) {
-		if (backgroundUrl == null) backgroundUrl = state.backgroundUrl
+		if (backgroundUrlState.value == null) backgroundUrlState.value = state.backgroundUrl
 	}
 
 	// Initial focus: restore the last focused element, otherwise the play button (or first card)
@@ -261,34 +269,7 @@ fun ModernDetailsScreen(
 		}
 
 		// Ambient background, same as the home screen
-		Crossfade(
-			targetState = backgroundUrl,
-			animationSpec = tween(durationMillis = 800),
-			label = "DetailsBackground",
-			modifier = Modifier.fillMaxSize(),
-		) { url ->
-			if (url != null) {
-				AsyncImage(
-					model = url,
-					contentDescription = null,
-					imageLoader = imageLoader,
-					contentScale = ContentScale.Crop,
-					alignment = Alignment.TopCenter,
-					modifier = Modifier.fillMaxSize(),
-				)
-			}
-		}
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(
-					Brush.verticalGradient(
-						0f to ModernHomeColors.AmbientScrimTop,
-						0.45f to ModernHomeColors.AmbientScrimMiddle,
-						1f to ModernHomeColors.AmbientScrimBottom,
-					)
-				)
-		)
+		AmbientBackground(urlState = backgroundUrlState, imageLoader = imageLoader)
 
 		CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScrollBringIntoViewSpec) {
 			LazyColumn(
@@ -302,7 +283,7 @@ fun ModernDetailsScreen(
 				) { index, block ->
 					// Scroll the focused block into place
 					val scrollModifier = Modifier.onFocusChanged { focusState ->
-						if (focusState.hasFocus) scope.launch { listState.animateScrollToItem(index) }
+						if (focusState.hasFocus) scope.launch { scroller.scrollToItem(index) }
 					}
 
 					fun requesterFor(key: String): FocusRequester? =

@@ -80,6 +80,9 @@ class ModernHomeViewModel(
 	 */
 	fun refresh() = loadSections(debounce = REFRESH_DEBOUNCE)
 
+	/** Reload the rows right away, e.g. after marking something as watched */
+	fun refreshNow() = loadSections(debounce = Duration.ZERO)
+
 	suspend fun resolvePlayableId(item: BaseItemDto): UUID? = repository.resolvePlayableId(item)
 
 	fun hideLibrary(library: BaseItemDto) = libraryVisibilityRepository.setHidden(library.id, hidden = true)

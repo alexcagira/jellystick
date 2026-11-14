@@ -150,4 +150,13 @@ class MediaBadgesTests : FunSpec({
 		MediaBadges.duplicateKey(english) shouldBe MediaBadges.duplicateKey(spanish)
 		(MediaBadges.duplicateKey(english) == MediaBadges.duplicateKey(other)) shouldBe false
 	}
+
+	test("Language keys map to display tags for the collection names") {
+		MediaBadges.languageTag("eng") shouldBe "en"
+		MediaBadges.languageTag("fre") shouldBe "fr"
+		MediaBadges.languageTag("spa-419") shouldBe "es-419"
+		MediaBadges.languageTag("por-br") shouldBe "pt-BR"
+		MediaBadges.flagFor("jpn") shouldBe "jp"
+		MediaBadges.flagFor("ara") shouldBe null
+	}
 })

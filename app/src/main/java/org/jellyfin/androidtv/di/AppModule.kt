@@ -35,9 +35,15 @@ import org.jellyfin.androidtv.ui.details.modern.ModernDetailsViewModel
 import org.jellyfin.androidtv.ui.details.modern.ThemeMusicPlayer
 import org.jellyfin.androidtv.ui.home.modern.HomeCache
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
+import org.jellyfin.androidtv.ui.collections.LanguageCollectionsRepository
+import org.jellyfin.androidtv.ui.home.modern.ItemActions
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
 import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseViewModel
+import org.jellyfin.androidtv.ui.music.modern.ModernMusicItemViewModel
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
+import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
+import org.jellyfin.androidtv.ui.music.share.SharedQueueServer
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicViewModel
 import org.jellyfin.androidtv.ui.home.modern.TmdbTrendingClient
 import org.jellyfin.androidtv.ui.itemhandling.ItemLauncher
@@ -58,6 +64,7 @@ import org.jellyfin.androidtv.ui.playback.stillwatching.StillWatchingViewModel
 import org.jellyfin.androidtv.ui.player.photo.PhotoPlayerViewModel
 import org.jellyfin.androidtv.ui.search.SearchFragmentDelegate
 import org.jellyfin.androidtv.ui.search.SearchRepository
+import org.jellyfin.androidtv.ui.search.modern.ModernSearchViewModel
 import org.jellyfin.androidtv.ui.search.SearchRepositoryImpl
 import org.jellyfin.androidtv.ui.search.SearchViewModel
 import org.jellyfin.androidtv.ui.settings.compat.SettingsViewModel
@@ -164,9 +171,13 @@ val appModule = module {
 	// Modern home screen
 	single { TmdbTrendingClient(BuildConfig.TMDB_API_KEY) }
 	single { ModernHomeRepository(get(), get(), get()) }
+	single { ItemActions(get(), get()) }
+	single { LanguageCollectionsRepository(androidContext(), get(), get()) }
+	single { SharedQueueServer(androidContext(), get(), get()) }
 	single { HomeCache(androidContext()) }
 	single { ModernDetailsRepository(get(), get()) }
 	single { ModernMusicRepository(get()) }
+	single { MusicItemRepository(get(), get()) }
 	single { ThemeMusicPlayer(androidContext(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
 	single<MediaSegmentRepository> { MediaSegmentRepositoryImpl(get(), get()) }
 	single<ExternalAppRepository> { ExternalAppRepository(get(), getAll(), get<DefaultExternalPlayerApi>()) }
@@ -189,6 +200,9 @@ val appModule = module {
 	viewModel { ModernDetailsViewModel(get(), get()) }
 	viewModel { ModernWatchlistViewModel(get(), get()) }
 	viewModel { ModernMusicViewModel(get(), get(), get()) }
+	viewModel { ModernMusicItemViewModel(get(), get()) }
+	viewModel { ModernMusicBrowseViewModel(get()) }
+	viewModel { ModernSearchViewModel(get(), get(), get()) }
 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }
 	viewModel { SettingsViewModel() }
 	viewModel { SettingsLibrariesScreenViewModel(get()) }

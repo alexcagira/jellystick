@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -60,6 +61,8 @@ import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
@@ -69,6 +72,7 @@ import org.jellyfin.androidtv.ui.navigation.NavigationRepository
 import org.jellyfin.androidtv.util.PlaybackHelper
 import org.koin.compose.koinInject
 import java.util.Locale
+import org.jellyfin.sdk.model.api.BaseItemDto
 import java.util.UUID
 
 /** Height reserved for the top bar when there is no hero carousel */
@@ -93,6 +97,7 @@ fun ModernHomeScreen(
 	val imageLoader = koinInject<ImageLoader>()
 
 	val listState = rememberLazyListState()
+	val scroller = rememberSmoothListScroller(listState)
 	val heroFocusRequester = remember { FocusRequester() }
 	val firstCardFocusRequester = remember { FocusRequester() }
 	val restoreFocusRequester = remember { FocusRequester() }
@@ -100,12 +105,14 @@ fun ModernHomeScreen(
 	val restorePosition = remember { viewModel.lastFocus }
 	var initialFocusDone by remember { mutableStateOf(false) }
 	var screenHasFocus by remember { mutableStateOf(false) }
-	var backgroundUrl by remember { mutableStateOf<String?>(null) }
+	// Kept out of the composition: changing them must not recompose the whole screen at every
+	// focus move (only the background reads them)
+	val backgroundUrl = remember { mutableStateOf<String?>(null) }
 	// Background of the focused card, applied once the focus rests a moment (no full screen
 	// crossfade for every card while scrolling fast)
-	var pendingBackgroundUrl by remember { mutableStateOf<String?>(null) }
+	val pendingBackgroundUrl = remember { MutableStateFlow<String?>(null) }
 	var heroIndex by rememberSaveable { mutableIntStateOf(0) }
-	var menuCard by remember { mutableStateOf<HomeCard?>(null) }
+	val posterActions = rememberPosterActionsState()
 	val currentSlide = state.hero.getOrNull(heroIndex.coerceIn(0, (state.hero.size - 1).coerceAtLeast(0)))
 
 	val topBarThresholdPx = with(density) { 40.dp.toPx() }
@@ -121,10 +128,15 @@ fun ModernHomeScreen(
 		else openDetails(card.targetId)
 	}
 
-	// Long press: menu on "Continue watching" (which plays on click), details screen everywhere else
-	fun onCardLongClick(card: HomeCard) {
-		if (card.playOnClick) menuCard = card
-		else openDetails(card.targetId)
+	// Hold OK on a card: menu with play, watched, identify, file info...
+	fun onCardLongClick(card: HomeCard) = posterActions.open(card.menuTarget())
+
+	fun playItem(item: BaseItemDto) {
+		scope.launch {
+			val playableId = viewModel.resolvePlayableId(item)
+			if (playableId != null) playbackHelper.retrieveAndPlay(playableId, false, context)
+			else openDetails(item.id)
+		}
 	}
 
 	// Play/pause button of the remote on a poster: play the episode/movie shown on the card
@@ -186,15 +198,20 @@ fun ModernHomeScreen(
 		}
 	}
 
-	LaunchedEffect(pendingBackgroundUrl) {
-		val url = pendingBackgroundUrl ?: return@LaunchedEffect
-		delay(BACKGROUND_DELAY_MS)
-		backgroundUrl = url
+	LaunchedEffect(Unit) {
+		pendingBackgroundUrl.collectLatest { url ->
+			if (url == null) return@collectLatest
+			delay(BACKGROUND_DELAY_MS)
+			backgroundUrl.value = url
+		}
 	}
 
 	// While the hero is on screen the ambient background follows the current slide
 	LaunchedEffect(currentSlide, showTopBar) {
-		if (showTopBar && currentSlide != null) backgroundUrl = currentSlide.backgroundUrl
+		if (showTopBar && currentSlide != null) {
+			pendingBackgroundUrl.value = null
+			backgroundUrl.value = currentSlide.backgroundUrl
+		}
 	}
 
 	// When a refresh removes the focused card (e.g. an episode finished and left "continue watching")
@@ -229,34 +246,7 @@ fun ModernHomeScreen(
 
 		// Ambient background: heavily blurred backdrop of the hero slide or the focused card. The hero
 		// fades out into it, so its colors flow through the whole page
-		Crossfade(
-			targetState = backgroundUrl,
-			animationSpec = tween(durationMillis = 800),
-			label = "HomeBackground",
-			modifier = Modifier.fillMaxSize(),
-		) { url ->
-			if (url != null) {
-				AsyncImage(
-					model = url,
-					contentDescription = null,
-					imageLoader = imageLoader,
-					contentScale = ContentScale.Crop,
-					alignment = Alignment.TopCenter,
-					modifier = Modifier.fillMaxSize(),
-				)
-			}
-		}
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(
-					Brush.verticalGradient(
-						0f to ModernHomeColors.AmbientScrimTop,
-						0.45f to ModernHomeColors.AmbientScrimMiddle,
-						1f to ModernHomeColors.AmbientScrimBottom,
-					)
-				)
-		)
+		AmbientBackground(urlState = backgroundUrl, imageLoader = imageLoader)
 
 		// Rows scroll into place by themselves (see onFocusChanged below), so automatic scrolling is disabled
 		CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScrollBringIntoViewSpec) {
@@ -279,7 +269,7 @@ fun ModernHomeScreen(
 							modifier = Modifier.onFocusChanged { focusState ->
 								if (focusState.hasFocus) {
 									viewModel.lastFocus = null
-									scope.launch { listState.animateScrollToItem(0) }
+									scope.launch { scroller.scrollToItem(0) }
 								}
 							},
 						)
@@ -310,13 +300,13 @@ fun ModernHomeScreen(
 						onCardLongClick = { card -> onCardLongClick(card) },
 						onCardPlay = { card -> onCardPlay(card) },
 						onCardFocused = { card ->
-							pendingBackgroundUrl = card.backgroundUrl
+							pendingBackgroundUrl.value = card.backgroundUrl
 							viewModel.lastFocus = HomeFocusPosition(section.type, card.key)
 						},
 						modifier = Modifier
 							.padding(top = ModernHomeDimens.SectionSpacing)
 							.onFocusChanged { focusState ->
-								if (focusState.hasFocus) scope.launch { listState.animateScrollToItem(sectionIndex + 1) }
+								if (focusState.hasFocus) scope.launch { scroller.scrollToItem(sectionIndex + 1) }
 							},
 					)
 				}
@@ -357,45 +347,51 @@ fun ModernHomeScreen(
 			)
 		}
 
-		ContinueWatchingMenu(
-			card = menuCard,
-			onDismissRequest = { menuCard = null },
-			onMarkWatched = { card -> viewModel.markWatched(card.item) },
-			onOpen = { id -> openDetails(id) },
+		PosterActionsDialogs(
+			state = posterActions,
+			onPlay = ::playItem,
+			onOpen = ::openDetails,
+			onChanged = viewModel::refreshNow,
 		)
 	}
 }
 
 /**
- * Menu shown when holding OK on a "Continue watching" card.
+ * Full screen blurred backdrop with a dark gradient on top. Reads the url itself so a new
+ * background only recomposes this part of the screen.
  */
 @Composable
-private fun ContinueWatchingMenu(
-	card: HomeCard?,
-	onDismissRequest: () -> Unit,
-	onMarkWatched: (HomeCard) -> Unit,
-	onOpen: (UUID) -> Unit,
+internal fun AmbientBackground(
+	urlState: State<String?>,
+	imageLoader: ImageLoader,
 ) {
-	val item = card?.item
-	val seasonId = item?.seasonId
-	val seriesId = item?.seriesId
-
-	val options = buildList {
-		if (card == null) return@buildList
-
-		add(ModernMenuOption(stringResource(R.string.modern_home_mark_watched), R.drawable.ic_check) { onMarkWatched(card) })
-		if (seasonId != null) add(ModernMenuOption(stringResource(R.string.modern_home_go_to_season), R.drawable.ic_folder) { onOpen(seasonId) })
-		if (seriesId != null) add(ModernMenuOption(stringResource(R.string.modern_home_go_to_show), R.drawable.ic_tv) { onOpen(seriesId) })
-		// Movies: their details page
-		if (seriesId == null) add(ModernMenuOption(stringResource(R.string.modern_home_more_info), R.drawable.ic_info) { onOpen(card.targetId) })
+	Crossfade(
+		targetState = urlState.value,
+		animationSpec = tween(durationMillis = 700),
+		label = "AmbientBackground",
+		modifier = Modifier.fillMaxSize(),
+	) { url ->
+		if (url != null) {
+			AsyncImage(
+				model = url,
+				contentDescription = null,
+				imageLoader = imageLoader,
+				contentScale = ContentScale.Crop,
+				alignment = Alignment.TopCenter,
+				modifier = Modifier.fillMaxSize(),
+			)
+		}
 	}
-
-	ModernMenuDialog(
-		visible = card != null,
-		title = card?.title.orEmpty(),
-		subtitle = card?.subtitle,
-		options = options,
-		onDismissRequest = onDismissRequest,
+	Box(
+		modifier = Modifier
+			.fillMaxSize()
+			.background(
+				Brush.verticalGradient(
+					0f to ModernHomeColors.AmbientScrimTop,
+					0.45f to ModernHomeColors.AmbientScrimMiddle,
+					1f to ModernHomeColors.AmbientScrimBottom,
+				)
+			)
 	)
 }
 

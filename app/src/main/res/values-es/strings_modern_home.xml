@@ -157,4 +157,115 @@
     <string name="modern_music_radio">Radio</string>
     <string name="modern_music_open_album">Ir al álbum</string>
     <string name="modern_music_shuffle">Aleatorio</string>
+
+    <!-- Menú de los pósters, identificar -->
+    <string name="modern_menu_play_now">Reproducir ahora</string>
+    <string name="modern_menu_mark_unwatched">Marcar como no visto</string>
+    <string name="modern_menu_identify">Identificar</string>
+    <string name="modern_menu_file_info">Información del archivo</string>
+    <string name="modern_menu_failed">No se ha podido hacer, inténtalo de nuevo</string>
+    <string name="modern_identify_title">Identificar</string>
+    <string name="modern_identify_name">Nombre</string>
+    <string name="modern_identify_year">Año</string>
+    <string name="modern_identify_id">ID de IMDb o TMDb</string>
+    <string name="modern_identify_search">Buscar</string>
+    <string name="modern_identify_searching">Buscando…</string>
+    <string name="modern_identify_applying">Actualizando los metadatos…</string>
+    <string name="modern_identify_no_results">Sin resultados. Prueba con otro nombre, el año o el ID de IMDb/TMDb</string>
+    <string name="modern_identify_done">Identificado como %1$s. La nueva información aparece en unos segundos</string>
+    <string name="modern_identify_failed">No se ha podido identificar. Solo los administradores pueden cambiar los metadatos</string>
+
+    <!-- Colecciones por idioma de audio -->
+    <string name="language_collections_filter">Filtrar por idioma de audio</string>
+    <string name="language_collections_title">Colecciones por idioma de audio</string>
+    <string name="language_collections_hint">Elige un idioma para crear una colección con todos los títulos que lo tienen. Aparece en Colecciones y añade sola los títulos nuevos cada día.</string>
+    <string name="language_collections_reading">Leyendo la biblioteca…</string>
+    <string name="language_collections_scanning">Leyendo las pistas de audio… %1$d de %2$d</string>
+    <string name="language_collections_none">No se han encontrado idiomas. Las pistas de audio de los archivos necesitan un idioma.</string>
+    <string name="language_collections_created_badge">Colección creada</string>
+    <string name="language_collections_name">Nombre</string>
+    <string name="language_collections_poster">Póster</string>
+    <string name="language_collections_poster_generated">Bandera</string>
+    <string name="language_collections_poster_keep">Actual</string>
+    <string name="language_collections_create">Crear colección</string>
+    <string name="language_collections_update">Actualizar colección</string>
+    <string name="language_collections_creating">Creando la colección…</string>
+    <string name="language_collections_updating">Actualizando la colección…</string>
+    <string name="language_collections_created">\"%1$s\" está lista. La tienes en Colecciones</string>
+    <string name="language_collections_updated">\"%1$s\" está al día</string>
+    <string name="language_collections_poster_failed">La colección está lista, pero no se ha podido cambiar el póster: solo los administradores pueden cambiar imágenes</string>
+    <string name="language_collections_failed">No se ha podido crear la colección. Tu usuario necesita permiso para gestionar colecciones</string>
+    <string name="language_collections_default_name_movies">Películas en %1$s</string>
+    <string name="language_collections_default_name_series">Series en %1$s</string>
+    <string name="language_collections_kind_movies">Películas</string>
+    <string name="language_collections_kind_series">Series</string>
+    <plurals name="language_collections_count_movies">
+        <item quantity="one">%d película</item>
+        <item quantity="other">%d películas</item>
+    </plurals>
+    <plurals name="language_collections_count_series">
+        <item quantity="one">%d serie</item>
+        <item quantity="other">%d series</item>
+    </plurals>
+
+    <!-- Cola de música compartida -->
+    <string name="shared_queue_title">Cola compartida</string>
+    <string name="shared_queue_description">Deja que todos en casa añadan canciones desde su móvil, sin app ni cuenta. Solo tienen que estar en el mismo Wi-Fi que la tele.</string>
+    <string name="shared_queue_start">Empezar a compartir</string>
+    <string name="shared_queue_stop">Dejar de compartir</string>
+    <string name="shared_queue_done">Listo</string>
+    <string name="shared_queue_scan">Escanéalo con la cámara del móvil</string>
+    <string name="shared_queue_added">Añadidas desde los móviles</string>
+    <string name="shared_queue_nobody">Nadie ha añadido canciones todavía</string>
+    <string name="shared_queue_song">%1$s · %2$s</string>
+    <string name="shared_queue_no_network">La tele no está conectada a la red de casa. Conéctala por Wi-Fi o cable.</string>
+    <string name="shared_queue_links">Pueden buscar en la biblioteca o pegar un enlace de Spotify, Apple Music o YouTube Music (Compartir → Copiar enlace). Se añaden las canciones que tengas en tu biblioteca.</string>
+    <string name="shared_queue_troubleshoot">¿No abre la página? El móvil tiene que estar en el mismo Wi-Fi que la tele (no en una red de invitados) y la dirección tiene que empezar por los números de arriba.</string>
+
+    <!-- Páginas de música: álbumes, listas, artistas, géneros, reproduciendo -->
+    <string name="music_add_to_playlist">Añadir a una lista</string>
+    <string name="music_new_playlist">Nueva lista</string>
+    <string name="music_create">Crear</string>
+    <string name="music_added_to_playlist">Añadida a %1$s</string>
+    <string name="music_no_playlists">Aún no tienes listas</string>
+    <string name="music_popular_songs">Canciones populares</string>
+    <string name="music_songs">Canciones</string>
+    <string name="music_disc">Disco %1$d</string>
+    <string name="music_play_from_here">Reproducir desde aquí</string>
+    <string name="music_add_to_queue">Añadir a la cola</string>
+    <string name="music_added_to_queue">Añadida a la cola</string>
+    <string name="music_remove_from_queue">Quitar de la cola</string>
+    <string name="music_add_favorite">Añadir a favoritos</string>
+    <string name="music_remove_favorite">Quitar de favoritos</string>
+    <string name="music_added_favorite">Añadida a favoritos</string>
+    <string name="music_removed_favorite">Quitada de favoritos</string>
+    <string name="music_favorite">Favorito</string>
+    <string name="music_go_to_album">Ir al álbum</string>
+    <string name="music_go_to_artist">Ir al artista</string>
+    <string name="music_type_album">Álbum</string>
+    <string name="music_type_playlist">Lista</string>
+    <string name="music_type_artist">Artista</string>
+    <string name="music_type_genre">Género</string>
+    <string name="music_stations_for_you">Para ti</string>
+    <string name="music_nothing_here">Aquí no hay nada todavía</string>
+    <string name="music_now_playing">Reproduciendo</string>
+    <string name="music_no_lyrics">Esta canción no tiene letra</string>
+    <string name="music_show_lyrics">Mostrar letra</string>
+    <string name="music_hide_lyrics">Ocultar letra</string>
+    <string name="music_screensaver">Salvapantallas</string>
+    <string name="music_queue_position">%1$d / %2$d</string>
+    <plurals name="music_song_count">
+        <item quantity="one">%d canción</item>
+        <item quantity="other">%d canciones</item>
+    </plurals>
+    <plurals name="music_album_count">
+        <item quantity="one">%d álbum</item>
+        <item quantity="other">%d álbumes</item>
+    </plurals>
+
+    <!-- Búsqueda moderna -->
+    <string name="search_hint">Películas, series, personas, música…</string>
+    <string name="search_hint_music">Canciones, álbumes, artistas, listas…</string>
+    <string name="search_voice_hint">Pulsa OK para escribir. Con el teclado abierto, mantén pulsado el botón del micrófono del mando y di lo que buscas</string>
+    <string name="search_no_results">Sin resultados para \"%1$s\"</string>
 </resources>

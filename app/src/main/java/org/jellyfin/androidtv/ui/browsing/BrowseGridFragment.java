@@ -811,6 +811,19 @@ public class BrowseGridFragment extends Fragment implements View.OnKeyListener {
         mLetterButton.setContentDescription(getString(R.string.lbl_by_letter));
         binding.toolBar.addView(mLetterButton);
 
+        // Films and TV Shows: collections by audio language
+        if (BrowseGridFragmentHelperKt.supportsLanguageCollections(mFolder)) {
+            MutableStateFlow<Boolean> languageCollectionsVisible = BrowseGridFragmentHelperKt.createSettingsVisibility(BrowseGridFragment.this);
+            ImageButton filterButton = new ImageButton(requireContext(), null, 0, R.style.Button_Icon);
+            filterButton.setImageResource(R.drawable.ic_filter);
+            filterButton.setMaxHeight(size);
+            filterButton.setAdjustViewBounds(true);
+            filterButton.setOnClickListener(v -> languageCollectionsVisible.setValue(true));
+            filterButton.setContentDescription(getString(R.string.language_collections_filter));
+            binding.toolBar.addView(filterButton);
+            BrowseGridFragmentHelperKt.addLanguageCollections(BrowseGridFragment.this, binding.languageCollections, mFolder, languageCollectionsVisible);
+        }
+
         if (mFolder.getDisplayPreferencesId() != null) {
             MutableStateFlow<Boolean> settingsVisible = BrowseGridFragmentHelperKt.createSettingsVisibility(BrowseGridFragment.this);
             mSettingsButton = new ImageButton(requireContext(), null, 0, R.style.Button_Icon);

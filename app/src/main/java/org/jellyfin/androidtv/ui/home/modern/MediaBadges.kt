@@ -243,6 +243,33 @@ object MediaBadges {
 			.map { (_, key) -> LanguageBadge(language = key, flag = languageFlags[key]) }
 	}
 
+	/** All audio languages of an item, normalized like the flags ("eng", "spa-419"...) */
+	fun allAudioLanguageKeys(item: BaseItemDto?): Set<String> = item?.mediaStreams.orEmpty()
+		.filter { it.type == MediaStreamType.AUDIO }
+		.mapNotNull { stream -> languageKey(stream.language, listOfNotNull(stream.title, stream.displayTitle).joinToString(" ")) }
+		.toSet()
+
+	/** Flag drawn for a normalized language key, null when there is none */
+	fun flagFor(key: String): String? = languageFlags[key]
+
+	/** BCP 47 tag of a normalized language key ("spa-419" → "es-419"), for display names */
+	fun languageTag(key: String): String {
+		val code = key.substringBefore('-')
+		val primary = languageAliases.entries.firstOrNull { (alias, value) -> value == code && alias.length == 2 }?.key ?: code
+		return when (key) {
+			"spa-419" -> "$primary-419"
+			"por-br" -> "$primary-BR"
+			else -> primary
+		}
+	}
+
+	/** Name of a language in the language of the app, capitalized ("English", "Español (Latinoamérica)") */
+	fun languageName(key: String, locale: java.util.Locale = java.util.Locale.getDefault()): String {
+		val name = java.util.Locale.forLanguageTag(languageTag(key)).getDisplayName(locale)
+		val readable = name.takeIf { it.isNotBlank() && !it.equals(languageTag(key), ignoreCase = true) } ?: key.uppercase()
+		return readable.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+	}
+
 	/** Provider ids used to recognize the same title in different libraries */
 	private val duplicateProviders = listOf("Tmdb", "Tvdb", "Imdb")
 

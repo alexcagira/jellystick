@@ -41,6 +41,7 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.sockets.subscribe
 import org.jellyfin.sdk.model.api.LibraryChangedMessage
 import org.jellyfin.sdk.model.api.UserDataChangedMessage
+import org.jellyfin.androidtv.ui.collections.LanguageCollectionsRepository
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -50,6 +51,7 @@ class HomeFragment : Fragment() {
 	private val notificationRepository by inject<NotificationsRepository>()
 	private val userPreferences by inject<UserPreferences>()
 	private val api by inject<ApiClient>()
+	private val languageCollectionsRepository by inject<LanguageCollectionsRepository>()
 
 	// Only created when the modern home screen is enabled
 	private val modernHomeViewModel by viewModel<ModernHomeViewModel>()
@@ -63,6 +65,8 @@ class HomeFragment : Fragment() {
 		savedInstanceState: Bundle?
 	): View {
 		useModernHome = userPreferences[UserPreferences.modernHomeEnabled]
+		// Collections by audio language: add the new titles once a day
+		languageCollectionsRepository.updateInBackground()
 
 		return content {
 			if (useModernHome) ModernHomeScreen(viewModel = modernHomeViewModel)

@@ -61,7 +61,10 @@ class ModernDetailsFragment : Fragment() {
 
 			val item = state.item
 			if (item != null && state.kind == null) {
-				navigationRepository.navigate(Destinations.legacyItemDetails(item.id), replace = true)
+				// Albums, artists and music playlists: the page in the style of the music library
+				val destination = if (Destinations.isModernMusicItem(item)) Destinations.modernMusicItem(item.id)
+				else Destinations.legacyItemDetails(item.id)
+				navigationRepository.navigate(destination, replace = true)
 			}
 		}
 

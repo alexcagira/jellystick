@@ -70,6 +70,19 @@ de la app. Suena una vez, no en bucle.
 - Se desactiva en Ajustes → Personalización → Inicio → **Música de la serie**. El volumen está en
   `ThemeMusicPlayer.kt` (`MAX_VOLUME`).
 
+## Música sonando: burbuja en la barra
+
+Mientras suena música, debajo de los botones de Watchlist, ajustes y usuario aparece una burbuja con la
+portada (con un anillo de progreso), la canción y el artista. Abajo desde esos botones llega a la burbuja
+y OK abre *Reproduciendo ahora*. Sale en el inicio, las fichas, la Watchlist y la página de Música.
+
+## Fluidez
+
+- El paso entre filas es una animación de 320 ms con aceleración suave (la distancia se calcula antes de
+  empezar, en vez de ir midiendo mientras se mueve).
+- El fondo difuminado cambia sin volver a dibujar la pantalla entera.
+- La etiqueta de resolución (4K, 1080p...) se dibuja una sola vez y se reutiliza en todos los pósters.
+
 ## Biblioteca de música
 
 Al abrir una biblioteca de música desde la barra se muestra una página con el mismo estilo que el inicio:
@@ -97,6 +110,96 @@ Las recomendaciones y las radios salen del propio servidor de Jellyfin, sin serv
 
 Se desactiva en Ajustes → Personalización → Inicio → **Página de música moderna** (vuelve la página clásica).
 El código está en `app/src/main/java/org/jellyfin/androidtv/ui/music/modern/`.
+
+### Álbumes, listas, artistas y géneros
+
+Al abrir un álbum, una lista de reproducción, un artista o un género (desde la página de Música, la búsqueda,
+"Ir al álbum/artista"...) se muestra una página con el mismo estilo:
+
+- Portada grande, tipo, nombre, artista, año, número de canciones y duración, sobre la portada difuminada.
+- Botones: Reproducir, Aleatorio, Radio (mezcla instantánea), Favorito e Ir al artista (álbumes).
+- **Las canciones**: OK reproduce desde esa canción, el botón play/pausa también. Mantener OK:
+  Reproducir desde aquí, Añadir a la cola, Añadir a una lista, Favoritos, Ir al álbum, Ir al artista.
+- Artistas: sus álbumes en cuadrícula y sus canciones más escuchadas. Géneros: sus álbumes y la radio del género.
+- Álbumes: "More like this" con álbumes parecidos.
+
+En la barra de accesos de Música: Álbumes, Artistas del álbum, Artistas, **Géneros** (cuadrícula de géneros
+con portada), **Radios** (todas: para ti, una por género y una por artista), Aleatorio, Cola compartida y
+la **lupa** para buscar solo música.
+
+### Reproduciendo ahora
+
+- Arriba, pequeños: "Reproduciendo", el artista y la hora.
+- Portada y canción, álbum y artista. La letra está **oculta por defecto**; con el botón de letra se muestra
+  más grande (y la portada crece un poco). Se recuerda mientras la app está abierta.
+- Botones bajo la barra de tiempo: Anterior, Reproducir/Pausa, Siguiente, Añadir a una lista, Aleatorio,
+  Letra, Ir al artista, Ir al álbum y **Salvapantallas**. El nombre del botón aparece al enfocarlo.
+- **Salvapantallas**: portada, canción, álbum y artista sobre la portada difuminada; con la letra activada,
+  la letra grande al lado. Se mueve un poco cada 25 s para no marcar la pantalla. Cualquier botón lo cierra.
+- **Cola**: portadas con canción y artista · álbum debajo, y la posición ("3 / 24"). OK salta a esa canción;
+  mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista.
+
+### Cola compartida (como una "fiesta")
+
+En la página de Música → **Cola compartida** → *Empezar a compartir*. La tele muestra un código QR:
+cualquiera en el mismo Wi-Fi lo escanea con la cámara del móvil, busca canciones o álbumes y los añade
+al final de la cola. No necesitan app ni cuenta de Jellyfin; la web la sirve la propia tele
+(puerto 8765) y usa tu sesión.
+
+- También pueden **pegar un enlace** de Spotify, Apple Music o YouTube Music (en la app: Compartir →
+  Copiar enlace). La tele lee el nombre de la canción (o del álbum) y su artista y busca la misma en tu
+  biblioteca de Jellyfin: solo puede sonar música que tengas en el servidor.
+- Si no sonaba nada, empieza a sonar lo que añadan; si tenías la música en pausa, sigue en pausa.
+- Si la página no abre: el móvil tiene que estar en el mismo Wi-Fi que la tele (no en la red de invitados,
+  que suele aislar los dispositivos). La dirección usa ahora la IP de la red activa de la tele; antes podía
+  salir la de Wi-Fi Direct (192.168.49.1), que los móviles no alcanzan.
+- La web muestra lo que suena y lo que han añadido los invitados (con su nombre).
+- El enlace lleva un código que cambia cada vez que empiezas a compartir. *Dejar de compartir* lo corta.
+- La página es `app/src/main/res/raw/shared_queue.html`.
+
+## Búsqueda
+
+La lupa de la barra abre la búsqueda nueva: películas, series, episodios, colecciones, personas y música, con
+los pósters con todas las etiquetas (4K/1080p, Dolby Vision, HDR, Atmos y banderas de idioma).
+
+- **Por voz**: pulsa OK en el cuadro de búsqueda para abrir el teclado y, con el teclado abierto, **mantén
+  pulsado el botón del micrófono** del mando del Fire TV y di lo que buscas. Si el dispositivo tiene
+  reconocimiento de voz de Android, sale además un botón de micrófono al lado.
+- El botón del micrófono con el teclado cerrado abre Alexa (eso lo controla el sistema, no la app).
+
+## Menú de los pósters (mantener OK)
+
+Mantén OK sobre cualquier póster del inicio o de la Watchlist:
+
+- **Películas**: Reproducir ahora, Marcar como visto, Marcar como no visto, Identificar, Información del archivo.
+- **Series**: Reproducir ahora, Marcar como visto, Marcar como no visto, Ir a la serie, Identificar.
+- **Episodios** (Continue Watching, Latest Episodes): además Ir a la temporada e Información del archivo;
+  Identificar actúa sobre la serie.
+
+**Identificar** funciona como en la web: busca en los proveedores de metadatos del servidor (TMDb, TVDb...)
+con el nombre y el año, o con el ID de IMDb (`tt0120737`) o de TMDb. Al elegir el resultado se aplican
+los metadatos y las imágenes nuevas (tardan unos segundos). Solo aparece para administradores.
+Los campos de texto solo abren el teclado al pulsar OK sobre ellos.
+
+## Colecciones por idioma de audio
+
+En las bibliotecas de **Películas** y **Series**, el botón **Filtro** (icono de embudo, junto a ordenar)
+lee los idiomas de audio de todos los títulos y muestra cuántos hay de cada uno (con su bandera).
+Al elegir un idioma:
+
+1. Nombre de la colección (por defecto "Películas en Inglés", "Series en Español"...).
+2. Póster: **Bandera** (generado por la app con la bandera y el idioma) o el póster de cualquiera de los
+   títulos de la colección.
+3. *Crear colección*. Es una colección normal de Jellyfin: aparece en la pestaña **Colecciones** y en
+   todas las apps.
+
+Las series cuentan con el idioma de sus primeros episodios. La app recuerda cómo se hizo cada colección
+y una vez al día (al abrir el inicio) añade los títulos nuevos y quita los que ya no tienen ese idioma.
+También se puede actualizar a mano: vuelve a Filtro y elige el idioma (sale "Colección creada" →
+*Actualizar colección*, y puedes cambiar el póster).
+
+Permisos: crear colecciones necesita que el usuario pueda gestionar colecciones; cambiar el póster
+necesita un administrador (si no, la colección se crea con el póster automático de Jellyfin).
 
 ## Fichas de películas, series, temporadas y personas
 
@@ -217,5 +320,10 @@ Todo está en `app/src/main/java/org/jellyfin/androidtv/ui/home/modern/`:
 | `../../details/modern/` | Fichas de películas/series/temporadas/personas y `ThemeMusicPlayer.kt` |
 | `../../playback/modern/` | Controles del reproductor, menús, miniaturas y desfase de subtítulos |
 | `../../music/modern/` | Página de música: media bar, radios y recomendaciones |
+| `../../music/share/` | Cola compartida (servidor web de la tele y código QR) |
+| `../../music/nowplaying/` | Reproduciendo ahora y su salvapantallas |
+| `../../search/modern/` | Búsqueda con etiquetas y voz |
+| `../../collections/` | Colecciones por idioma de audio y sus pósters |
+| `PosterActions.kt` / `IdentifyDialog.kt` | Menú de los pósters e Identificar |
 
 La fuente de los títulos es Bebas Neue (licencia SIL OFL, ver `docs/fonts/BebasNeue-OFL.txt`).
