@@ -5,8 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.util.apiclient.JellyfinImage
 import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
@@ -81,40 +79,15 @@ class ModernMusicRepository(
 		}
 	}
 
-	/** Genres of the library with the cover of one of their albums */
+	/** Genres of the library (shown as colored squares with their name) */
 	suspend fun genres(libraryId: UUID): List<MusicCard> = withContext(Dispatchers.IO) {
-		val genres = api.musicGenresApi.getMusicGenres(
+		api.musicGenresApi.getMusicGenres(
 			parentId = libraryId,
 			sortBy = setOf(ItemSortBy.SORT_NAME),
 			limit = MAX_GENRES,
+			enableImages = false,
 			enableTotalRecordCount = false,
-		).content.items
-
-		val semaphore = Semaphore(PARALLEL_REQUESTS)
-		coroutineScope {
-			genres.map { genre ->
-				async {
-					val cover = if (genre.itemImages[ImageType.PRIMARY] != null) null else semaphore.withPermit {
-						safe("genre cover") {
-							api.itemsApi.getItems(
-								GetItemsRequest(
-									parentId = libraryId,
-									genreIds = setOf(genre.id),
-									includeItemTypes = setOf(BaseItemKind.MUSIC_ALBUM),
-									recursive = true,
-									imageTypes = setOf(ImageType.PRIMARY),
-									sortBy = setOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME),
-									sortOrder = setOf(SortOrder.DESCENDING),
-									limit = 1,
-									enableTotalRecordCount = false,
-								)
-							).content.items.firstOrNull()
-						}
-					}
-					genreCard(genre, cover)
-				}
-			}.awaitAll()
-		}
+		).content.items.map { genreCard(it) }
 	}
 
 	/**
@@ -423,19 +396,16 @@ class ModernMusicRepository(
 		)
 	}
 
-	/** Genre: the cover of one of its albums (genres rarely have images of their own) */
-	internal fun genreCard(genre: BaseItemDto, coverAlbum: BaseItemDto?): MusicCard {
-		val image = genre.itemImages[ImageType.PRIMARY] ?: coverAlbum?.itemImages?.get(ImageType.PRIMARY)
-		return MusicCard(
-			key = genre.id.toString(),
-			kind = MusicCardKind.GENRE,
-			item = genre,
-			title = genre.name.orEmpty(),
-			subtitle = null,
-			imageUrl = image?.getUrl(api, maxWidth = COVER_WIDTH),
-			backgroundUrl = image?.blurredUrl(),
-		)
-	}
+	/** Genre: drawn by the app (colored square with the name), no image */
+	internal fun genreCard(genre: BaseItemDto): MusicCard = MusicCard(
+		key = genre.id.toString(),
+		kind = MusicCardKind.GENRE,
+		item = genre,
+		title = genre.name.orEmpty(),
+		subtitle = null,
+		imageUrl = null,
+		backgroundUrl = null,
+	)
 
 	internal fun stationCard(key: String, title: String, subtitle: String?, source: StationSource, imageItemId: UUID?) = MusicCard(
 		key = "station_$key",
@@ -497,7 +467,6 @@ class ModernMusicRepository(
 		const val STATION_TRACKS = 100
 		const val MAX_GENRES = 150
 		const val MAX_STATION_ARTISTS = 300
-		const val PARALLEL_REQUESTS = 8
 
 		const val COVER_WIDTH = 360
 		const val HERO_COVER_WIDTH = 500

@@ -268,4 +268,7 @@
     <string name="search_hint_music">Canciones, álbumes, artistas, listas…</string>
     <string name="search_voice_hint">Pulsa OK para escribir. Con el teclado abierto, mantén pulsado el botón del micrófono del mando y di lo que buscas</string>
     <string name="search_no_results">Sin resultados para \"%1$s\"</string>
+    <string name="music_stop">Detener</string>
+    <string name="music_screensaver_show_lyrics">OK · Mostrar letra</string>
+    <string name="music_screensaver_hide_lyrics">OK · Ocultar letra</string>
 </resources>

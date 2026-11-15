@@ -1,6 +1,20 @@
 package org.jellyfin.androidtv.ui.music.nowplaying
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.Dp
+import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.ui.base.Icon
+import org.jellyfin.androidtv.ui.home.modern.isPlayKey
+import org.jellyfin.androidtv.ui.playback.MediaManager
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -58,10 +72,12 @@ import org.koin.compose.koinInject
 /** Positions the content moves through, so nothing stays at the same place on the TV */
 private val driftOffsets = listOf(0 to 0, 24 to -14, -20 to 12, 14 to 18, -26 to -10)
 private const val DRIFT_MS = 25_000L
+private const val BUTTON_HIGHLIGHT_MS = 3_000L
 
 /**
  * Full screen view of the song: cover, name, album and artist over the blurred cover, and the
- * lyrics (bigger) when they are shown. Any key goes back.
+ * lyrics (bigger) when they are shown. OK shows or hides the lyrics (small button in the corner),
+ * play/pause pauses, any other key goes back.
  */
 @Composable
 internal fun NowPlayingScreensaver(
@@ -73,12 +89,18 @@ internal fun NowPlayingScreensaver(
 	onExit: () -> Unit,
 ) {
 	val imageLoader = koinInject<ImageLoader>()
+	val mediaManager = koinInject<MediaManager>()
 	val focusRequester = remember { FocusRequester() }
 	val progress by rememberPlayerProgress(playbackManager)
 	var drift by remember { mutableIntStateOf(0) }
 	val (driftX, driftY) = driftOffsets[drift % driftOffsets.size]
 	val offsetX by animateDpAsState(driftX.dp, tween(6_000), label = "DriftX")
 	val offsetY by animateDpAsState(driftY.dp, tween(6_000), label = "DriftY")
+	val showLyrics = NowPlayingPreferences.showLyrics && lyrics != null
+	// The lyrics button is barely visible, and lights up for a moment when used
+	var buttonActive by remember { mutableStateOf(false) }
+	var buttonTouch by remember { mutableIntStateOf(0) }
+	val buttonAlpha by animateFloatAsState(if (buttonActive) 1f else 0.35f, tween(400), label = "LyricsButton")
 
 	BackHandler(onBack = onExit)
 
@@ -89,15 +111,31 @@ internal fun NowPlayingScreensaver(
 			drift++
 		}
 	}
+	LaunchedEffect(buttonTouch) {
+		if (buttonTouch == 0) return@LaunchedEffect
+		buttonActive = true
+		delay(BUTTON_HIGHLIGHT_MS)
+		buttonActive = false
+	}
 
 	Box(
 		modifier = Modifier
 			.fillMaxSize()
 			.background(Color.Black)
 			.focusRequester(focusRequester)
-			// Any key (released) closes it, Back included
 			.onPreviewKeyEvent { event ->
-				if (event.type == KeyEventType.KeyUp) onExit()
+				val up = event.type == KeyEventType.KeyUp
+				when {
+					event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
+						if (up) {
+							NowPlayingPreferences.showLyrics = !NowPlayingPreferences.showLyrics
+							buttonTouch++
+						}
+					}
+
+					event.isPlayKey -> if (up) mediaManager.togglePlayPause()
+					else -> if (up) onExit()
+				}
 				true
 			}
 			.focusable(),
@@ -123,23 +161,24 @@ internal fun NowPlayingScreensaver(
 			Clock(fontSize = 16, color = Color.White.copy(alpha = 0.7f))
 		}
 
-		Box(
+		BoxWithConstraints(
 			modifier = Modifier
 				.fillMaxSize()
 				.offset(offsetX, offsetY)
-				.padding(horizontal = 72.dp, vertical = 56.dp),
+				.padding(horizontal = 72.dp, vertical = 52.dp),
 			contentAlignment = Alignment.Center,
 		) {
-			if (lyrics != null) {
+			if (showLyrics) {
+				val coverSize = minOf(320.dp, maxHeight - 130.dp)
 				Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
-					Column(modifier = Modifier.width(340.dp)) {
-						Cover(coverUrl, item, size = 320)
-						Spacer(Modifier.height(20.dp))
+					Column(modifier = Modifier.width(coverSize + 20.dp)) {
+						Cover(coverUrl, item, size = coverSize)
+						Spacer(Modifier.height(18.dp))
 						SongInfo(item, align = TextAlign.Start, large = false)
 					}
 					Spacer(Modifier.width(56.dp))
 					NowPlayingLyrics(
-						lyrics = lyrics,
+						lyrics = lyrics!!,
 						playbackManager = playbackManager,
 						fontSize = 30,
 						modifier = Modifier
@@ -148,11 +187,42 @@ internal fun NowPlayingScreensaver(
 					)
 				}
 			} else {
-				Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-					Cover(coverUrl, item, size = 340)
-					Spacer(Modifier.height(28.dp))
-					SongInfo(item, align = TextAlign.Center, large = true)
+				// Cover beside the text: everything fits whatever the height of the screen
+				val coverSize = minOf(340.dp, maxHeight)
+				Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+					Cover(coverUrl, item, size = coverSize)
+					Spacer(Modifier.width(48.dp))
+					Box(modifier = Modifier.weight(1f, fill = false).width(420.dp)) {
+						SongInfo(item, align = TextAlign.Start, large = true)
+					}
 				}
+			}
+		}
+
+		// Lyrics on/off, subtle
+		if (lyrics != null) {
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				modifier = Modifier
+					.align(Alignment.BottomEnd)
+					.padding(end = 40.dp, bottom = 20.dp)
+					.graphicsLayer { alpha = buttonAlpha }
+					.background(Color.White.copy(alpha = if (buttonActive) 0.18f else 0.08f), RoundedCornerShape(50))
+					.padding(horizontal = 12.dp, vertical = 6.dp),
+			) {
+				Icon(
+					imageVector = ImageVector.vectorResource(R.drawable.ic_subtitles),
+					contentDescription = null,
+					tint = if (NowPlayingPreferences.showLyrics) ModernHomeColors.Accent else Color.White,
+					modifier = Modifier.size(14.dp),
+				)
+				Spacer(Modifier.width(6.dp))
+				Text(
+					text = stringResource(if (NowPlayingPreferences.showLyrics) R.string.music_screensaver_hide_lyrics else R.string.music_screensaver_show_lyrics),
+					color = Color.White,
+					fontSize = 11.sp,
+					fontWeight = FontWeight.SemiBold,
+				)
 			}
 		}
 
@@ -175,10 +245,10 @@ internal fun NowPlayingScreensaver(
 }
 
 @Composable
-private fun Cover(url: String?, item: BaseItemDto?, size: Int) {
+private fun Cover(url: String?, item: BaseItemDto?, size: Dp) {
 	Box(
 		modifier = Modifier
-			.size(size.dp)
+			.size(size)
 			.clip(RoundedCornerShape(18.dp))
 			.background(ModernHomeColors.CardSurface),
 	) {

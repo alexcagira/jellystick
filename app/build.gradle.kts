@@ -80,7 +80,7 @@ android {
 			resValue("string", "app_search_suggest_intent_data", "content://${namespace}.content/intent")
 
 			// Set flavored application name
-			resValue("string", "app_name", "Jellyfin")
+			resValue("string", "app_name", "Jellystick")
 
 			buildConfigField("boolean", "DEVELOPMENT", "false")
 
@@ -97,7 +97,7 @@ android {
 			resValue("string", "app_search_suggest_intent_data", "content://${namespace + applicationIdSuffix}.content/intent")
 
 			// Set flavored application name
-			resValue("string", "app_name", "Jellyfin Debug")
+			resValue("string", "app_name", "Jellystick")
 
 			buildConfigField("boolean", "DEVELOPMENT", (defaultConfig.versionCode!! < 100).toString())
 		}

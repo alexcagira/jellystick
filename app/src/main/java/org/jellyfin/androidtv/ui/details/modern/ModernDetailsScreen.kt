@@ -55,6 +55,8 @@ import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
 import org.jellyfin.androidtv.ui.home.modern.rememberSmoothListScroller
 import org.jellyfin.androidtv.ui.home.modern.GlassBackdrop
 import org.jellyfin.androidtv.ui.home.modern.HomeCard
+import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
+import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
 import org.jellyfin.androidtv.ui.home.modern.ModernTopBar
 import org.jellyfin.androidtv.ui.home.modern.NoAutoScrollBringIntoViewSpec
@@ -175,6 +177,9 @@ fun ModernDetailsScreen(
 	var showMediaInfo by remember { mutableStateOf(false) }
 	// Item shown in the media info dialog (the page item, or an episode held with OK)
 	var mediaInfoItem by remember { mutableStateOf<BaseItemDto?>(null) }
+	// Season held with OK: play / watched menu
+	var seasonMenu by remember { mutableStateOf<HomeCard?>(null) }
+	var lastSeasonMenu by remember { mutableStateOf<HomeCard?>(null) }
 
 	val blocks = remember(state) { buildBlocks(state) }
 
@@ -345,6 +350,10 @@ fun ModernDetailsScreen(
 							focusRequesterFor = { card -> requesterFor(card.key) },
 							onFocused = { card -> rememberFocus(index, card.key, card) },
 							onClick = { card -> openDetails(card.targetId) },
+							onLongClick = { card ->
+								lastSeasonMenu = card
+								seasonMenu = card
+							},
 							onPlay = null,
 							modifier = scrollModifier,
 						)
@@ -444,6 +453,22 @@ fun ModernDetailsScreen(
 			visible = showMediaInfo,
 			item = mediaInfoItem,
 			onDismissRequest = { showMediaInfo = false },
+		)
+
+		val season = lastSeasonMenu
+		ModernMenuDialog(
+			visible = seasonMenu != null,
+			title = season?.title.orEmpty(),
+			subtitle = season?.item?.seriesName,
+			options = buildList {
+				val item = season?.item ?: return@buildList
+				add(ModernMenuOption(stringResource(R.string.modern_menu_play_now), R.drawable.ic_play) {
+					scope.launch { viewModel.seasonPlayableId(item)?.let(::play) }
+				})
+				add(ModernMenuOption(stringResource(R.string.modern_home_mark_watched), R.drawable.ic_watch) { viewModel.setItemPlayed(item.id, true) })
+				add(ModernMenuOption(stringResource(R.string.modern_menu_mark_unwatched), R.drawable.ic_unwatch) { viewModel.setItemPlayed(item.id, false) })
+			},
+			onDismissRequest = { seasonMenu = null },
 		)
 	}
 }

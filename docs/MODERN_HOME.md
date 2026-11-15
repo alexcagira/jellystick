@@ -124,7 +124,7 @@ Al abrir un álbum, una lista de reproducción, un artista o un género (desde l
 - Álbumes: "More like this" con álbumes parecidos.
 
 En la barra de accesos de Música: Álbumes, Artistas del álbum, Artistas, **Géneros** (cuadrícula de géneros
-con portada), **Radios** (todas: para ti, una por género y una por artista), Aleatorio, Cola compartida y
+como cuadrados de color con su nombre), **Radios** (todas: para ti, una por género y una por artista), Aleatorio, Cola compartida y
 la **lupa** para buscar solo música.
 
 ### Reproduciendo ahora
@@ -132,10 +132,13 @@ la **lupa** para buscar solo música.
 - Arriba, pequeños: "Reproduciendo", el artista y la hora.
 - Portada y canción, álbum y artista. La letra está **oculta por defecto**; con el botón de letra se muestra
   más grande (y la portada crece un poco). Se recuerda mientras la app está abierta.
-- Botones bajo la barra de tiempo: Anterior, Reproducir/Pausa, Siguiente, Añadir a una lista, Aleatorio,
-  Letra, Ir al artista, Ir al álbum y **Salvapantallas**. El nombre del botón aparece al enfocarlo.
+- Botones bajo la barra de tiempo: Anterior, Reproducir/Pausa, Siguiente, **Detener** (vacía la cola y sale de
+  la pantalla), Añadir a una lista, Aleatorio, Letra, Ir al artista, Ir al álbum y **Salvapantallas**.
+  El nombre del botón aparece al enfocarlo.
+- La pantalla no tiene scroll: la portada se ajusta al espacio que queda, así que siempre se ve entera.
 - **Salvapantallas**: portada, canción, álbum y artista sobre la portada difuminada; con la letra activada,
-  la letra grande al lado. Se mueve un poco cada 25 s para no marcar la pantalla. Cualquier botón lo cierra.
+  la letra grande al lado. Se mueve un poco cada 25 s para no marcar la pantalla. **OK** muestra u oculta la
+  letra (botón discreto abajo a la derecha), play/pausa pausa, y cualquier otro botón lo cierra.
 - **Cola**: portadas con canción y artista · álbum debajo, y la posición ("3 / 24"). OK salta a esa canción;
   mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista.
 
@@ -166,6 +169,11 @@ los pósters con todas las etiquetas (4K/1080p, Dolby Vision, HDR, Atmos y bande
   pulsado el botón del micrófono** del mando del Fire TV y di lo que buscas. Si el dispositivo tiene
   reconocimiento de voz de Android, sale además un botón de micrófono al lado.
 - El botón del micrófono con el teclado cerrado abre Alexa (eso lo controla el sistema, no la app).
+
+## Temporadas: mantener OK
+
+En la página de una serie, mantener OK sobre una temporada abre: Reproducir ahora (el primer episodio sin ver
+de la temporada), Marcar como vista y Marcar como no vista.
 
 ## Menú de los pósters (mantener OK)
 
@@ -249,6 +257,19 @@ perfil 8 llevan una capa HDR10, que se reproduce con el decodificador HEVC norma
 
 Ajustes (icono de engranaje) → Personalización → Inicio → **Pantalla de inicio moderna** (activada por defecto).
 Al cambiarlo, vuelve a abrir el inicio (o reinicia la app). El inicio clásico sigue disponible.
+
+## Icono y banner (Jellystick)
+
+La app se llama **Jellystick** (también la versión debug: `app_name_release` y `app_name_debug` en
+`values/strings.xml`). El banner que muestra el Fire TV (`mipmap-*/app_banner.png` y
+`drawable/app_banner_foreground.xml`) lleva el logo de Jellyfin en verde (degradado `#9BE15D` → `#00B37A`) y el
+nombre Jellystick, igual que el logo de dentro de la app (`drawable/app_logo.xml`, `drawable-v24/app_logo.xml`,
+colores en `values/logo.xml` y `src/debug/res/values/logo.xml`): arranque, barra y salvapantallas.
+
+Si el Fire TV sigue enseñando el banner o el nombre antiguos, desinstala la app y vuelve a instalarla (el
+launcher guarda la imagen de las apps ya instaladas); si aun así no cambia, reinicia el Fire TV. El icono
+(`mipmap-*/app_icon.png` y `drawable/app_icon_foreground.xml`) es el mismo logo en verde. El logo de Jellyfin
+tiene licencia CC BY-SA 4.0; el texto está dibujado con Montserrat Bold (SIL Open Font License).
 
 ## Clave de TMDB (opcional, para completar "Trending this week")
 

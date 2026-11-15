@@ -2,7 +2,10 @@ package org.jellyfin.androidtv.ui.music.modern
 
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -38,10 +41,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -60,6 +65,7 @@ import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
 import org.jellyfin.androidtv.ui.home.modern.CardArtwork
 import org.jellyfin.androidtv.ui.home.modern.HeroButton
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
+import org.jellyfin.androidtv.ui.home.modern.ProvideKeepInViewScrolling
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
 import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
 import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
@@ -78,8 +84,6 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.koin.compose.koinInject
 import java.util.UUID
 
-/** Albums per line in the album grids (artist and genre pages) */
-private const val GRID_COLUMNS = 7
 
 @Composable
 fun ModernMusicItemScreen(
@@ -103,6 +107,8 @@ fun ModernMusicItemScreen(
 	var lastMenuTrack by remember { mutableStateOf<Pair<Int, BaseItemDto>?>(null) }
 	var playlistItems by remember { mutableStateOf<List<UUID>?>(null) }
 	val backgroundState = remember { mutableStateOf<String?>(null) }
+	// Albums per line in the artist and genre grids
+	val columns = musicGridColumns(LocalConfiguration.current.screenWidthDp.dp)
 
 	val entry by rememberQueueEntry(koinInject<PlaybackManager>())
 	val playingId = entry?.baseItem?.id
@@ -123,7 +129,7 @@ fun ModernMusicItemScreen(
 		if (state.loading || initialFocusDone || content == null) return@LaunchedEffect
 		val trackIndex = content.tracks.indexOfFirst { "track_${it.id}" == restoreKey }
 		if (trackIndex >= 0) {
-			listState.scrollToItem(trackIndex + trackListOffset(content))
+			listState.scrollToItem(trackIndex + trackListOffset(content, columns))
 			awaitFrames(2)
 			if (restoreFocusRequester.tryRequestFocus()) {
 				initialFocusDone = true
@@ -142,116 +148,118 @@ fun ModernMusicItemScreen(
 		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
 
 		when {
-			content != null -> LazyColumn(
-				state = listState,
-				contentPadding = PaddingValues(top = 44.dp, bottom = 80.dp),
-				modifier = Modifier.fillMaxSize(),
-			) {
-				item(key = "header") {
-					MusicItemHeader(
-						content = content,
-						favorite = state.favorite,
-						playFocusRequester = playFocusRequester,
-						onPlay = {
-							when (content.kind) {
-								MusicItemKind.GENRE -> playRadio(StationSource(genreId = content.item.id))
-								else -> playTracks(content.tracks)
-							}
-						},
-						onShuffle = { playTracks(content.tracks, shuffle = true) },
-						onRadio = {
-							playRadio(
+			content != null -> ProvideKeepInViewScrolling {
+				LazyColumn(
+					state = listState,
+					contentPadding = PaddingValues(top = 44.dp, bottom = 80.dp),
+					modifier = Modifier.fillMaxSize(),
+				) {
+					item(key = "header") {
+						MusicItemHeader(
+							content = content,
+							favorite = state.favorite,
+							playFocusRequester = playFocusRequester,
+							onPlay = {
 								when (content.kind) {
-									MusicItemKind.ALBUM -> StationSource(albumId = content.item.id)
-									MusicItemKind.PLAYLIST -> StationSource(playlistId = content.item.id)
-									MusicItemKind.ARTIST -> StationSource(artistId = content.item.id)
-									MusicItemKind.GENRE -> StationSource(genreId = content.item.id)
+									MusicItemKind.GENRE -> playRadio(StationSource(genreId = content.item.id))
+									else -> playTracks(content.tracks)
 								}
-							)
-						},
-						onFavorite = viewModel::toggleFavorite,
-						onArtist = content.item.albumArtists?.firstOrNull()?.id?.let { id -> { open(id) } },
-					)
-				}
-
-				// Artist and genre: their albums
-				if (content.albums.isNotEmpty()) {
-					item(key = "albums_title") {
-						SectionHeader(stringResource(R.string.lbl_albums), compact = true, modifier = Modifier.padding(top = 18.dp))
+							},
+							onShuffle = { playTracks(content.tracks, shuffle = true) },
+							onRadio = {
+								playRadio(
+									when (content.kind) {
+										MusicItemKind.ALBUM -> StationSource(albumId = content.item.id)
+										MusicItemKind.PLAYLIST -> StationSource(playlistId = content.item.id)
+										MusicItemKind.ARTIST -> StationSource(artistId = content.item.id)
+										MusicItemKind.GENRE -> StationSource(genreId = content.item.id)
+									}
+								)
+							},
+							onFavorite = viewModel::toggleFavorite,
+							onArtist = content.item.albumArtists?.firstOrNull()?.id?.let { id -> { open(id) } },
+						)
 					}
-					val rows = content.albums.chunked(GRID_COLUMNS)
-					itemsIndexed(rows, key = { index, _ -> "albums_$index" }) { _, row ->
-						Row(
-							horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
-							modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
-						) {
-							for (card in row) {
-								MusicCardView(
-									card = card,
-									focusRequester = null,
-									onFocused = {
-										viewModel.lastFocusKey = card.key
-										card.backgroundUrl?.let { backgroundState.value = it }
-									},
-									onClick = { card.item?.let { open(it.id) } },
-									onLongClick = { card.item?.let { open(it.id) } },
-									onPlay = { card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
+
+					// Artist and genre: their albums
+					if (content.albums.isNotEmpty()) {
+						item(key = "albums_title") {
+							SectionHeader(stringResource(R.string.lbl_albums), compact = true, modifier = Modifier.padding(top = 18.dp))
+						}
+						val rows = content.albums.chunked(columns)
+						itemsIndexed(rows, key = { index, _ -> "albums_$index" }) { _, row ->
+							Row(
+								horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
+								modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
+							) {
+								for (card in row) {
+									MusicCardView(
+										card = card,
+										focusRequester = null,
+										onFocused = {
+											viewModel.lastFocusKey = card.key
+											card.backgroundUrl?.let { backgroundState.value = it }
+										},
+										onClick = { card.item?.let { open(it.id) } },
+										onLongClick = { card.item?.let { open(it.id) } },
+										onPlay = { card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
+									)
+								}
+							}
+						}
+					}
+
+					if (content.tracks.isNotEmpty()) {
+						item(key = "tracks_title") {
+							SectionHeader(
+								stringResource(if (content.kind == MusicItemKind.ARTIST) R.string.music_popular_songs else R.string.music_songs),
+								compact = true,
+								modifier = Modifier.padding(top = 18.dp, bottom = 6.dp),
+							)
+						}
+						val showDiscs = content.kind == MusicItemKind.ALBUM && content.tracks.mapNotNull { it.parentIndexNumber }.distinct().size > 1
+						itemsIndexed(content.tracks, key = { index, track -> "track_${index}_${track.id}" }) { index, track ->
+							val disc = track.parentIndexNumber
+							if (showDiscs && disc != null && content.tracks.getOrNull(index - 1)?.parentIndexNumber != disc) {
+								Text(
+									text = stringResource(R.string.music_disc, disc),
+									color = ModernHomeColors.TextMuted,
+									fontSize = 12.sp,
+									fontWeight = FontWeight.Bold,
+									modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal + 12.dp, top = 12.dp, bottom = 4.dp),
 								)
 							}
-						}
-					}
-				}
-
-				if (content.tracks.isNotEmpty()) {
-					item(key = "tracks_title") {
-						SectionHeader(
-							stringResource(if (content.kind == MusicItemKind.ARTIST) R.string.music_popular_songs else R.string.music_songs),
-							compact = true,
-							modifier = Modifier.padding(top = 18.dp, bottom = 6.dp),
-						)
-					}
-					val showDiscs = content.kind == MusicItemKind.ALBUM && content.tracks.mapNotNull { it.parentIndexNumber }.distinct().size > 1
-					itemsIndexed(content.tracks, key = { index, track -> "track_${index}_${track.id}" }) { index, track ->
-						val disc = track.parentIndexNumber
-						if (showDiscs && disc != null && content.tracks.getOrNull(index - 1)?.parentIndexNumber != disc) {
-							Text(
-								text = stringResource(R.string.music_disc, disc),
-								color = ModernHomeColors.TextMuted,
-								fontSize = 12.sp,
-								fontWeight = FontWeight.Bold,
-								modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal + 12.dp, top = 12.dp, bottom = 4.dp),
+							TrackRow(
+								number = if (content.kind == MusicItemKind.ALBUM) track.indexNumber ?: (index + 1) else index + 1,
+								track = track,
+								showArtist = content.kind != MusicItemKind.ALBUM ||
+									(track.artists.orEmpty().joinToString() != (track.albumArtist ?: content.item.albumArtist)),
+								showAlbum = content.kind != MusicItemKind.ALBUM,
+								playing = track.id == playingId,
+								focusRequester = if ("track_${track.id}" == restoreKey) restoreFocusRequester else null,
+								onFocused = { viewModel.lastFocusKey = "track_${track.id}" },
+								onClick = { playTracks(content.tracks, index) },
+								onLongClick = {
+									lastMenuTrack = index to track
+									menuTrack = index to track
+								},
 							)
 						}
-						TrackRow(
-							number = if (content.kind == MusicItemKind.ALBUM) track.indexNumber ?: (index + 1) else index + 1,
-							track = track,
-							showArtist = content.kind != MusicItemKind.ALBUM ||
-								(track.artists.orEmpty().joinToString() != (track.albumArtist ?: content.item.albumArtist)),
-							showAlbum = content.kind != MusicItemKind.ALBUM,
-							playing = track.id == playingId,
-							focusRequester = if ("track_${track.id}" == restoreKey) restoreFocusRequester else null,
-							onFocused = { viewModel.lastFocusKey = "track_${track.id}" },
-							onClick = { playTracks(content.tracks, index) },
-							onLongClick = {
-								lastMenuTrack = index to track
-								menuTrack = index to track
-							},
-						)
 					}
-				}
 
-				if (content.similar.isNotEmpty()) {
-					item(key = "similar") {
-						MusicSectionRow(
-							title = stringResource(R.string.lbl_more_like_this),
-							cards = content.similar,
-							focusRequesterFor = { null },
-							onFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
-							onClick = { card -> card.item?.let { open(it.id) } },
-							onLongClick = { card -> card.item?.let { open(it.id) } },
-							onPlay = { card -> card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
-							modifier = Modifier.padding(top = 18.dp),
-						)
+					if (content.similar.isNotEmpty()) {
+						item(key = "similar") {
+							MusicSectionRow(
+								title = stringResource(R.string.lbl_more_like_this),
+								cards = content.similar,
+								focusRequesterFor = { null },
+								onFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
+								onClick = { card -> card.item?.let { open(it.id) } },
+								onLongClick = { card -> card.item?.let { open(it.id) } },
+								onPlay = { card -> card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
+								modifier = Modifier.padding(top = 18.dp),
+							)
+						}
 					}
 				}
 			}
@@ -309,9 +317,9 @@ fun ModernMusicItemScreen(
 }
 
 /** Index of the first song in the list (header, album grid...) */
-private fun trackListOffset(content: MusicItemContent): Int {
+private fun trackListOffset(content: MusicItemContent, columns: Int): Int {
 	var offset = 1
-	if (content.albums.isNotEmpty()) offset += 1 + content.albums.chunked(GRID_COLUMNS).size
+	if (content.albums.isNotEmpty()) offset += 1 + content.albums.chunked(columns).size
 	return offset + 1
 }
 
@@ -365,7 +373,9 @@ private fun MusicItemHeader(
 				.clip(coverShape)
 				.background(ModernHomeColors.CardSurface, coverShape),
 		) {
-			CardArtwork(url = content.coverUrl, fallbackTitle = item.name.orEmpty())
+			// Genres: colored square with the name, like on the genres page
+			if (content.kind == MusicItemKind.GENRE) GenreArtwork(item.name.orEmpty(), item.id.toString(), large = true)
+			else CardArtwork(url = content.coverUrl, fallbackTitle = item.name.orEmpty())
 		}
 
 		Spacer(Modifier.width(32.dp))
@@ -424,18 +434,45 @@ private fun MusicItemHeader(
 				}
 				if (content.kind != MusicItemKind.GENRE) {
 					HeroButton(text = stringResource(R.string.modern_music_radio), icon = R.drawable.ic_radio, primary = false, onClick = onRadio)
-					HeroButton(
-						text = stringResource(if (favorite) R.string.music_favorite else R.string.music_add_favorite),
-						icon = if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart,
-						primary = false,
-						onClick = onFavorite,
-					)
+					// Only the heart, so "Go to artist" fits
+					HeartButton(favorite = favorite, onClick = onFavorite)
 				}
 				if (onArtist != null) {
 					HeroButton(text = stringResource(R.string.music_go_to_artist), icon = R.drawable.ic_artist, primary = false, onClick = onArtist)
 				}
 			}
 		}
+	}
+}
+
+@Composable
+private fun HeartButton(
+	favorite: Boolean,
+	onClick: () -> Unit,
+) {
+	val interactionSource = remember { MutableInteractionSource() }
+	val focused by interactionSource.collectIsFocusedAsState()
+	val scale by animateFloatAsState(if (focused) 1.08f else 1f, label = "HeartScale")
+
+	Box(
+		contentAlignment = Alignment.Center,
+		modifier = Modifier
+			.graphicsLayer {
+				scaleX = scale
+				scaleY = scale
+			}
+			.size(42.dp)
+			.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+			.background(if (focused) Color.White else Color.Black.copy(alpha = 0.45f), CircleShape)
+			.border(if (focused) 2.dp else 1.dp, if (focused) ModernHomeColors.Accent else Color.White.copy(alpha = 0.25f), CircleShape),
+	) {
+		Icon(
+			imageVector = ImageVector.vectorResource(if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart),
+			contentDescription = stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite),
+			// The red heart keeps its color
+			tint = if (favorite) Color.Unspecified else if (focused) Color.Black else Color.White,
+			modifier = Modifier.size(20.dp),
+		)
 	}
 }
 

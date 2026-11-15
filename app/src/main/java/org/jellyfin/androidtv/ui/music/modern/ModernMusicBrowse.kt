@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +30,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.Fragment
@@ -48,6 +50,7 @@ import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.androidtv.ui.home.modern.AmbientBackground
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
+import org.jellyfin.androidtv.ui.home.modern.ProvideKeepInViewScrolling
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
 import org.jellyfin.androidtv.ui.home.modern.SectionHeader
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
@@ -66,7 +69,11 @@ enum class MusicBrowseMode {
 	STATIONS,
 }
 
-private const val COLUMNS = 7
+/** Music cards that fit in a line of a grid of the given width */
+internal fun musicGridColumns(width: Dp): Int {
+	val available = width - ModernHomeDimens.ScreenPaddingHorizontal * 2 + ModernHomeDimens.CardSpacing
+	return (available / (MusicCardSize + ModernHomeDimens.CardSpacing)).toInt().coerceAtLeast(1)
+}
 
 /** A titled group of cards (stations page: for you, genres, artists) */
 data class MusicBrowseGroup(
@@ -191,52 +198,56 @@ fun ModernMusicBrowseScreen(
 		if (!restoreFocusRequester.tryRequestFocus()) firstFocusRequester.tryRequestFocus()
 	}
 
-	Box(
+	BoxWithConstraints(
 		modifier = Modifier
 			.fillMaxSize()
 			.background(ModernHomeColors.Background),
 	) {
+		val columns = musicGridColumns(maxWidth)
 		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
 
-		LazyColumn(
-			state = listState,
-			contentPadding = PaddingValues(top = 40.dp, bottom = 80.dp),
-			modifier = Modifier.fillMaxSize(),
-		) {
-			item(key = "title") {
-				Text(
-					text = stringResource(if (mode == MusicBrowseMode.GENRES) R.string.lbl_genres else R.string.modern_music_stations),
-					color = ModernHomeColors.TextPrimary,
-					fontSize = 30.sp,
-					fontWeight = FontWeight.Bold,
-					modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, bottom = 6.dp),
-				)
-			}
-
-			for ((groupIndex, group) in state.groups.withIndex()) {
-				val firstGroup = groupIndex == 0
-				if (group.title != null) {
-					item(key = "group_$groupIndex") {
-						SectionHeader(stringResource(group.title), compact = true, modifier = Modifier.padding(top = 14.dp))
-					}
+		ProvideKeepInViewScrolling {
+			LazyColumn(
+				state = listState,
+				contentPadding = PaddingValues(top = 40.dp, bottom = 80.dp),
+				modifier = Modifier.fillMaxSize(),
+			) {
+				item(key = "title") {
+					Text(
+						text = stringResource(if (mode == MusicBrowseMode.GENRES) R.string.lbl_genres else R.string.modern_music_stations),
+						color = ModernHomeColors.TextPrimary,
+						fontSize = 30.sp,
+						fontWeight = FontWeight.Bold,
+						modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, bottom = 6.dp),
+					)
 				}
-				cardGrid(
-					keyPrefix = "group_$groupIndex",
-					cards = group.cards,
-					focusRequesterFor = { card ->
-						when {
-							card.key == restoreKey -> restoreFocusRequester
-							firstGroup && card == group.cards.first() -> firstFocusRequester
-							else -> null
+
+				for ((groupIndex, group) in state.groups.withIndex()) {
+					val firstGroup = groupIndex == 0
+					if (group.title != null) {
+						item(key = "group_$groupIndex") {
+							SectionHeader(stringResource(group.title), compact = true, modifier = Modifier.padding(top = 14.dp))
 						}
-					},
-					onFocused = { card ->
-						viewModel.lastFocusKey = card.key
-						card.backgroundUrl?.let { backgroundState.value = it }
-					},
-					onClick = ::onClick,
-					onPlay = ::onPlay,
-				)
+					}
+					cardGrid(
+						keyPrefix = "group_$groupIndex",
+						cards = group.cards,
+						columns = columns,
+						focusRequesterFor = { card ->
+							when {
+								card.key == restoreKey -> restoreFocusRequester
+								firstGroup && card == group.cards.first() -> firstFocusRequester
+								else -> null
+							}
+						},
+						onFocused = { card ->
+							viewModel.lastFocusKey = card.key
+							card.backgroundUrl?.let { backgroundState.value = it }
+						},
+						onClick = ::onClick,
+						onPlay = ::onPlay,
+					)
+				}
 			}
 		}
 
@@ -253,17 +264,18 @@ fun ModernMusicBrowseScreen(
 	}
 }
 
-/** Cards in rows of [COLUMNS], as items of a lazy list */
+/** Cards in rows of [columns], as items of a lazy list */
 internal fun LazyListScope.cardGrid(
 	keyPrefix: String,
 	cards: List<MusicCard>,
+	columns: Int,
 	focusRequesterFor: (MusicCard) -> FocusRequester?,
 	onFocused: (MusicCard) -> Unit,
 	onClick: (MusicCard) -> Unit,
 	onPlay: (MusicCard) -> Unit,
 	onLongClick: (MusicCard) -> Unit = onClick,
 ) {
-	itemsIndexed(cards.chunked(COLUMNS), key = { index, _ -> "${keyPrefix}_row_$index" }) { _, row ->
+	itemsIndexed(cards.chunked(columns), key = { index, _ -> "${keyPrefix}_row_$index" }) { _, row ->
 		Row(
 			horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
 			modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),

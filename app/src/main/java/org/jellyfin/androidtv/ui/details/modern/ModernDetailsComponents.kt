@@ -606,6 +606,8 @@ internal fun PosterRow(
 	onClick: (HomeCard) -> Unit,
 	onPlay: ((HomeCard) -> Unit)?,
 	modifier: Modifier = Modifier,
+	/** Hold OK; null opens the item like a click */
+	onLongClick: ((HomeCard) -> Unit)? = null,
 ) {
 	DetailsRow(
 		title = title,
@@ -619,6 +621,7 @@ internal fun PosterRow(
 			focusRequester = focusRequesterFor(card),
 			onFocused = { onFocused(card) },
 			onClick = { onClick(card) },
+			onLongClick = { (onLongClick ?: onClick)(card) },
 			onPlay = onPlay?.let { play -> { play(card) } },
 		)
 	}
@@ -634,6 +637,7 @@ private fun CaptionedPoster(
 	focusRequester: FocusRequester?,
 	onFocused: () -> Unit,
 	onClick: () -> Unit,
+	onLongClick: () -> Unit,
 	onPlay: (() -> Unit)?,
 ) {
 	val typeLabel = when (card.item.type) {
@@ -647,7 +651,7 @@ private fun CaptionedPoster(
 		PosterCard(
 			card = card,
 			onClick = onClick,
-			onLongClick = onClick,
+			onLongClick = onLongClick,
 			onFocused = onFocused,
 			focusRequester = focusRequester,
 			onPlay = onPlay,

@@ -72,6 +72,7 @@ import org.jellyfin.androidtv.ui.home.modern.HomeSection
 import org.jellyfin.androidtv.ui.home.modern.HomeSectionRow
 import org.jellyfin.androidtv.ui.home.modern.HomeSectionType
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
+import org.jellyfin.androidtv.ui.home.modern.ProvideKeepInViewScrolling
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
 import org.jellyfin.androidtv.ui.home.modern.PosterActionsDialogs
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
@@ -165,69 +166,71 @@ fun ModernSearchScreen(viewModel: ModernSearchViewModel) {
 	) {
 		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
 
-		LazyColumn(
-			contentPadding = PaddingValues(top = 36.dp, bottom = 80.dp),
-			modifier = Modifier.fillMaxSize(),
-		) {
-			item(key = "field") {
-				Row(
-					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
-				) {
-					SearchField(
-						query = state.query,
-						hint = stringResource(if (viewModel.musicOnly) R.string.search_hint_music else R.string.search_hint),
-						startEditing = startEditing,
-						onEditingStarted = { startEditing = false },
-						onQueryChange = { viewModel.setQuery(it) },
-						onSubmit = { viewModel.setQuery(state.query, immediate = true) },
-						focusRequester = fieldFocusRequester,
-						modifier = Modifier.weight(1f),
-					)
-					if (voiceAvailable) {
-						Spacer(Modifier.width(14.dp))
-						SearchVoiceInput(
+		ProvideKeepInViewScrolling {
+			LazyColumn(
+				contentPadding = PaddingValues(top = 36.dp, bottom = 80.dp),
+				modifier = Modifier.fillMaxSize(),
+			) {
+				item(key = "field") {
+					Row(
+						verticalAlignment = Alignment.CenterVertically,
+						modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
+					) {
+						SearchField(
+							query = state.query,
+							hint = stringResource(if (viewModel.musicOnly) R.string.search_hint_music else R.string.search_hint),
+							startEditing = startEditing,
+							onEditingStarted = { startEditing = false },
 							onQueryChange = { viewModel.setQuery(it) },
-							onQuerySubmit = { viewModel.setQuery(viewModel.state.value.query, immediate = true) },
+							onSubmit = { viewModel.setQuery(state.query, immediate = true) },
+							focusRequester = fieldFocusRequester,
+							modifier = Modifier.weight(1f),
+						)
+						if (voiceAvailable) {
+							Spacer(Modifier.width(14.dp))
+							SearchVoiceInput(
+								onQueryChange = { viewModel.setQuery(it) },
+								onQuerySubmit = { viewModel.setQuery(viewModel.state.value.query, immediate = true) },
+							)
+						}
+					}
+					Text(
+						text = stringResource(R.string.search_voice_hint),
+						color = ModernHomeColors.TextMuted,
+						fontSize = 12.sp,
+						modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal + 4.dp, top = 8.dp, bottom = 4.dp),
+					)
+				}
+
+				itemsIndexed(state.groups, key = { index, group -> "${group.title}_$index" }) { _, group ->
+					when (group) {
+						is SearchGroup.Posters -> HomeSectionRow(
+							section = HomeSection(HomeSectionType.FAVORITES, CardStyle.POSTER, group.cards),
+							title = stringResource(group.title),
+							initialCardIndex = 0,
+							focusRequesterFor = { _, _ -> null },
+							onCardClick = ::onPosterClick,
+							onCardLongClick = { card -> posterActions.open(card.menuTarget()) },
+							onCardPlay = ::onPosterPlay,
+							onCardFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
+							modifier = Modifier.padding(top = ModernHomeDimens.SectionSpacing),
+						)
+
+						is SearchGroup.Music -> MusicSectionRow(
+							title = stringResource(group.title),
+							cards = group.cards,
+							focusRequesterFor = { null },
+							onFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
+							onClick = ::onMusicClick,
+							onLongClick = { card ->
+								val item = card.item
+								val albumId = item?.albumId
+								if (card.kind == MusicCardKind.TRACK && albumId != null) navigationRepository.navigate(Destinations.modernMusicItem(albumId))
+								else onMusicClick(card)
+							},
+							onPlay = { card -> card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
 						)
 					}
-				}
-				Text(
-					text = stringResource(R.string.search_voice_hint),
-					color = ModernHomeColors.TextMuted,
-					fontSize = 12.sp,
-					modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal + 4.dp, top = 8.dp, bottom = 4.dp),
-				)
-			}
-
-			itemsIndexed(state.groups, key = { index, group -> "${group.title}_$index" }) { _, group ->
-				when (group) {
-					is SearchGroup.Posters -> HomeSectionRow(
-						section = HomeSection(HomeSectionType.FAVORITES, CardStyle.POSTER, group.cards),
-						title = stringResource(group.title),
-						initialCardIndex = 0,
-						focusRequesterFor = { _, _ -> null },
-						onCardClick = ::onPosterClick,
-						onCardLongClick = { card -> posterActions.open(card.menuTarget()) },
-						onCardPlay = ::onPosterPlay,
-						onCardFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
-						modifier = Modifier.padding(top = ModernHomeDimens.SectionSpacing),
-					)
-
-					is SearchGroup.Music -> MusicSectionRow(
-						title = stringResource(group.title),
-						cards = group.cards,
-						focusRequesterFor = { null },
-						onFocused = { card -> card.backgroundUrl?.let { backgroundState.value = it } },
-						onClick = ::onMusicClick,
-						onLongClick = { card ->
-							val item = card.item
-							val albumId = item?.albumId
-							if (card.kind == MusicCardKind.TRACK && albumId != null) navigationRepository.navigate(Destinations.modernMusicItem(albumId))
-							else onMusicClick(card)
-						},
-						onPlay = { card -> card.item?.let { playbackHelper.retrieveAndPlay(it.id, false, context) } },
-					)
 				}
 			}
 		}

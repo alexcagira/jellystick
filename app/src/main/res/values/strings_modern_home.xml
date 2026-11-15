@@ -268,4 +268,7 @@
     <string name="search_hint_music">Songs, albums, artists, playlists…</string>
     <string name="search_voice_hint">Press OK to type. With the keyboard open, hold the microphone button of the remote to say what you are looking for</string>
     <string name="search_no_results">No results for \"%1$s\"</string>
+    <string name="music_stop">Stop</string>
+    <string name="music_screensaver_show_lyrics">OK · Show lyrics</string>
+    <string name="music_screensaver_hide_lyrics">OK · Hide lyrics</string>
 </resources>

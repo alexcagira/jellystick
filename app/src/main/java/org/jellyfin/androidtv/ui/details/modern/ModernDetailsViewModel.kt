@@ -72,6 +72,20 @@ class ModernDetailsViewModel(
 		}
 	}
 
+	/** Season (or any item) marked as watched / unwatched from its menu */
+	fun setItemPlayed(id: UUID, played: Boolean) {
+		viewModelScope.launch {
+			runCatching { repository.setPlayed(id, played) }
+				.onFailure { Timber.w(it, "Unable to change played state of $id") }
+			refresh()
+		}
+	}
+
+	/** Episode "Play now" starts for a season: the first one not watched yet */
+	suspend fun seasonPlayableId(season: BaseItemDto): UUID? = runCatching { repository.seasonPlayableId(season) }
+		.onFailure { Timber.w(it, "Unable to find an episode of ${season.id}") }
+		.getOrNull()
+
 	suspend fun fullItem(id: UUID): BaseItemDto? = runCatching { repository.fullItem(id) }
 		.onFailure { Timber.w(it, "Unable to load media info of $id") }
 		.getOrNull()

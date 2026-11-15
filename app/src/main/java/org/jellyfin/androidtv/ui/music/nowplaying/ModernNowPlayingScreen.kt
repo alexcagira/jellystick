@@ -22,20 +22,20 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -84,7 +84,6 @@ import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
 import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
 import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
-import org.jellyfin.androidtv.ui.home.modern.SectionHeader
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
 import org.jellyfin.androidtv.ui.music.modern.AddToPlaylistDialog
@@ -200,52 +199,55 @@ fun ModernNowPlayingScreen() {
 	) {
 		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
 
-		LazyColumn(
-			state = rememberLazyListState(),
-			contentPadding = PaddingValues(top = 22.dp, bottom = 32.dp),
-			modifier = Modifier.fillMaxSize(),
+		// Fixed layout that always fits the screen: the cover takes the height that is left
+		Column(
+			modifier = Modifier
+				.fillMaxSize()
+				.padding(top = 20.dp, bottom = 10.dp),
 		) {
 			// Artist and clock, small
-			item(key = "header") {
-				Row(
-					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier
-						.fillMaxWidth()
-						.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
-				) {
-					Text(
-						text = stringResource(R.string.music_now_playing).uppercase(),
-						color = ModernHomeColors.Accent,
-						fontSize = 11.sp,
-						fontWeight = FontWeight.Bold,
-						letterSpacing = 1.2.sp,
-					)
-					Spacer(Modifier.width(12.dp))
-					Text(
-						text = item?.artistsText().orEmpty(),
-						color = ModernHomeColors.TextSecondary,
-						fontSize = 14.sp,
-						fontWeight = FontWeight.SemiBold,
-						maxLines = 1,
-						overflow = TextOverflow.Ellipsis,
-						modifier = Modifier.weight(1f),
-					)
-					Clock(fontSize = 14)
-				}
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
+			) {
+				Text(
+					text = stringResource(R.string.music_now_playing).uppercase(),
+					color = ModernHomeColors.Accent,
+					fontSize = 11.sp,
+					fontWeight = FontWeight.Bold,
+					letterSpacing = 1.2.sp,
+				)
+				Spacer(Modifier.width(12.dp))
+				Text(
+					text = item?.artistsText().orEmpty(),
+					color = ModernHomeColors.TextSecondary,
+					fontSize = 13.sp,
+					fontWeight = FontWeight.SemiBold,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+					modifier = Modifier.weight(1f),
+				)
+				Clock(fontSize = 13)
 			}
 
-			item(key = "main") {
-				val coverSize by animateDpAsState(if (showLyrics && lyrics != null) 270.dp else 230.dp, label = "CoverSize")
-				Row(
-					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier
-						.fillMaxWidth()
-						.height(if (showLyrics && lyrics != null) 290.dp else 250.dp)
-						.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
-				) {
+			Spacer(Modifier.height(12.dp))
+
+			BoxWithConstraints(
+				modifier = Modifier
+					.weight(1f)
+					.fillMaxWidth()
+					.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
+			) {
+				val lyricsShown = showLyrics && lyrics != null
+				val coverSize = minOf(maxHeight, if (lyricsShown) 260.dp else 230.dp)
+				val animatedCover by animateDpAsState(coverSize, label = "CoverSize")
+
+				Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
 					Box(
 						modifier = Modifier
-							.size(coverSize)
+							.size(animatedCover)
 							.clip(RoundedCornerShape(14.dp))
 							.background(ModernHomeColors.CardSurface),
 					) {
@@ -253,25 +255,25 @@ fun ModernNowPlayingScreen() {
 							CardArtwork(url = url, fallbackTitle = item?.album ?: item?.name.orEmpty())
 						}
 					}
-					Spacer(Modifier.width(36.dp))
+					Spacer(Modifier.width(32.dp))
 
-					if (showLyrics && lyrics != null) {
-						Column(modifier = Modifier.weight(1f)) {
+					if (lyricsShown) {
+						Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
 							SongTitle(item, compact = true)
-							Spacer(Modifier.height(8.dp))
+							Spacer(Modifier.height(6.dp))
 							NowPlayingLyrics(
-								lyrics = lyrics,
+								lyrics = lyrics!!,
 								playbackManager = playbackManager,
 								fontSize = 22,
 								modifier = Modifier
 									.fillMaxWidth()
-									.height(210.dp),
+									.weight(1f),
 							)
 						}
 					} else {
 						Column(modifier = Modifier.weight(1f)) {
 							SongTitle(item, compact = false)
-							if (showLyrics && lyrics == null && item != null) {
+							if (showLyrics && item != null) {
 								Spacer(Modifier.height(10.dp))
 								Text(stringResource(R.string.music_no_lyrics), color = ModernHomeColors.TextMuted, fontSize = 13.sp)
 							}
@@ -281,76 +283,84 @@ fun ModernNowPlayingScreen() {
 			}
 
 			// Timeline
-			item(key = "timeline") {
-				Timeline(playbackManager)
-			}
+			Timeline(playbackManager)
 
 			// Buttons under the timeline
-			item(key = "controls") {
-				Row(
-					horizontalArrangement = Arrangement.spacedBy(14.dp),
-					verticalAlignment = Alignment.Top,
-					modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal - 6.dp, vertical = 4.dp),
-				) {
-					ControlButton(R.drawable.ic_previous, stringResource(R.string.lbl_prev_item)) { mediaManager.prevAudioItem() }
-					ControlButton(
-						icon = if (playState == PlayState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
-						label = stringResource(if (playState == PlayState.PLAYING) R.string.lbl_pause else R.string.lbl_play),
-						primary = true,
-						modifier = Modifier.focusRequester(playFocusRequester),
-					) { mediaManager.togglePlayPause() }
-					ControlButton(R.drawable.ic_next, stringResource(R.string.lbl_next_item)) { mediaManager.nextAudioItem() }
-					ControlButton(R.drawable.ic_add, stringResource(R.string.music_add_to_playlist)) { item?.let { playlistItems = listOf(it.id) } }
-					ControlButton(
-						icon = R.drawable.ic_shuffle,
-						label = stringResource(R.string.lbl_shuffle_queue),
-						active = playbackOrder != PlaybackOrder.DEFAULT,
-					) { mediaManager.shuffleAudioQueue() }
-					ControlButton(
-						icon = R.drawable.ic_subtitles,
-						label = stringResource(if (showLyrics) R.string.music_hide_lyrics else R.string.music_show_lyrics),
-						active = showLyrics,
-					) { NowPlayingPreferences.showLyrics = !showLyrics }
-					ControlButton(R.drawable.ic_artist, stringResource(R.string.music_go_to_artist)) { open(artistId(item)) }
-					ControlButton(R.drawable.ic_album, stringResource(R.string.music_go_to_album)) { open(item?.albumId) }
-					ControlButton(R.drawable.ic_photos, stringResource(R.string.music_screensaver)) { screensaver = true }
+			Row(
+				horizontalArrangement = Arrangement.spacedBy(6.dp),
+				verticalAlignment = Alignment.Top,
+				modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal - 12.dp),
+			) {
+				ControlButton(R.drawable.ic_previous, stringResource(R.string.lbl_prev_item)) { mediaManager.prevAudioItem() }
+				ControlButton(
+					icon = if (playState == PlayState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
+					label = stringResource(if (playState == PlayState.PLAYING) R.string.lbl_pause else R.string.lbl_play),
+					primary = true,
+					modifier = Modifier.focusRequester(playFocusRequester),
+				) { mediaManager.togglePlayPause() }
+				ControlButton(R.drawable.ic_next, stringResource(R.string.lbl_next_item)) { mediaManager.nextAudioItem() }
+				// Stop: ends the queue and leaves this screen
+				ControlButton(R.drawable.ic_stop, stringResource(R.string.music_stop)) {
+					mediaManager.stopAudio(true)
+					navigationRepository.goBack()
 				}
+				ControlButton(R.drawable.ic_add, stringResource(R.string.music_add_to_playlist)) { item?.let { playlistItems = listOf(it.id) } }
+				ControlButton(
+					icon = R.drawable.ic_shuffle,
+					label = stringResource(R.string.lbl_shuffle_queue),
+					active = playbackOrder != PlaybackOrder.DEFAULT,
+				) { mediaManager.shuffleAudioQueue() }
+				ControlButton(
+					icon = R.drawable.ic_subtitles,
+					label = stringResource(if (showLyrics) R.string.music_hide_lyrics else R.string.music_show_lyrics),
+					active = showLyrics,
+				) { NowPlayingPreferences.showLyrics = !showLyrics }
+				ControlButton(R.drawable.ic_artist, stringResource(R.string.music_go_to_artist)) { open(artistId(item)) }
+				ControlButton(R.drawable.ic_album, stringResource(R.string.music_go_to_album)) { open(item?.albumId) }
+				ControlButton(R.drawable.ic_photos, stringResource(R.string.music_screensaver)) { screensaver = true }
 			}
 
 			// Queue: the current song and what comes next
-			item(key = "queue") {
-				val queue = listOfNotNull(entry) + upcoming
-				Row(
-					verticalAlignment = Alignment.CenterVertically,
+			val queue = listOfNotNull(entry) + upcoming
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(top = 2.dp, end = ModernHomeDimens.ScreenPaddingHorizontal),
+			) {
+				Text(
+					text = stringResource(R.string.current_queue).uppercase(),
+					color = ModernHomeColors.TextSecondary,
+					fontSize = 11.sp,
+					fontWeight = FontWeight.Bold,
+					letterSpacing = 1.sp,
 					modifier = Modifier
-						.fillMaxWidth()
-						.padding(top = 6.dp, end = ModernHomeDimens.ScreenPaddingHorizontal),
-				) {
-					SectionHeader(stringResource(R.string.current_queue), compact = true, modifier = Modifier.weight(1f))
-					if (entryIndex >= 0) {
-						Text(
-							text = stringResource(R.string.music_queue_position, entryIndex + 1, playbackManager.queue.estimatedSize.coerceAtLeast(entryIndex + 1)),
-							color = ModernHomeColors.TextSecondary,
-							fontSize = 13.sp,
-							fontWeight = FontWeight.SemiBold,
-						)
-					}
+						.weight(1f)
+						.padding(start = ModernHomeDimens.ScreenPaddingHorizontal),
+				)
+				if (entryIndex >= 0) {
+					Text(
+						text = stringResource(R.string.music_queue_position, entryIndex + 1, playbackManager.queue.estimatedSize.coerceAtLeast(entryIndex + 1)),
+						color = ModernHomeColors.TextSecondary,
+						fontSize = 11.sp,
+						fontWeight = FontWeight.SemiBold,
+					)
 				}
-				LazyRow(
-					horizontalArrangement = Arrangement.spacedBy(16.dp),
-					contentPadding = PaddingValues(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 10.dp),
-				) {
-					itemsIndexed(queue, key = { index, queueEntry -> "${index}_${queueEntry.baseItem?.id}" }) { index, queueEntry ->
-						QueueCard(
-							entry = queueEntry,
-							playing = index == 0 && entry != null,
-							onClick = { if (index > 0) mediaManager.playFrom(queueEntry) },
-							onLongClick = {
-								lastMenuEntry = queueEntry
-								menuEntry = queueEntry
-							},
-						)
-					}
+			}
+			LazyRow(
+				horizontalArrangement = Arrangement.spacedBy(12.dp),
+				contentPadding = PaddingValues(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 6.dp),
+			) {
+				itemsIndexed(queue, key = { index, queueEntry -> "${index}_${queueEntry.baseItem?.id}" }) { index, queueEntry ->
+					QueueCard(
+						entry = queueEntry,
+						playing = index == 0 && entry != null,
+						onClick = { if (index > 0) mediaManager.playFrom(queueEntry) },
+						onLongClick = {
+							lastMenuEntry = queueEntry
+							menuEntry = queueEntry
+						},
+					)
 				}
 			}
 		}
@@ -389,7 +399,7 @@ fun ModernNowPlayingScreen() {
 				item = item,
 				coverUrl = coverUrl,
 				backgroundUrl = backgroundState.value,
-				lyrics = if (showLyrics) lyrics else null,
+				lyrics = lyrics,
 				playbackManager = playbackManager,
 				onExit = { screensaver = false },
 			)
@@ -450,7 +460,7 @@ private fun Timeline(playbackManager: PlaybackManager) {
 	val positionInfo by rememberPlayerPositionInfo(playbackManager)
 	val ticksPerMs = 10_000L
 
-	Column(modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 8.dp)) {
+	Column(modifier = Modifier.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 6.dp)) {
 		PlayerSeekbar(
 			playbackManager = playbackManager,
 			colors = SeekbarColors(
@@ -463,7 +473,7 @@ private fun Timeline(playbackManager: PlaybackManager) {
 				.fillMaxWidth()
 				.height(4.dp),
 		)
-		Spacer(Modifier.height(6.dp))
+		Spacer(Modifier.height(4.dp))
 		Row {
 			Text(
 				text = formatDuration(positionInfo.active.inWholeMilliseconds * ticksPerMs) ?: "0:00",
@@ -495,9 +505,9 @@ private fun ControlButton(
 	val interactionSource = remember { MutableInteractionSource() }
 	val focused by interactionSource.collectIsFocusedAsState()
 	val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "ControlScale")
-	val size: Dp = if (primary) 56.dp else 46.dp
+	val size: Dp = if (primary) 40.dp else 32.dp
 
-	Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(76.dp)) {
+	Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(58.dp)) {
 		Box(
 			contentAlignment = Alignment.Center,
 			modifier = modifier
@@ -522,18 +532,20 @@ private fun ControlButton(
 				imageVector = ImageVector.vectorResource(icon),
 				contentDescription = label,
 				tint = if (focused || primary) Color.Black else ModernHomeColors.TextPrimary,
-				modifier = Modifier.size(if (primary) 26.dp else 20.dp),
+				modifier = Modifier.size(if (primary) 20.dp else 15.dp),
 			)
 		}
-		Spacer(Modifier.height(6.dp))
+		Spacer(Modifier.height(3.dp))
+		// Name of the focused button, one line so the layout does not move
 		Text(
 			text = if (focused) label else "",
 			color = ModernHomeColors.TextPrimary,
-			fontSize = 11.sp,
+			fontSize = 10.sp,
 			fontWeight = FontWeight.SemiBold,
 			textAlign = TextAlign.Center,
-			maxLines = 2,
-			lineHeight = 13.sp,
+			maxLines = 1,
+			overflow = TextOverflow.Ellipsis,
+			lineHeight = 12.sp,
 		)
 	}
 }
@@ -555,14 +567,14 @@ private fun QueueCard(
 	val image = song?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
 	val url = remember(image) { image?.getUrl(api, maxWidth = 240) }
 
-	Column(modifier = Modifier.width(112.dp)) {
+	Column(modifier = Modifier.width(QUEUE_CARD_SIZE)) {
 		Box(
 			modifier = Modifier
 				.graphicsLayer {
 					scaleX = scale
 					scaleY = scale
 				}
-				.size(112.dp)
+				.size(QUEUE_CARD_SIZE)
 				.combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
 				.clip(shape)
 				.background(ModernHomeColors.CardSurface, shape)
@@ -578,19 +590,20 @@ private fun QueueCard(
 					contentAlignment = Alignment.Center,
 					modifier = Modifier
 						.align(Alignment.BottomStart)
-						.padding(6.dp)
-						.size(24.dp)
+						.padding(4.dp)
+						.size(18.dp)
 						.background(ModernHomeColors.Accent, CircleShape),
 				) {
-					Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+					Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = Color.Black, modifier = Modifier.size(10.dp))
 				}
 			}
 		}
-		Spacer(Modifier.height(8.dp))
+		Spacer(Modifier.height(4.dp))
 		Text(
 			text = song?.name.orEmpty(),
 			color = if (playing) ModernHomeColors.Accent else ModernHomeColors.TextPrimary,
-			fontSize = 12.sp,
+			fontSize = 10.sp,
+			lineHeight = 12.sp,
 			fontWeight = FontWeight.SemiBold,
 			maxLines = 1,
 			overflow = TextOverflow.Ellipsis,
@@ -598,9 +611,9 @@ private fun QueueCard(
 		Text(
 			text = listOfNotNull(song?.artistsText(), song?.album).joinToString(" · "),
 			color = ModernHomeColors.TextMuted,
-			fontSize = 11.sp,
-			maxLines = 2,
-			lineHeight = 13.sp,
+			fontSize = 9.sp,
+			lineHeight = 11.sp,
+			maxLines = 1,
 			overflow = TextOverflow.Ellipsis,
 		)
 	}
@@ -628,4 +641,5 @@ internal fun BaseItemDto.artistsText(): String? =
 	artists?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: albumArtist
 
 private const val QUEUE_PEEK = 100
+private val QUEUE_CARD_SIZE = 64.dp
 private const val CLOCK_TICK_MS = 15_000L

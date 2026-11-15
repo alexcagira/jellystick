@@ -245,6 +245,18 @@ class ModernDetailsRepository(
 		safe("next up") { nextUp(item.id) }?.id ?: firstEpisodeId(item.id)
 	}
 
+	/** First episode of a season that was not watched yet (the first one when all were watched) */
+	suspend fun seasonPlayableId(season: BaseItemDto): UUID? = withContext(Dispatchers.IO) {
+		val seriesId = season.seriesId ?: return@withContext season.id
+		val episodes = api.tvShowsApi.getEpisodes(
+			seriesId = seriesId,
+			seasonId = season.id,
+			isMissing = false,
+			enableUserData = true,
+		).content.items
+		(episodes.firstOrNull { it.userData?.played != true } ?: episodes.firstOrNull())?.id
+	}
+
 	suspend fun firstEpisodeId(seriesId: UUID): UUID? = withContext(Dispatchers.IO) { firstEpisode(seriesId)?.id }
 
 	/** First regular episode of a series (specials only when there is nothing else) */

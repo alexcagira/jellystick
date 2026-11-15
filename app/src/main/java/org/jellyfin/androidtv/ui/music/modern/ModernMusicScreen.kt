@@ -107,7 +107,9 @@ import kotlin.math.absoluteValue
 private const val HERO_HEIGHT_FRACTION = 0.74f
 private const val HERO_AUTO_ADVANCE_MS = 10_000L
 private const val BACKGROUND_DELAY_MS = 300L
-private val CardSize = 150.dp
+/** Size of the square music cards (also used to know how many fit in a grid line) */
+internal val MusicCardSize = 150.dp
+private val CardSize = MusicCardSize
 
 /**
  * Music library in the style of the home screen: recommended albums in the media bar, quick links
@@ -618,6 +620,8 @@ internal fun MusicCardView(
 		) { focused ->
 			if (card.kind == MusicCardKind.STATION) {
 				StationArtwork(card)
+			} else if (card.kind == MusicCardKind.GENRE) {
+				GenreArtwork(card.title, card.key)
 			} else {
 				CardArtwork(url = card.imageUrl, fallbackTitle = card.title)
 			}
@@ -666,7 +670,8 @@ internal fun MusicCardView(
  */
 @Composable
 private fun StationArtwork(card: MusicCard) {
-	val palette = stationPalettes[card.key.hashCode().absoluteValue % stationPalettes.size]
+	// Colors from the name: a genre looks the same in Stations and in Genres
+	val palette = stationPalettes[card.title.hashCode().absoluteValue % stationPalettes.size]
 
 	Box(
 		modifier = Modifier
@@ -706,6 +711,46 @@ private fun StationArtwork(card: MusicCard) {
 				color = Color.White,
 				fontSize = 15.sp,
 				lineHeight = 17.sp,
+				fontWeight = FontWeight.Bold,
+				textAlign = TextAlign.Start,
+				maxLines = 2,
+				overflow = TextOverflow.Ellipsis,
+			)
+		}
+	}
+}
+
+/**
+ * Genre: drawn like the genre stations (gradient, small icon and the name), the images of genres
+ * made by the server repeat the same album cover four times.
+ */
+@Composable
+internal fun GenreArtwork(name: String, key: String, modifier: Modifier = Modifier, large: Boolean = false) {
+	// Same colors as the station of the genre
+	val palette = stationPalettes[name.hashCode().absoluteValue % stationPalettes.size]
+
+	Box(
+		modifier = modifier
+			.fillMaxSize()
+			.background(Brush.linearGradient(palette)),
+	) {
+		Column(
+			modifier = Modifier
+				.align(Alignment.BottomStart)
+				.padding(if (large) 20.dp else 10.dp),
+		) {
+			Icon(
+				imageVector = ImageVector.vectorResource(R.drawable.ic_music_album),
+				contentDescription = null,
+				tint = Color.White,
+				modifier = Modifier.size(if (large) 30.dp else 16.dp),
+			)
+			Spacer(Modifier.height(if (large) 8.dp else 4.dp))
+			Text(
+				text = name,
+				color = Color.White,
+				fontSize = if (large) 30.sp else 15.sp,
+				lineHeight = if (large) 34.sp else 17.sp,
 				fontWeight = FontWeight.Bold,
 				textAlign = TextAlign.Start,
 				maxLines = 2,
