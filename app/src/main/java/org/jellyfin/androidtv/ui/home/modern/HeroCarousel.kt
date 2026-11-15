@@ -62,7 +62,8 @@ import org.koin.compose.koinInject
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
 
-private val AUTO_ADVANCE_INTERVAL = 9.seconds
+/** Time each slide of the media bar stays on screen */
+internal val HERO_AUTO_ADVANCE = 9.seconds
 private val INFO_AREA_HEIGHT = 210.dp
 
 /**
@@ -95,7 +96,7 @@ internal fun HeroCarousel(
 	// Restarts every time the slide changes, so manual navigation also resets the timer
 	LaunchedEffect(currentIndex, autoAdvance, slides.size) {
 		if (!autoAdvance || slides.size < 2) return@LaunchedEffect
-		delay(AUTO_ADVANCE_INTERVAL)
+		delay(HERO_AUTO_ADVANCE)
 		showNext()
 	}
 

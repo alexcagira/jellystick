@@ -1,9 +1,12 @@
 package org.jellyfin.androidtv.ui.music.modern
 
+import kotlinx.serialization.Serializable
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.serializer.UUIDSerializer
 import java.util.UUID
 
 /** Rows of the music library, in the default order */
+@Serializable
 enum class MusicSectionType {
 	LATEST,
 	LAST_PLAYED,
@@ -13,6 +16,7 @@ enum class MusicSectionType {
 	PLAYLISTS,
 }
 
+@Serializable
 enum class MusicCardKind {
 	ALBUM,
 	TRACK,
@@ -23,15 +27,17 @@ enum class MusicCardKind {
 }
 
 /** Where a station (instant mix) comes from */
+@Serializable
 data class StationSource(
-	val genreId: UUID? = null,
-	val artistId: UUID? = null,
+	val genreId: @Serializable(with = UUIDSerializer::class) UUID? = null,
+	val artistId: @Serializable(with = UUIDSerializer::class) UUID? = null,
 	/** "Your mix": songs like an album */
-	val albumId: UUID? = null,
+	val albumId: @Serializable(with = UUIDSerializer::class) UUID? = null,
 	/** Songs like those of a playlist */
-	val playlistId: UUID? = null,
+	val playlistId: @Serializable(with = UUIDSerializer::class) UUID? = null,
 )
 
+@Serializable
 data class MusicCard(
 	val key: String,
 	val kind: MusicCardKind,
@@ -45,12 +51,14 @@ data class MusicCard(
 	val station: StationSource? = null,
 )
 
+@Serializable
 data class MusicSection(
 	val type: MusicSectionType,
 	val cards: List<MusicCard>,
 )
 
 /** Recommended album in the media bar */
+@Serializable
 data class MusicHeroSlide(
 	val album: BaseItemDto,
 	val title: String,

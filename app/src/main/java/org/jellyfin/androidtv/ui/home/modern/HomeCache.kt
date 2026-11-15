@@ -68,7 +68,7 @@ class HomeCache(private val context: Context) {
  * Only what the cards need from an item (play, menus, details): the cache stays small and quick
  * to read on a Fire TV.
  */
-private fun BaseItemDto.slim() = copy(
+internal fun BaseItemDto.slim() = copy(
 	mediaStreams = null,
 	mediaSources = null,
 	chapters = null,

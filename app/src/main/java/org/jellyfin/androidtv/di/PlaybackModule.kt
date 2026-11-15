@@ -81,6 +81,7 @@ fun Scope.createPlaybackManager() = playbackManager(androidContext()) {
 		maxBufferDuration = bufferLength.maxBufferDuration,
 		bufferForPlaybackDuration = bufferLength.bufferForPlaybackDuration,
 		bufferForPlaybackAfterRebufferDuration = bufferLength.bufferForPlaybackAfterRebufferDuration,
+		enableAudioOffload = userPreferences[UserPreferences.audioOffloadEnabled],
 	)
 	install(exoPlayerPlugin(get(), exoPlayerOptions))
 

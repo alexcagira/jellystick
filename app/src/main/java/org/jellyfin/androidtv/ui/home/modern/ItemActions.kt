@@ -5,10 +5,12 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.auth.repository.UserRepository
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemLookupApi
+import org.jellyfin.sdk.api.client.extensions.itemRefreshApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.MetadataRefreshMode
 import org.jellyfin.sdk.model.api.MovieInfo
 import org.jellyfin.sdk.model.api.MovieInfoRemoteSearchQuery
 import org.jellyfin.sdk.model.api.RemoteSearchResult
@@ -26,6 +28,25 @@ class ItemActions(
 	/** "Identify" changes the metadata of the library: administrators only (same as the web app) */
 	val canIdentify: Boolean
 		get() = userRepository.currentUser.value?.policy?.isAdministrator == true
+
+	/** Scanning a library for new files: administrators only */
+	val canScan: Boolean
+		get() = canIdentify
+
+	/**
+	 * "Trigger scan": the server looks for new, changed and removed files in the library (like "Scan
+	 * library" in the web app) and refreshes the metadata of what it finds.
+	 */
+	suspend fun scanLibrary(libraryId: UUID) = withContext(Dispatchers.IO) {
+		api.itemRefreshApi.refreshItem(
+			itemId = libraryId,
+			metadataRefreshMode = MetadataRefreshMode.DEFAULT,
+			imageRefreshMode = MetadataRefreshMode.DEFAULT,
+			replaceAllMetadata = false,
+			replaceAllImages = false,
+		)
+		Unit
+	}
 
 	suspend fun setPlayed(itemId: UUID, played: Boolean) = withContext(Dispatchers.IO) {
 		if (played) api.playStateApi.markPlayedItem(itemId)

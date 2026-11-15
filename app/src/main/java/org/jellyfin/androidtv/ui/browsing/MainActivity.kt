@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -30,6 +31,8 @@ import org.jellyfin.androidtv.ui.screensaver.InAppScreensaver
 import org.jellyfin.androidtv.ui.settings.compat.MainActivitySettings
 import org.jellyfin.androidtv.ui.startup.StartupActivity
 import org.jellyfin.androidtv.util.applyTheme
+import org.jellyfin.playback.core.PlaybackManager
+import org.jellyfin.playback.core.model.PlayState
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import timber.log.Timber
@@ -40,6 +43,7 @@ class MainActivity : FragmentActivity() {
 	private val userRepository by inject<UserRepository>()
 	private val interactionTrackerViewModel by viewModel<InteractionTrackerViewModel>()
 	private val workManager by inject<WorkManager>()
+	private val playbackManager by inject<PlaybackManager>()
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		applyTheme()
@@ -48,7 +52,11 @@ class MainActivity : FragmentActivity() {
 
 		if (!validateAuthentication()) return
 
-		interactionTrackerViewModel.keepScreenOn.flowWithLifecycle(lifecycle, Lifecycle.State.RESUMED)
+		// Also while music plays: with nobody touching the remote (a shared queue party) the Fire TV
+		// went to sleep after a while and the music stopped
+		combine(interactionTrackerViewModel.keepScreenOn, playbackManager.state.playState) { keepScreenOn, playState ->
+			keepScreenOn || playState == PlayState.PLAYING
+		}.flowWithLifecycle(lifecycle, Lifecycle.State.RESUMED)
 			.onEach { keepScreenOn ->
 				if (keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 				else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

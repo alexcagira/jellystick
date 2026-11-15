@@ -12,7 +12,7 @@ internal class RandomOrderIndexProvider : OrderIndexProvider {
 		size: Int,
 		playedIndices: Collection<Int>,
 		currentIndex: Int,
-	) = List(amount) { i ->
+	) = if (size <= 0) emptyList() else List(amount) { i ->
 		if (i <= nextIndices.lastIndex) {
 			nextIndices[i]
 		} else {
@@ -28,6 +28,6 @@ internal class RandomOrderIndexProvider : OrderIndexProvider {
 	}
 
 	override fun useNextIndex() {
-		nextIndices.removeAt(0)
+		if (nextIndices.isNotEmpty()) nextIndices.removeAt(0)
 	}
 }

@@ -126,7 +126,11 @@ class ExoPlayerBackend(
 				setParameters(buildUponParameters().apply {
 					setAudioOffloadPreferences(
 						TrackSelectionParameters.AudioOffloadPreferences.DEFAULT.buildUpon().apply {
-							setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+							// Offload can stall the playback on Fire TV: only when enabled in the settings
+							setAudioOffloadMode(
+								if (exoPlayerOptions.enableAudioOffload) TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+								else TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+							)
 						}.build()
 					)
 					setAllowInvalidateSelectionsOnRendererCapabilitiesChange(true)
@@ -295,6 +299,9 @@ class ExoPlayerBackend(
 	override fun play() {
 		// If the item has ended, revert first so the item will start over again
 		if (exoPlayer.playbackState == Player.STATE_ENDED) exoPlayer.seekTo(0)
+		// After an error (a network drop...) the player is idle: prepare again, otherwise "Play"
+		// does nothing
+		if (exoPlayer.playbackState == Player.STATE_IDLE && exoPlayer.mediaItemCount > 0) exoPlayer.prepare()
 		exoPlayer.play()
 	}
 

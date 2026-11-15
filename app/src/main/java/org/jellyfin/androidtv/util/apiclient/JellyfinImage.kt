@@ -4,6 +4,7 @@ import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemPerson
+import org.jellyfin.sdk.model.api.ImageFormat
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.UserDto
 import java.util.UUID
@@ -27,6 +28,8 @@ fun JellyfinImage.getUrl(
 	maxHeight: Int? = null,
 	fillWidth: Int? = null,
 	fillHeight: Int? = null,
+	quality: Int? = null,
+	format: ImageFormat? = null,
 ): String = when (source) {
 	JellyfinImageSource.USER -> api.imageApi.getUserImageUrl(
 		userId = item,
@@ -42,6 +45,8 @@ fun JellyfinImage.getUrl(
 		maxHeight = maxHeight,
 		fillWidth = fillWidth,
 		fillHeight = fillHeight,
+		quality = quality,
+		format = format,
 	)
 }
 

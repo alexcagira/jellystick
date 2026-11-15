@@ -10,8 +10,11 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import org.jellyfin.androidtv.ui.base.Icon
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,7 +51,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
@@ -59,10 +61,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
+import coil3.request.ImageRequest
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
@@ -108,9 +109,6 @@ fun ModernHomeScreen(
 	// Kept out of the composition: changing them must not recompose the whole screen at every
 	// focus move (only the background reads them)
 	val backgroundUrl = remember { mutableStateOf<String?>(null) }
-	// Background of the focused card, applied once the focus rests a moment (no full screen
-	// crossfade for every card while scrolling fast)
-	val pendingBackgroundUrl = remember { MutableStateFlow<String?>(null) }
 	var heroIndex by rememberSaveable { mutableIntStateOf(0) }
 	val posterActions = rememberPosterActionsState()
 	val currentSlide = state.hero.getOrNull(heroIndex.coerceIn(0, (state.hero.size - 1).coerceAtLeast(0)))
@@ -198,19 +196,26 @@ fun ModernHomeScreen(
 		}
 	}
 
-	LaunchedEffect(Unit) {
-		pendingBackgroundUrl.collectLatest { url ->
-			if (url == null) return@collectLatest
-			delay(BACKGROUND_DELAY_MS)
-			backgroundUrl.value = url
-		}
+	// The media bar keeps changing while browsing the rows (its item can be off screen, so the
+	// timer lives here and not in the media bar)
+	LaunchedEffect(heroIndex, state.hero.size) {
+		if (state.hero.size < 2) return@LaunchedEffect
+		delay(HERO_AUTO_ADVANCE)
+		heroIndex = (heroIndex + 1) % state.hero.size
 	}
 
-	// While the hero is on screen the ambient background follows the current slide
-	LaunchedEffect(currentSlide, showTopBar) {
-		if (showTopBar && currentSlide != null) {
-			pendingBackgroundUrl.value = null
-			backgroundUrl.value = currentSlide.backgroundUrl
+	// The ambient background is always the current slide of the media bar (not the focused card);
+	// the details page shows the item's own
+	LaunchedEffect(currentSlide) {
+		if (currentSlide != null) backgroundUrl.value = currentSlide.backgroundUrl
+	}
+
+	// Media bar images in the cache from the start, so every slide shows at once
+	LaunchedEffect(state.hero) {
+		for (slide in state.hero) {
+			for (url in listOfNotNull(slide.backdropUrl, slide.logoUrl, slide.backgroundUrl)) {
+				imageLoader.enqueue(ImageRequest.Builder(context).data(url).build())
+			}
 		}
 	}
 
@@ -262,7 +267,7 @@ fun ModernHomeScreen(
 							index = heroIndex,
 							onIndexChange = { heroIndex = it },
 							height = heroHeight,
-							autoAdvance = showTopBar,
+							autoAdvance = false,
 							playFocusRequester = heroFocusRequester,
 							onPlay = { slide -> onHeroPlay(slide) },
 							onInfo = { slide -> openDetails(slide.item.id) },
@@ -300,7 +305,6 @@ fun ModernHomeScreen(
 						onCardLongClick = { card -> onCardLongClick(card) },
 						onCardPlay = { card -> onCardPlay(card) },
 						onCardFocused = { card ->
-							pendingBackgroundUrl.value = card.backgroundUrl
 							viewModel.lastFocus = HomeFocusPosition(section.type, card.key)
 						},
 						modifier = Modifier
@@ -425,12 +429,42 @@ internal fun HomeSectionRow(
 	onCardPlay: (HomeCard) -> Unit,
 	onCardFocused: (HomeCard) -> Unit,
 	modifier: Modifier = Modifier,
+) = CardRow(
+	style = section.style,
+	cards = section.cards,
+	title = title,
+	initialCardIndex = initialCardIndex,
+	focusRequesterFor = focusRequesterFor,
+	onCardClick = onCardClick,
+	onCardLongClick = onCardLongClick,
+	onCardPlay = onCardPlay,
+	onCardFocused = onCardFocused,
+	modifier = modifier,
+)
+
+/**
+ * A titled horizontal row of cards, with a "See all" card at the end when [onSeeAll] is set.
+ */
+@Composable
+internal fun CardRow(
+	style: CardStyle,
+	cards: List<HomeCard>,
+	title: String,
+	initialCardIndex: Int,
+	focusRequesterFor: (cardIndex: Int, card: HomeCard) -> FocusRequester?,
+	onCardClick: (HomeCard) -> Unit,
+	onCardLongClick: (HomeCard) -> Unit,
+	onCardPlay: (HomeCard) -> Unit,
+	onCardFocused: (HomeCard) -> Unit,
+	modifier: Modifier = Modifier,
+	onSeeAll: (() -> Unit)? = null,
 ) {
 	val density = LocalDensity.current
 	val bringIntoViewSpec = remember(density) {
 		KeepInViewBringIntoViewSpec(marginPx = with(density) { ModernHomeDimens.ScreenPaddingHorizontal.toPx() })
 	}
 	val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialCardIndex)
+	val focusMemory = rememberFocusMemory()
 
 	Column(modifier = modifier.fillMaxWidth()) {
 		SectionHeader(title)
@@ -446,26 +480,27 @@ internal fun HomeSectionRow(
 				verticalAlignment = Alignment.Bottom,
 				modifier = Modifier
 					.fillMaxWidth()
-					.focusRestorer()
-					.focusGroup(),
+					.then(focusMemory.group),
 			) {
 				itemsIndexed(
-					items = section.cards,
+					items = cards,
 					key = { _, card -> card.key },
 				) { cardIndex, card ->
 					val focusRequester = focusRequesterFor(cardIndex, card)
+					val memory = focusMemory.child(card.key)
 					val onClick = { onCardClick(card) }
 					val onLongClick = { onCardLongClick(card) }
 					val onFocused = { onCardFocused(card) }
 					val onPlay = { onCardPlay(card) }
 
-					when (section.style) {
+					when (style) {
 						CardStyle.LANDSCAPE -> LandscapeCard(
 							card = card,
 							onClick = onClick,
 							onLongClick = onLongClick,
 							onFocused = onFocused,
 							focusRequester = focusRequester,
+							modifier = memory,
 						)
 
 						CardStyle.POSTER -> PosterCard(
@@ -474,6 +509,7 @@ internal fun HomeSectionRow(
 							onLongClick = onLongClick,
 							onFocused = onFocused,
 							focusRequester = focusRequester,
+							modifier = memory,
 							onPlay = onPlay,
 						)
 
@@ -484,8 +520,15 @@ internal fun HomeSectionRow(
 							onLongClick = onLongClick,
 							onFocused = onFocused,
 							focusRequester = focusRequester,
+							modifier = memory,
 							onPlay = onPlay,
 						)
+					}
+				}
+
+				if (onSeeAll != null) {
+					item(key = "see_all") {
+						SeeAllCard(landscape = style == CardStyle.LANDSCAPE, onClick = onSeeAll, modifier = focusMemory.child("see_all"))
 					}
 				}
 			}
@@ -535,4 +578,62 @@ internal fun FocusRequester.tryRequestFocus(): Boolean = try {
 
 internal suspend fun awaitFrames(count: Int) = repeat(count) { withFrameNanos { } }
 
-private const val BACKGROUND_DELAY_MS = 300L
+/**
+ * Puts the focus back on an element when a page shows again, and keeps checking for a moment:
+ * the page fades in and the system can give the focus to its first element a bit later. Stops as
+ * soon as [interrupted] (a key was pressed). Returns true when the element has the focus.
+ */
+internal suspend fun FocusRequester.restoreFocus(
+	hasFocus: () -> Boolean,
+	interrupted: () -> Boolean,
+	attempts: Int = 15,
+): Boolean {
+	var restored = false
+	for (attempt in 0 until attempts) {
+		awaitFrames(2)
+		if (interrupted()) break
+		restored = hasFocus() || tryRequestFocus()
+	}
+	return restored
+}
+
+
+/** Last card of a row: opens every title of it in a grid */
+@Composable
+internal fun SeeAllCard(
+	landscape: Boolean,
+	onClick: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	FocusableCardSurface(
+		onClick = onClick,
+		onLongClick = null,
+		onFocused = {},
+		modifier = modifier.then(
+			if (landscape) Modifier.size(ModernHomeDimens.LandscapeWidth, ModernHomeDimens.LandscapeHeight)
+			else Modifier.size(ModernHomeDimens.PosterWidth, ModernHomeDimens.PosterHeight)
+		),
+	) { focused ->
+		Column(
+			horizontalAlignment = Alignment.CenterHorizontally,
+			verticalArrangement = Arrangement.Center,
+			modifier = Modifier
+				.fillMaxSize()
+				.background(if (focused) Color.White else Color.White.copy(alpha = 0.06f)),
+		) {
+			Icon(
+				imageVector = ImageVector.vectorResource(R.drawable.ic_grid),
+				contentDescription = null,
+				tint = if (focused) Color.Black else ModernHomeColors.TextPrimary,
+				modifier = Modifier.size(26.dp),
+			)
+			Spacer(Modifier.height(8.dp))
+			Text(
+				text = stringResource(R.string.browse_see_all),
+				color = if (focused) Color.Black else ModernHomeColors.TextPrimary,
+				fontSize = 13.sp,
+				fontWeight = FontWeight.Bold,
+			)
+		}
+	}
+}

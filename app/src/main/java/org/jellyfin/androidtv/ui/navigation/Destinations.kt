@@ -16,6 +16,10 @@ import org.jellyfin.androidtv.ui.details.modern.ModernDetailsFragment
 import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistFragment
 import org.jellyfin.androidtv.ui.home.HomeFragment
 import org.jellyfin.androidtv.ui.itemdetail.FullDetailsFragment
+import org.jellyfin.androidtv.ui.library.modern.BrowseFilter
+import org.jellyfin.androidtv.ui.library.modern.ModernBrowseFragment
+import org.jellyfin.androidtv.ui.library.modern.ModernLibraryFragment
+import org.jellyfin.androidtv.ui.library.modern.libraryKind
 import org.jellyfin.androidtv.ui.itemdetail.ItemListFragment
 import org.jellyfin.androidtv.ui.itemdetail.MusicFavoritesListFragment
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseFragment
@@ -103,6 +107,25 @@ object Destinations {
 	fun modernMusicBrowse(library: BaseItemDto, mode: MusicBrowseMode) = fragmentDestination<ModernMusicBrowseFragment> {
 		putString(Extras.Folder, Json.encodeToString(library))
 		putString(ModernMusicBrowseFragment.ARGUMENT_MODE, mode.name)
+	}
+
+	/** Movie or TV show library in the style of the home screen (null for other libraries or the classic home) */
+	fun movieOrShowLibrary(item: BaseItemDto): Destination.Fragment? =
+		if (preference(UserPreferences.modernHomeEnabled) && item.libraryKind != null) modernLibrary(item) else null
+
+	fun modernLibrary(item: BaseItemDto) = fragmentDestination<ModernLibraryFragment> {
+		putString(Extras.Folder, Json.encodeToString(item))
+	}
+
+	/** Grid of titles with filters and the A-Z rail */
+	fun modernBrowse(filter: BrowseFilter) = fragmentDestination<ModernBrowseFragment> {
+		putString(ModernBrowseFragment.ARGUMENT_FILTER, Json.encodeToString(filter))
+	}
+
+	/** "Browse" of a library: the modern grid for movies and shows, the classic grid otherwise */
+	fun libraryBrowse(library: BaseItemDto): Destination.Fragment {
+		val kind = library.libraryKind ?: return libraryBrowser(library, null)
+		return modernBrowse(BrowseFilter(title = library.name.orEmpty(), libraryId = library.id, kind = kind))
 	}
 
 	/** Search with poster badges and voice input; [music] limits it to music */

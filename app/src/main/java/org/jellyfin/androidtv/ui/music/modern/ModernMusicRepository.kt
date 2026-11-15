@@ -5,7 +5,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.ui.library.modern.BrowseChip
 import org.jellyfin.androidtv.util.apiclient.JellyfinImage
 import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
 import org.jellyfin.androidtv.util.apiclient.getUrl
@@ -36,19 +40,49 @@ import java.util.UUID
  */
 class ModernMusicRepository(
 	private val api: ApiClient,
+	private val cache: MusicCache,
 ) {
 	data class Content(
 		val hero: List<MusicHeroSlide>,
 		val sections: List<MusicSection>,
+		/** false for the quick first rows: the media bar, radios and recommendations come after */
+		val complete: Boolean = true,
 	)
 
-	suspend fun load(libraryId: UUID, labels: MusicLabels): Content = withContext(Dispatchers.IO) {
+	/** Server and user signed in: a cache of another session is not used */
+	private fun session() = "${api.baseUrl}|${api.accessToken}"
+
+	/** What the page showed last time (memory, or disk after a restart) */
+	suspend fun cached(libraryId: UUID): Content? =
+		cache.read(libraryId, session())?.let { Content(it.hero, it.sections) }
+
+	/**
+	 * Fresh content in two steps: first the rows that load fast (latest, last played, favorites,
+	 * playlists), then everything with the media bar, radios and recommendations (the server's
+	 * "similar albums" are slow). The full content is saved for the next time.
+	 */
+	fun load(libraryId: UUID, labels: MusicLabels): Flow<Content> = flow {
 		coroutineScope {
 			val latestAsync = async { safe("latest") { latest(libraryId) }.orEmpty() }
 			val lastPlayedAsync = async { safe("last played") { lastPlayed(libraryId) }.orEmpty() }
 			val favoritesAsync = async { safe("favorites") { favorites(libraryId) }.orEmpty() }
 			val playlistsAsync = async { safe("playlists") { playlists() }.orEmpty() }
-			val mostPlayed = safe("most played") { mostPlayed(libraryId) }.orEmpty()
+			val mostPlayedAsync = async { safe("most played") { mostPlayed(libraryId) }.orEmpty() }
+
+			emit(
+				Content(
+					hero = emptyList(),
+					sections = listOfNotNull(
+						section(MusicSectionType.LATEST, latestAsync.await().map { albumCard(it) }),
+						section(MusicSectionType.LAST_PLAYED, lastPlayedAsync.await().map { trackCard(it) }),
+						section(MusicSectionType.FAVORITES, favoritesAsync.await().map { albumCard(it) }),
+						section(MusicSectionType.PLAYLISTS, playlistsAsync.await().map { playlistCard(it) }),
+					),
+					complete = false,
+				)
+			)
+
+			val mostPlayed = mostPlayedAsync.await()
 
 			// Albums listened to the most, they seed the recommendations and "Your mix"
 			val topAlbums = mostPlayed
@@ -65,7 +99,7 @@ class ModernMusicRepository(
 			val recommendations = recommendationsAsync.await()
 			val hero = recommendations.take(HERO_SLIDES).map { (album, seed) -> heroSlide(album, seed, labels) }
 
-			Content(
+			val content = Content(
 				hero = hero,
 				sections = listOfNotNull(
 					section(MusicSectionType.LATEST, latestAsync.await().map { albumCard(it) }),
@@ -76,8 +110,12 @@ class ModernMusicRepository(
 					section(MusicSectionType.PLAYLISTS, playlistsAsync.await().map { playlistCard(it) }),
 				),
 			)
+			emit(content)
+			if (content.hero.isNotEmpty() || content.sections.isNotEmpty()) {
+				cache.write(libraryId, CachedMusic(session(), content.hero, content.sections))
+			}
 		}
-	}
+	}.flowOn(Dispatchers.IO)
 
 	/** Genres of the library (shown as colored squares with their name) */
 	suspend fun genres(libraryId: UUID): List<MusicCard> = withContext(Dispatchers.IO) {
@@ -89,6 +127,27 @@ class ModernMusicRepository(
 			enableTotalRecordCount = false,
 		).content.items.map { genreCard(it) }
 	}
+
+	/** Every music genre of the server, for the music search page (kept for the session) */
+	suspend fun allGenres(): List<BrowseChip> = withContext(Dispatchers.IO) {
+		val session = "${api.baseUrl}|${api.accessToken}"
+		allGenresCache?.takeIf { it.first == session }?.let { return@withContext it.second }
+
+		val genres = api.musicGenresApi.getMusicGenres(
+			sortBy = setOf(ItemSortBy.SORT_NAME),
+			limit = MAX_GENRES,
+			enableImages = false,
+			enableTotalRecordCount = false,
+		).content.items
+			.filter { !it.name.isNullOrBlank() }
+			.groupBy { it.name.orEmpty().trim().lowercase() }
+			.map { (_, same) -> BrowseChip(name = same.first().name.orEmpty().trim(), ids = same.map { it.id }) }
+		allGenresCache = session to genres
+		genres
+	}
+
+	@Volatile
+	private var allGenresCache: Pair<String, List<BrowseChip>>? = null
 
 	/**
 	 * Every station: the personal ones (like on the music page), one per genre and one per artist.

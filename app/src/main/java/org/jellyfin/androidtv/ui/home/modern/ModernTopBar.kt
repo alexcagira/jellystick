@@ -31,11 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -52,7 +54,9 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.auth.repository.UserRepository
@@ -74,6 +78,7 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.CollectionType
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinActivityViewModel
+import timber.log.Timber
 
 /**
  * Floating navigation bar: logo on the left, a frosted glass pill with Home + libraries + search in
@@ -86,12 +91,16 @@ internal fun ModernTopBar(
 	modifier: Modifier = Modifier,
 	homeActive: Boolean = true,
 	watchlistActive: Boolean = false,
+	/** Library whose page is open, highlighted in the bar */
+	activeLibraryId: java.util.UUID? = null,
 	onNavigateDown: () -> Boolean = { false },
 	onHideLibrary: ((BaseItemDto) -> Unit)? = null,
 	onMoveLibrary: ((BaseItemDto, Int) -> Unit)? = null,
 ) {
 	val navigationRepository = koinInject<NavigationRepository>()
 	val itemLauncher = koinInject<ItemLauncher>()
+	val itemActions = koinInject<ItemActions>()
+	val scope = rememberCoroutineScope()
 	val settingsViewModel = koinActivityViewModel<SettingsViewModel>()
 	val context = LocalContext.current
 	var libraryToHide by remember { mutableStateOf<BaseItemDto?>(null) }
@@ -113,6 +122,17 @@ internal fun ModernTopBar(
 	// under the buttons the automatic search could leave the focus stuck on the right
 	val searchFocusRequester = remember { FocusRequester() }
 	val watchlistFocusRequester = remember { FocusRequester() }
+	// Going up into the bar lands on the page that is open: Home, the library, the watchlist
+	val homeFocusRequester = remember { FocusRequester() }
+	val activeLibraryFocusRequester = remember { FocusRequester() }
+	val activeFocusRequester = when {
+		homeActive -> homeFocusRequester
+		watchlistActive -> watchlistFocusRequester
+		activeLibraryId != null && libraries.any { it.id == activeLibraryId } -> activeLibraryFocusRequester
+		else -> null
+	}
+	// Up from the bubble goes to the button above it, not to the page
+	val fromBubble = remember { booleanArrayOf(false) }
 
 	Column(
 		horizontalAlignment = Alignment.End,
@@ -134,7 +154,13 @@ internal fun ModernTopBar(
 					if (endButtonsFocused && musicPlaying && bubbleFocusRequester.tryRequestFocus()) true
 					else onNavigateDown()
 				}
-				.focusRestorer()
+				.then(
+					if (activeFocusRequester != null) Modifier.focusProperties {
+						onEnter = {
+							if (!fromBubble[0] && movingLibraryId == null) activeFocusRequester.tryRequestFocus()
+						}
+					} else Modifier.focusRestorer()
+				)
 				.focusGroup(),
 			start = {
 				Logo(modifier = Modifier.height(28.dp))
@@ -148,6 +174,7 @@ internal fun ModernTopBar(
 						onClick = {
 							if (!homeActive) navigationRepository.reset(Destinations.home, clearHistory = true)
 						},
+						modifier = Modifier.focusRequester(homeFocusRequester),
 					)
 
 					for (library in libraries) {
@@ -156,7 +183,7 @@ internal fun ModernTopBar(
 							NavigationPillButton(
 								text = library.name.orEmpty(),
 								icon = library.collectionType.navigationIcon,
-								active = false,
+								active = library.id == activeLibraryId,
 								moving = movingLibraryId == library.id,
 								onClick = {
 									if (movingLibraryId == library.id) movingLibraryId = null
@@ -171,6 +198,7 @@ internal fun ModernTopBar(
 								} else null,
 								onMove = { offset -> onMoveLibrary?.invoke(library, offset) },
 								onMoveDone = { movingLibraryId = null },
+								modifier = if (library.id == activeLibraryId) Modifier.focusRequester(activeLibraryFocusRequester) else Modifier,
 							)
 						}
 					}
@@ -234,7 +262,11 @@ internal fun ModernTopBar(
 					}
 
 					Key.DirectionUp -> {
-						if (down) watchlistFocusRequester.tryRequestFocus()
+						if (down) {
+							fromBubble[0] = true
+							watchlistFocusRequester.tryRequestFocus()
+							fromBubble[0] = false
+						}
 						true
 					}
 
@@ -267,6 +299,27 @@ internal fun ModernTopBar(
 				add(ModernMenuOption(stringResource(R.string.modern_home_hide), R.drawable.ic_visibility_off) {
 					libraryToHide = menuLibrary
 					lastLibraryToHide = menuLibrary
+				})
+			}
+			// Every title of the library in a grid, with filters and A-Z
+			add(ModernMenuOption(stringResource(R.string.library_browse), R.drawable.ic_grid) {
+				navigationRepository.navigate(Destinations.libraryBrowse(menuLibrary))
+			})
+			// The server looks for new content in the library
+			if (itemActions.canScan) {
+				add(ModernMenuOption(stringResource(R.string.library_trigger_scan), R.drawable.ic_refresh) {
+					scope.launch {
+						val message = try {
+							itemActions.scanLibrary(menuLibrary.id)
+							context.getString(R.string.library_scan_started, menuLibrary.name.orEmpty())
+						} catch (err: CancellationException) {
+							throw err
+						} catch (err: Exception) {
+							Timber.w(err, "Unable to scan library ${menuLibrary.id}")
+							context.getString(R.string.library_scan_failed)
+						}
+						Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+					}
 				})
 			}
 		},
@@ -312,7 +365,8 @@ private fun NavigationPill(
 			.glassSurface(glassBackdrop, CircleShape)
 			.horizontalScroll(rememberScrollState())
 			.padding(4.dp)
-			.focusRestorer()
+			// No focusRestorer() here: the bar already sends the focus to the active page, and it
+			// would send the request to the button focused before instead
 			.focusGroup(),
 		horizontalArrangement = Arrangement.spacedBy(2.dp),
 		verticalAlignment = Alignment.CenterVertically,

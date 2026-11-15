@@ -35,6 +35,9 @@ Si una película o serie está en varias bibliotecas (por ejemplo, una por idiom
   "Latino"/"Latin" en el título o etiqueta `es-419`/`es-MX`) lleva bandera de México y el portugués de Brasil
   la de Brasil. Idiomas sin bandera se muestran con su código ("ARA").
 - En las series se usan los idiomas y la calidad de uno de sus episodios.
+- En **Seguir viendo** (inicio y bibliotecas) las tarjetas 16:9 llevan la calidad, HDR y Dolby Vision y las
+  banderas arriba a la derecha. En las que están a medias el tiempo restante ocupa la esquina de arriba a la
+  izquierda, así que la calidad va abajo a la izquierda, encima de la barra de progreso.
 
 ## Orden de las filas del inicio
 
@@ -50,6 +53,67 @@ con arriba/abajo y pulsa OK otra vez para soltarla. *Restablecer el orden por de
   tienes las mismas películas dos veces (por ejemplo "Films" en inglés y "Películas" en español).
 - Para volver a mostrarla: Ajustes → **Hidden libraries / Bibliotecas ocultas** (también en
   Personalización → Inicio). Se guardan en el dispositivo.
+- **Mantén pulsado OK** → *Explorar*: todos los títulos de la biblioteca en cuadrícula (ver abajo).
+- **Mantén pulsado OK** → *Escanear biblioteca* (solo administradores): el servidor busca contenido nuevo,
+  cambiado o borrado en esa biblioteca, como "Escanear biblioteca" en la web.
+
+## Bibliotecas de películas y series
+
+Al abrir una biblioteca de películas o de series (Films, Películas, TV Shows, Series...) se ve una página como
+el inicio:
+
+- **Media bar** con títulos de esa biblioteca (el fondo difuminado es siempre la diapositiva actual).
+- Debajo, **pills** con las demás bibliotecas del mismo tipo (para saltar de Films a Películas), **Colecciones**
+  (en películas: todas las colecciones) y *Explorar*. Al volver de una de esas páginas, el cursor vuelve a su pill.
+- **Seguir viendo** solo de esa biblioteca: películas a medias, o episodios a medias y siguientes episodios.
+- **Últimas películas** (estrenos más recientes de la biblioteca) o **Últimos episodios** en series, como tarjetas
+  16:9 con la calidad (4K, HDR, Dolby Vision...) arriba a la izquierda y las banderas de idioma arriba a la derecha.
+- **Añadido recientemente**.
+- Todos los pósters llevan las etiquetas de calidad, HDR, Dolby Vision y las banderas de idioma del audio, también
+  las series (se sacan de uno de sus episodios: aparecen un momento después de abrir la página la primera vez).
+  En series salen además *Nuevo episodio*, *Nueva temporada* y *Nueva serie*, como en el inicio.
+- Recomendaciones: *Porque viste…*, *Porque te gustó…* (favoritos), *Porque … está en tu Watchlist*.
+- **IMDb Top 250** (películas), **Colecciones** y una colección concreta con sus películas.
+- *Lo mejor de {estudio}* / *Series de {cadena}*, dos o tres **géneros** con títulos propios
+  (*Películas para llorar*, *Películas de acción que merecen la pena*…) y una **etiqueta** popular.
+- **Filas de temporada**: en octubre *Películas de Halloween*, terror y thrillers (*Episodios de Halloween* en
+  series); del 1 de diciembre al 6 de enero Navidad; del 1 al 14 de febrero San Valentín; en julio y agosto
+  *Taquillazos de verano*.
+- Las filas con más títulos acaban en una tarjeta **Ver todo** que abre la cuadrícula filtrada.
+- Mantener OK en un póster: el mismo menú que en el inicio (reproducir, visto/no visto, identificar…).
+
+La página carga por partes para salir enseguida: primero *Seguir viendo*, *Últimas películas/episodios* y
+*Añadido recientemente* (solas, sin el resto de peticiones delante), después la media bar (su sitio queda
+reservado y el cursor espera en las pills; cuando llega pasa a *Reproducir* si no has tocado nada) y por último
+las demás filas, de tres en tres, y las etiquetas de las series. Además se guarda en el dispositivo lo que
+mostró la última vez, así que al abrirla tras reiniciar la app sale al momento y se actualiza por detrás (con
+una media bar nueva). Si una fila cambia mientras estás en ella, se queda como estaba hasta que salgas.
+
+### Explorar (cuadrícula)
+
+Todos los títulos en una cuadrícula con título y año, cargados por páginas (sirve para miles de títulos):
+
+- Arriba: **Todo / Sin ver / Vistas / Favoritos**, **Géneros**, **Edad** (solo las clasificaciones de España:
+  TP/A, 7, 12, 16, 18...), **Ordenar por** (nombre, aleatorio, fecha de adición, estreno, valoración) y **Al azar**
+  (reproduce uno). Las listas de géneros y edades hacen scroll con el cursor.
+- Debajo, las **etiquetas** más usadas: Abajo desde los filtros llega a ellas; OK filtra, otra vez OK la quita.
+- Al volver arriba (a las etiquetas o los filtros) la página sube del todo.
+- A la izquierda, **# y A-Z**: OK salta al primer título con esa letra (ordena por nombre si hacía falta).
+  La letra del título enfocado se ilumina.
+- Al volver de una película, el cursor sigue en el póster en el que estabas.
+- Los pósters llevan las mismas etiquetas que en el inicio: calidad, HDR, Dolby Vision, banderas de idioma y, en
+  series, *Nuevo episodio / temporada / serie*.
+- **Géneros sin repetir**: si el servidor tiene el mismo género en inglés y en español ("Action" y "Acción", por
+  bibliotecas con metadatos en cada idioma) sale una sola vez, con el nombre en el idioma de la app, y filtra
+  por los dos.
+
+## IMDb Top 250
+
+La app crea una colección **IMDb Top 250** con las películas de tu servidor que están en el Top 250 de IMDb y
+la actualiza **una vez a la semana** (añade las que entran y quita las que salen). La lista viene de una lista
+pública de MDBList que replica el ranking (IMDb no tiene API pública) y las películas se reconocen por su ID de
+IMDb. Hace falta permiso para gestionar colecciones; la portada (estrella dorada) solo se sube con una cuenta
+de administrador. En la biblioteca de películas aparece como fila, en el orden del ranking.
 
 ## Watchlist
 
@@ -70,6 +134,14 @@ de la app. Suena una vez, no en bucle.
 - Se desactiva en Ajustes → Personalización → Inicio → **Música de la serie**. El volumen está en
   `ThemeMusicPlayer.kt` (`MAX_VOLUME`).
 
+## Barra de navegación
+
+Al subir a la barra flotante, el cursor va directamente a la página en la que estás: *Home* en el inicio, la
+biblioteca abierta (Films, TV Shows, Music...) y la Watchlist en su página. Desde la burbuja de música, Arriba
+sigue llevando al botón de encima.
+
+En la página de **Música**, al volver de Géneros, Radios, Álbumes... el cursor vuelve a ese acceso.
+
 ## Música sonando: burbuja en la barra
 
 Mientras suena música, debajo de los botones de Watchlist, ajustes y usuario aparece una burbuja con la
@@ -83,6 +155,17 @@ páginas de álbumes, listas, artistas y géneros (que también tienen la barra 
   empezar, en vez de ir midiendo mientras se mueve).
 - El fondo difuminado cambia sin volver a dibujar la pantalla entera.
 - La etiqueta de resolución (4K, 1080p...) se dibuja una sola vez y se reutiliza en todos los pósters.
+- El fondo difuminado del inicio es la diapositiva actual de la media bar (no cambia con cada póster).
+- La media bar sigue pasando de diapositiva aunque estés más abajo en las filas (inicio, bibliotecas y Música;
+  en Música se detiene mientras la tienes enfocada).
+- Las imágenes de la media bar (fondo y logo) se piden más ligeras (logo en WebP) y se cargan todas al
+  principio, así cada diapositiva aparece al momento.
+- Las filas, las pills y los accesos rápidos recuerdan su último elemento con el foco para cuando vuelves con
+  las flechas, pero sin `focusRestorer()` de Compose: ese guarda el elemento con la página y desviaba al
+  anterior cualquier intento de devolver el foco al volver (en Música siempre acababa en *Géneros*). Está en
+  `FocusMemory.kt`.
+- La página de Música se abre al instante con lo que mostró la última vez (se guarda en el dispositivo) y
+  se actualiza por detrás: primero las filas rápidas, luego la media bar, radios y recomendaciones.
 - **Usa la versión release** para el día a día: la debug (la que instala *Run ▶*) se puede depurar y por eso
   Android no optimiza su código; en Compose eso se nota mucho al moverse por las filas. La release va
   optimizada con R8 y lleva un *baseline profile* (`app/src/main/baseline-prof.txt`): las pantallas nuevas y
@@ -101,7 +184,8 @@ Al abrir una biblioteca de música desde la barra se muestra una página con el 
 - **Media bar** con álbumes recomendados ("Porque escuchas a …"): Reproducir, **Radio** (mezcla
   instantánea a partir del álbum) e Ir al álbum. Izquierda/derecha en los botones de los extremos cambian
   de recomendación; pasan solas cada 10 segundos cuando el foco no está en la barra.
-- Accesos rápidos: Álbumes, Artistas del álbum, Artistas, Géneros y Aleatorio.
+- Accesos rápidos: Álbumes, Artistas del álbum, Artistas, Géneros, Radios, Aleatorio, Cola compartida y
+  búsqueda. Al volver de cualquiera de ellos el cursor vuelve a ese mismo acceso.
 - Filas: Añadido recientemente, Escuchado recientemente, **Radios**, Recomendado para ti, Álbumes
   favoritos y Listas de reproducción. El orden se cambia en Ajustes → **Secciones de música** (igual que
   las del inicio).
@@ -156,6 +240,9 @@ la **lupa** para buscar solo música.
   la pantalla), **Favorito** (solo el corazón, rojo si ya lo es), Añadir a una lista, Aleatorio, Letra, Ir al artista, Ir al álbum y **Salvapantallas**.
   El nombre del botón aparece al enfocarlo.
 - La pantalla no tiene scroll: la portada se ajusta al espacio que queda, así que siempre se ve entera.
+- **⏪ / ⏩ del mando**: canción anterior / siguiente (también en el salvapantallas, sin salir de él).
+- La portada, el fondo y la letra de la siguiente canción se cargan mientras suena la actual, así el cambio
+  es inmediato (la portada anterior se queda hasta que la nueva está lista).
 - **Salvapantallas**: portada, canción, álbum y artista sobre la portada difuminada; con la letra activada,
   la letra grande al lado, sin moverse. **OK** muestra u oculta la
   letra (botón discreto abajo a la derecha), play/pausa pausa, y cualquier otro botón lo cierra.
@@ -181,6 +268,12 @@ al final de la cola. No necesitan app ni cuenta de Jellyfin; la web la sirve la 
   que suele aislar los dispositivos). La dirección usa ahora la IP de la red activa de la tele; antes podía
   salir la de Wi-Fi Direct (192.168.49.1), que los móviles no alcanzan.
 - La web muestra lo que suena y lo que han añadido los invitados (con su nombre).
+- **Si la música se paraba tras 5 o 6 canciones**: la cola calculaba mal su tamaño cuando antes se habían
+  quitado canciones de otra cola (y en aleatorio podía elegir una canción que no existía), así que daba la
+  cola por terminada. Ya está corregido; además, si la cola se acaba y añaden canciones, sigue con las
+  nuevas (antes volvía a la primera), *Play* recupera la reproducción tras un error de red, y el Fire TV
+  no entra en reposo mientras suena música aunque nadie toque el mando. La música tampoco usa ya el
+  *audio offload* salvo que lo actives en los ajustes del reproductor (en Fire TV puede congelar el sonido).
 - El enlace lleva un código que cambia cada vez que empiezas a compartir. *Dejar de compartir* lo corta.
 - La página es `app/src/main/res/raw/shared_queue.html`.
 
@@ -193,6 +286,13 @@ los pósters con todas las etiquetas (4K/1080p, Dolby Vision, HDR, Atmos y bande
   pulsado el botón del micrófono** del mando del Fire TV y di lo que buscas. Si el dispositivo tiene
   reconocimiento de voz de Android, sale además un botón de micrófono al lado.
 - El botón del micrófono con el teclado cerrado abre Alexa (eso lo controla el sistema, no la app).
+- **Sin texto**: *Explorar por género* (tiles de colores con icono) y *Explorar por etiqueta* (pills).
+  OK abre la cuadrícula de ese género o etiqueta con películas y series. Los géneros se guardan en el
+  dispositivo y se cargan por detrás al abrir el inicio, así salen al momento.
+- En la **búsqueda de Música** (la lupa de la página de Música), sin texto salen los géneros de música como
+  tiles (rock, pop, hip hop, electrónica, jazz...): OK abre la página del género con sus álbumes y su radio.
+- **Con texto**: resultados en filas como el inicio: Películas, Series, Colecciones, Episodios (tarjetas
+  16:9) y Personas, y después la música.
 
 ## Temporadas: mantener OK
 

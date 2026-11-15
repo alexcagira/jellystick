@@ -129,6 +129,8 @@ data class HomeCard(
 	/** Item played with the play/pause button of the remote, null to resolve it when pressed */
 	@Serializable(with = UUIDSerializer::class)
 	val playId: UUID? = null,
+	/** 16:9 cards: show the quality badges and the audio flags (library rows) */
+	val showBadges: Boolean = false,
 )
 
 @Serializable

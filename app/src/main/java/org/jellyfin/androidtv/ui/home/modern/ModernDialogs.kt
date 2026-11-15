@@ -1,5 +1,8 @@
 package org.jellyfin.androidtv.ui.home.modern
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,6 +45,7 @@ import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.androidtv.ui.base.dialog.DialogBase
 
 private val dialogShape = RoundedCornerShape(18.dp)
+private val MENU_MAX_HEIGHT = 330.dp
 
 /**
  * Dark glass panel used by the modern screens for small dialogs.
@@ -161,8 +165,12 @@ internal fun ModernMenuDialog(
 			Spacer(Modifier.height(16.dp))
 		}
 
-		Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-			for (option in options) {
+		// Long lists (genres, age ratings...) scroll with the focus
+		LazyColumn(
+			verticalArrangement = Arrangement.spacedBy(8.dp),
+			modifier = Modifier.heightIn(max = MENU_MAX_HEIGHT),
+		) {
+			items(options) { option ->
 				MenuOptionRow(
 					option = option,
 					onClick = {

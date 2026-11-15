@@ -47,25 +47,37 @@ class ModernMusicViewModel(
 		val labels = labels ?: return
 		loadJob?.cancel()
 		loadJob = viewModelScope.launch {
-			val content = try {
-				repository.load(library.id, labels)
+			// What the page showed last time, at once
+			if (_state.value.sections.isEmpty() && _state.value.hero.isEmpty()) {
+				repository.cached(library.id)?.let(::show)
+			}
+
+			try {
+				repository.load(library.id, labels).collect(::show)
 			} catch (err: CancellationException) {
 				throw err
 			} catch (err: Exception) {
 				Timber.w(err, "Unable to load the music library")
-				null
 			}
 
-			val order = MusicSectionOrder.parse(userPreferences[UserPreferences.musicSectionOrder])
-			_state.update { state ->
-				if (content == null) state.copy(loading = false)
-				else state.copy(
-					loading = false,
-					// The slides stay the same on refresh, they would jump under the user's eyes
-					hero = state.hero.ifEmpty { content.hero },
-					sections = content.sections.sortedBy { order.indexOf(it.type) },
-				)
-			}
+			_state.update { it.copy(loading = false) }
+		}
+	}
+
+	private fun show(content: ModernMusicRepository.Content) {
+		val order = MusicSectionOrder.parse(userPreferences[UserPreferences.musicSectionOrder])
+		_state.update { state ->
+			// The quick first rows replace their old version and keep the others (radios,
+			// recommendations) until the complete content arrives
+			val sections = if (content.complete) content.sections
+			else state.sections.filterNot { old -> content.sections.any { it.type == old.type } } + content.sections
+
+			state.copy(
+				loading = false,
+				// The slides stay the same on refresh, they would jump under the user's eyes
+				hero = state.hero.ifEmpty { content.hero },
+				sections = sections.sortedBy { order.indexOf(it.type) },
+			)
 		}
 	}
 

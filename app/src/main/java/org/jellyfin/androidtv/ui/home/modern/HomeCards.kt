@@ -355,6 +355,53 @@ internal fun LandscapeCard(
 		) {
 			CardArtwork(url = card.imageUrl, fallbackTitle = card.title)
 
+			if (card.showBadges) {
+				// The time left takes the top left corner of a started title: its quality goes to
+				// the bottom left then, above the progress bar
+				val hasQuality = card.quality?.isEmpty == false
+				val qualityOnTop = hasQuality && card.remainingMinutes == null
+				if (qualityOnTop || card.languages.isNotEmpty()) {
+					// Darker top so the white badges are readable on bright images
+					Box(
+						modifier = Modifier
+							.align(Alignment.TopCenter)
+							.fillMaxWidth()
+							.height(40.dp)
+							.background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.55f), 1f to Color.Transparent))
+					)
+				}
+				// Top left: resolution, Dolby, HDR
+				if (qualityOnTop) {
+					QualityBadges(
+						quality = card.quality,
+						modifier = Modifier
+							.align(Alignment.TopStart)
+							.padding(start = 6.dp, top = 6.dp, end = 60.dp),
+					)
+				} else if (hasQuality) {
+					Box(
+						modifier = Modifier
+							.align(Alignment.BottomCenter)
+							.fillMaxWidth()
+							.height(46.dp)
+							.background(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f)))
+					)
+					QualityBadges(
+						quality = card.quality,
+						modifier = Modifier
+							.align(Alignment.BottomStart)
+							.padding(start = 12.dp, bottom = if (card.progress != null) 19.dp else 8.dp),
+					)
+				}
+				// Top right: audio languages
+				LanguageFlags(
+					languages = card.languages,
+					modifier = Modifier
+						.align(Alignment.TopEnd)
+						.padding(top = 6.dp, end = 6.dp),
+				)
+			}
+
 			card.remainingMinutes?.let { minutes ->
 				TimeLeftBadge(
 					minutes = minutes,

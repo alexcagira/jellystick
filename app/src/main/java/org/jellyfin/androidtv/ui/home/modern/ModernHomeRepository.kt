@@ -5,6 +5,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
 import org.jellyfin.androidtv.util.apiclient.getUrl
@@ -15,6 +19,7 @@ import org.jellyfin.sdk.api.client.extensions.tvShowsApi
 import org.jellyfin.sdk.api.client.extensions.userApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ImageFormat
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemFilter
@@ -52,6 +57,13 @@ class ModernHomeRepository(
 
 	/** Quality and audio languages of a series, taken from one of its episodes */
 	private data class SeriesMedia(val quality: MediaQuality?, val languages: List<LanguageBadge>)
+
+	private data class LabelsCache(val session: String, val time: Long, val labels: Map<UUID, NewContentLabel>)
+
+	@Volatile
+	private var labelsCache: LabelsCache? = null
+	private val labelsMutex = Mutex()
+	private val lookupSemaphore = Semaphore(PARALLEL_LOOKUPS)
 
 	/** Media info per series, it rarely changes so it's kept for the whole session */
 	private val seriesMediaCache = HashMap<UUID, SeriesMedia>()
@@ -130,12 +142,20 @@ class ModernHomeRepository(
 	 * Poster cards with every badge (quality, HDR, Dolby, audio languages) for any list of
 	 * movies, series, episodes or people, e.g. search results. Items need `ItemFields.MEDIA_STREAMS`.
 	 */
-	suspend fun posterCards(items: List<BaseItemDto>): List<HomeCard> = withContext(Dispatchers.IO) {
+	suspend fun posterCards(
+		items: List<BaseItemDto>,
+		lookupSeriesMedia: Boolean = true,
+		/** "New episode", "New season", "New series" on series, like on Home */
+		withNewContentLabels: Boolean = false,
+	): List<HomeCard> = withContext(Dispatchers.IO) {
 		val visible = items.withoutHidden(hiddenItemIds())
 		val seriesIds = visible.filter { it.type == BaseItemKind.SERIES }.map { it.id }
 		val context = CardContext(
-			labels = emptyMap(),
-			seriesMedia = safe("series media") { seriesMedia(seriesIds, emptyMap()) }.orEmpty(),
+			labels = if (withNewContentLabels && seriesIds.isNotEmpty()) newContentLabels() else emptyMap(),
+			// Badges of series come from one of their episodes: without lookups (many rows at once)
+			// only the series already known this session have them
+			seriesMedia = if (lookupSeriesMedia) safe("series media") { seriesMedia(seriesIds, emptyMap()) }.orEmpty()
+			else cachedSeriesMedia(),
 			episodeHints = emptyMap(),
 			nextUpBySeries = emptyMap(),
 		)
@@ -147,6 +167,44 @@ class ModernHomeRepository(
 				// Episodes: the series page, the play button plays the episode
 				if (item.type == BaseItemKind.EPISODE) card.copy(key = item.id.toString(), subtitle = item.name) else card
 			}
+	}
+
+	/**
+	 * "New episode/season/series" of each series, from the episodes added lately (the same as on
+	 * Home). Kept a few minutes; several rows asking at once share one request.
+	 */
+	suspend fun newContentLabels(): Map<UUID, NewContentLabel> = withContext(Dispatchers.IO) {
+		labelsMutex.withLock {
+			val session = cacheKey()
+			labelsCache?.takeIf { it.session == session && System.currentTimeMillis() - it.time < LABELS_TTL_MS }?.let { return@withContext it.labels }
+			val labels = safe("new content labels") { MediaBadges.newContentLabels(recentEpisodes()) } ?: return@withContext emptyMap()
+			labelsCache = LabelsCache(session, System.currentTimeMillis(), labels)
+			labels
+		}
+	}
+
+	/**
+	 * Looks up the quality and audio languages of many series at once (one of their episodes each),
+	 * so the cards built afterwards with `lookupSeriesMedia = false` have their badges.
+	 */
+	suspend fun prefetchSeriesMedia(seriesIds: List<UUID>) {
+		withContext(Dispatchers.IO) { safe("series media") { seriesMedia(seriesIds.distinct(), emptyMap(), maxLookups = MAX_PREFETCH_LOOKUPS) } }
+	}
+
+	/** Quality and audio languages of series, for the browse grid */
+	suspend fun seriesBadges(seriesIds: List<UUID>): Map<UUID, Pair<MediaQuality?, List<LanguageBadge>>> = withContext(Dispatchers.IO) {
+		safe("series badges") { seriesMedia(seriesIds.distinct(), emptyMap(), maxLookups = MAX_PREFETCH_LOOKUPS) }
+			.orEmpty()
+			.mapValues { (_, media) -> media.quality to media.languages }
+	}
+
+	/** Media bar slides for any movies or series (the library pages) */
+	fun heroSlides(items: List<BaseItemDto>): List<HeroSlide> = items.map { it.toHeroSlide() }
+
+	/** 16:9 cards with progress, like "Continue watching"; [withBadges]: quality and audio flags too */
+	fun landscapeCards(items: List<BaseItemDto>, withBadges: Boolean = false): List<HomeCard> = items.map { item ->
+		val card = landscapeCard(item)
+		if (withBadges) card.copy(showBadges = true, languages = MediaBadges.audioLanguages(item)) else card
 	}
 
 	/** Identifies the server and session for the home cache */
@@ -184,6 +242,7 @@ class ModernHomeRepository(
 			// New episode/season labels and recently added shows are derived from the latest added episodes
 			val recentEpisodes = recentEpisodesAsync.await()
 			val labels = MediaBadges.newContentLabels(recentEpisodes)
+			labelsCache = LabelsCache(cacheKey(), System.currentTimeMillis(), labels)
 			val newestEpisodeBySeries = LinkedHashMap<UUID, BaseItemDto>()
 			for (episode in recentEpisodes) {
 				val seriesId = episode.seriesId ?: continue
@@ -219,7 +278,8 @@ class ModernHomeRepository(
 					.distinctBy { it.key }
 
 				return listOfNotNull(
-					section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, continueWatching.map { landscapeCard(it) }.distinctBy { it.key }),
+					// Quality, HDR, Dolby Vision and the audio flags, like on the library pages
+					section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, landscapeCards(continueWatching, withBadges = true).distinctBy { it.key }),
 					section(HomeSectionType.WATCHLIST, CardStyle.POSTER, posters(watchlist)),
 					section(HomeSectionType.TRENDING, CardStyle.RANKED, posters(trending).take(RANKED_LIMIT)),
 					section(HomeSectionType.LATEST_EPISODES, CardStyle.POSTER, posters(latestEpisodes, withReleaseDate = true)),
@@ -620,7 +680,11 @@ class ModernHomeRepository(
 	 * Quality and audio languages of each series, from the episode in [episodeHints] (next up or
 	 * newest) or otherwise its first episode. Results are cached for the session.
 	 */
-	private suspend fun seriesMedia(seriesIds: List<UUID>, episodeHints: Map<UUID, BaseItemDto>): Map<UUID, SeriesMedia> = coroutineScope {
+	private suspend fun seriesMedia(
+		seriesIds: List<UUID>,
+		episodeHints: Map<UUID, BaseItemDto>,
+		maxLookups: Int = SERIES_MEDIA_LOOKUPS,
+	): Map<UUID, SeriesMedia> = coroutineScope {
 		synchronized(seriesMediaCache) {
 			if (seriesMediaServer != api.baseUrl) {
 				seriesMediaCache.clear()
@@ -639,9 +703,10 @@ class ModernHomeRepository(
 		}
 
 		// The others: first episode of each series, in parallel and limited to keep the home screen fast
-		val firstEpisodes = unhinted.take(SERIES_MEDIA_LOOKUPS).map { seriesId ->
+		val firstEpisodes = unhinted.take(maxLookups).map { seriesId ->
 			async {
-				val episodes = safe("first episode") {
+				// A few at a time: a library page can ask for a hundred series
+				val episodes = lookupSemaphore.withPermit { safe("first episode") {
 					api.tvShowsApi.getEpisodes(
 						seriesId = seriesId,
 						fields = setOf(ItemFields.MEDIA_STREAMS),
@@ -650,7 +715,7 @@ class ModernHomeRepository(
 						enableImages = false,
 						enableUserData = false,
 					).content.items
-				}
+				} }
 				// Null when the request failed: not cached so it's tried again on the next refresh
 				seriesId to episodes
 			}
@@ -777,10 +842,11 @@ class ModernHomeRepository(
 	private fun BaseItemDto.toHeroSlide() = HeroSlide(
 		item = this,
 		title = name.orEmpty(),
-		backdropUrl = backdropImage()?.getUrl(api, maxWidth = HERO_IMAGE_WIDTH),
+		// Media bar images: a bit lighter, they are the first thing on screen
+		backdropUrl = backdropImage()?.getUrl(api, maxWidth = HERO_IMAGE_WIDTH, quality = HERO_IMAGE_QUALITY),
 		backgroundUrl = blurredBackdropUrl(api),
 		glassUrl = blurredBackdropUrl(api, maxWidth = ModernImageSizes.GLASS, blur = ModernImageSizes.GLASS_BLUR),
-		logoUrl = logoImage()?.getUrl(api, maxWidth = LOGO_IMAGE_WIDTH),
+		logoUrl = logoImage()?.getUrl(api, maxWidth = LOGO_IMAGE_WIDTH, maxHeight = LOGO_IMAGE_HEIGHT, format = ImageFormat.WEBP),
 		rating = communityRating,
 		year = productionYear,
 		runtimeMinutes = if (type == BaseItemKind.MOVIE) runTimeTicks?.let { (it / TICKS_PER_MINUTE).toInt() } else null,
@@ -813,13 +879,19 @@ class ModernHomeRepository(
 		const val RECENT_EPISODES_LIMIT = 150
 		const val LATEST_EPISODES_CANDIDATES = 80
 		const val SERIES_MEDIA_LOOKUPS = 40
+		const val MAX_PREFETCH_LOOKUPS = 200
+		const val PARALLEL_LOOKUPS = 8
+		const val LABELS_TTL_MS = 5 * 60 * 1000L
 		const val SERIES_ACTIVITY_LIMIT = 150
 		const val WATCHLIST_PAGE_LIMIT = 300
 
 		const val POSTER_IMAGE_WIDTH = 360
 		const val LANDSCAPE_IMAGE_WIDTH = 560
-		const val HERO_IMAGE_WIDTH = 1920
-		const val LOGO_IMAGE_WIDTH = 700
+		const val HERO_IMAGE_WIDTH = 1600
+		const val HERO_IMAGE_QUALITY = 80
+		// The logo shows at most 340 × 96 dp: WebP keeps the transparency in a much smaller file than PNG
+		const val LOGO_IMAGE_WIDTH = 600
+		const val LOGO_IMAGE_HEIGHT = 200
 
 		const val TRENDING_TTL_MS = 6 * 60 * 60 * 1000L
 		const val TMDB_INDEX_TTL_MS = 30 * 60 * 1000L

@@ -1,0 +1,937 @@
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/FocusMemory.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/FocusMemory.kt
+new file mode 100644
+index 0000000..1ce57df
+--- /dev/null
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/FocusMemory.kt
+@@ -0,0 +1,48 @@
++package org.jellyfin.androidtv.ui.home.modern
++
++import androidx.compose.foundation.focusGroup
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.Stable
++import androidx.compose.runtime.remember
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.focus.FocusDirection
++import androidx.compose.ui.focus.FocusRequester
++import androidx.compose.ui.focus.focusProperties
++import androidx.compose.ui.focus.focusRequester
++import androidx.compose.ui.focus.onFocusChanged
++
++/**
++ * Last focused child of a row or bar: the D-pad moving into the row goes back to it, like
++ * focusRestorer().
++ *
++ * focusRestorer() doesn't work on rows whose focus is put back by code when a page shows again: it
++ * also sends every requestFocus() on one of its children to the child it saved, and keeps that one
++ * with the saved state of the page. Coming back from Stations the focus always landed on Genres.
++ * Here a requestFocus() goes where it was asked, and nothing outlives the page.
++ */
++@Stable
++internal class FocusMemory {
++	private val requesters = HashMap<Any, FocusRequester>()
++	private var last: Any? = null
++
++	/** Modifier of a child, in front of its clickable */
++	fun child(key: Any): Modifier = Modifier
++		.focusRequester(requesters.getOrPut(key) { FocusRequester() })
++		.onFocusChanged { if (it.isFocused) last = key }
++
++	/** Modifier of the row, instead of focusRestorer().focusGroup() */
++	val group: Modifier = Modifier
++		.focusProperties {
++			onEnter = {
++				// Only D-pad moves: a requestFocus() comes in with Enter. A child that isn't there
++				// anymore (scrolled out) leaves the focus to the closest one.
++				if (requestedFocusDirection != FocusDirection.Enter) {
++					last?.let { requesters[it] }?.tryRequestFocus()
++				}
++			}
++		}
++		.focusGroup()
++}
++
++@Composable
++internal fun rememberFocusMemory(): FocusMemory = remember { FocusMemory() }
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/HomeCards.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/HomeCards.kt
+index a14ac60..64c5c30 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/HomeCards.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/HomeCards.kt
+@@ -356,8 +356,11 @@ internal fun LandscapeCard(
+ 			CardArtwork(url = card.imageUrl, fallbackTitle = card.title)
+ 
+ 			if (card.showBadges) {
+-				val hasQuality = card.quality?.isEmpty == false && card.remainingMinutes == null
+-				if (hasQuality || card.languages.isNotEmpty()) {
++				// The time left takes the top left corner of a started title: its quality goes to
++				// the bottom left then, above the progress bar
++				val hasQuality = card.quality?.isEmpty == false
++				val qualityOnTop = hasQuality && card.remainingMinutes == null
++				if (qualityOnTop || card.languages.isNotEmpty()) {
+ 					// Darker top so the white badges are readable on bright images
+ 					Box(
+ 						modifier = Modifier
+@@ -367,14 +370,28 @@ internal fun LandscapeCard(
+ 							.background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.55f), 1f to Color.Transparent))
+ 					)
+ 				}
+-				// Top left: resolution, Dolby, HDR (unless the time left is there)
+-				if (hasQuality) {
++				// Top left: resolution, Dolby, HDR
++				if (qualityOnTop) {
+ 					QualityBadges(
+ 						quality = card.quality,
+ 						modifier = Modifier
+ 							.align(Alignment.TopStart)
+ 							.padding(start = 6.dp, top = 6.dp, end = 60.dp),
+ 					)
++				} else if (hasQuality) {
++					Box(
++						modifier = Modifier
++							.align(Alignment.BottomCenter)
++							.fillMaxWidth()
++							.height(46.dp)
++							.background(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f)))
++					)
++					QualityBadges(
++						quality = card.quality,
++						modifier = Modifier
++							.align(Alignment.BottomStart)
++							.padding(start = 12.dp, bottom = if (card.progress != null) 19.dp else 8.dp),
++					)
+ 				}
+ 				// Top right: audio languages
+ 				LanguageFlags(
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt
+index 8f41b8d..5d234f4 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeRepository.kt
+@@ -278,7 +278,8 @@ class ModernHomeRepository(
+ 					.distinctBy { it.key }
+ 
+ 				return listOfNotNull(
+-					section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, continueWatching.map { landscapeCard(it) }.distinctBy { it.key }),
++					// Quality, HDR, Dolby Vision and the audio flags, like on the library pages
++					section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, landscapeCards(continueWatching, withBadges = true).distinctBy { it.key }),
+ 					section(HomeSectionType.WATCHLIST, CardStyle.POSTER, posters(watchlist)),
+ 					section(HomeSectionType.TRENDING, CardStyle.RANKED, posters(trending).take(RANKED_LIMIT)),
+ 					section(HomeSectionType.LATEST_EPISODES, CardStyle.POSTER, posters(latestEpisodes, withReleaseDate = true)),
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeScreen.kt
+index 7fe1c43..c584c97 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeScreen.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernHomeScreen.kt
+@@ -15,7 +15,6 @@ import androidx.compose.ui.res.vectorResource
+ import org.jellyfin.androidtv.ui.base.Icon
+ import androidx.compose.ui.graphics.Color
+ import androidx.compose.foundation.background
+-import androidx.compose.foundation.focusGroup
+ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Box
+@@ -52,7 +51,6 @@ import androidx.compose.runtime.withFrameNanos
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.focus.FocusRequester
+-import androidx.compose.ui.focus.focusRestorer
+ import androidx.compose.ui.focus.onFocusChanged
+ import androidx.compose.ui.graphics.Brush
+ import androidx.compose.ui.layout.ContentScale
+@@ -466,6 +464,7 @@ internal fun CardRow(
+ 		KeepInViewBringIntoViewSpec(marginPx = with(density) { ModernHomeDimens.ScreenPaddingHorizontal.toPx() })
+ 	}
+ 	val rowState = rememberLazyListState(initialFirstVisibleItemIndex = initialCardIndex)
++	val focusMemory = rememberFocusMemory()
+ 
+ 	Column(modifier = modifier.fillMaxWidth()) {
+ 		SectionHeader(title)
+@@ -481,14 +480,14 @@ internal fun CardRow(
+ 				verticalAlignment = Alignment.Bottom,
+ 				modifier = Modifier
+ 					.fillMaxWidth()
+-					.focusRestorer()
+-					.focusGroup(),
++					.then(focusMemory.group),
+ 			) {
+ 				itemsIndexed(
+ 					items = cards,
+ 					key = { _, card -> card.key },
+ 				) { cardIndex, card ->
+ 					val focusRequester = focusRequesterFor(cardIndex, card)
++					val memory = focusMemory.child(card.key)
+ 					val onClick = { onCardClick(card) }
+ 					val onLongClick = { onCardLongClick(card) }
+ 					val onFocused = { onCardFocused(card) }
+@@ -501,6 +500,7 @@ internal fun CardRow(
+ 							onLongClick = onLongClick,
+ 							onFocused = onFocused,
+ 							focusRequester = focusRequester,
++							modifier = memory,
+ 						)
+ 
+ 						CardStyle.POSTER -> PosterCard(
+@@ -509,6 +509,7 @@ internal fun CardRow(
+ 							onLongClick = onLongClick,
+ 							onFocused = onFocused,
+ 							focusRequester = focusRequester,
++							modifier = memory,
+ 							onPlay = onPlay,
+ 						)
+ 
+@@ -519,6 +520,7 @@ internal fun CardRow(
+ 							onLongClick = onLongClick,
+ 							onFocused = onFocused,
+ 							focusRequester = focusRequester,
++							modifier = memory,
+ 							onPlay = onPlay,
+ 						)
+ 					}
+@@ -526,7 +528,7 @@ internal fun CardRow(
+ 
+ 				if (onSeeAll != null) {
+ 					item(key = "see_all") {
+-						SeeAllCard(landscape = style == CardStyle.LANDSCAPE, onClick = onSeeAll)
++						SeeAllCard(landscape = style == CardStyle.LANDSCAPE, onClick = onSeeAll, modifier = focusMemory.child("see_all"))
+ 					}
+ 				}
+ 			}
+@@ -601,13 +603,16 @@ internal suspend fun FocusRequester.restoreFocus(
+ internal fun SeeAllCard(
+ 	landscape: Boolean,
+ 	onClick: () -> Unit,
++	modifier: Modifier = Modifier,
+ ) {
+ 	FocusableCardSurface(
+ 		onClick = onClick,
+ 		onLongClick = null,
+ 		onFocused = {},
+-		modifier = if (landscape) Modifier.size(ModernHomeDimens.LandscapeWidth, ModernHomeDimens.LandscapeHeight)
+-		else Modifier.size(ModernHomeDimens.PosterWidth, ModernHomeDimens.PosterHeight),
++		modifier = modifier.then(
++			if (landscape) Modifier.size(ModernHomeDimens.LandscapeWidth, ModernHomeDimens.LandscapeHeight)
++			else Modifier.size(ModernHomeDimens.PosterWidth, ModernHomeDimens.PosterHeight)
++		),
+ 	) { focused ->
+ 		Column(
+ 			horizontalAlignment = Alignment.CenterHorizontally,
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt
+index 3d7d547..07e4e3c 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/home/modern/ModernTopBar.kt
+@@ -365,7 +365,8 @@ private fun NavigationPill(
+ 			.glassSurface(glassBackdrop, CircleShape)
+ 			.horizontalScroll(rememberScrollState())
+ 			.padding(4.dp)
+-			.focusRestorer()
++			// No focusRestorer() here: the bar already sends the focus to the active page, and it
++			// would send the request to the button focused before instead
+ 			.focusGroup(),
+ 		horizontalArrangement = Arrangement.spacedBy(2.dp),
+ 		verticalAlignment = Alignment.CenterVertically,
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/LibraryModels.kt b/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/LibraryModels.kt
+index 287ef50..5ae2c75 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/LibraryModels.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/LibraryModels.kt
+@@ -1,6 +1,7 @@
+ package org.jellyfin.androidtv.ui.library.modern
+ 
+ import kotlinx.serialization.Serializable
++import kotlinx.serialization.Transient
+ import org.jellyfin.androidtv.ui.home.modern.CardStyle
+ import org.jellyfin.androidtv.ui.home.modern.HeroSlide
+ import org.jellyfin.androidtv.ui.home.modern.HomeCard
+@@ -85,7 +86,8 @@ data class BrowseCard(
+ 	val newLabel: NewContentLabel? = null,
+ )
+ 
+-/** A row of the library page */
++/** A row of the library page (saved for the next start, without its [items]) */
++@Serializable
+ data class LibrarySection(
+ 	val key: String,
+ 	val title: String,
+@@ -94,6 +96,7 @@ data class LibrarySection(
+ 	/** "See all": the browse grid with this filter */
+ 	val seeAll: BrowseFilter? = null,
+ 	/** Titles of the row, to build its cards again once the series badges are known */
++	@Transient
+ 	val items: List<BaseItemDto> = emptyList(),
+ )
+ 
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryRepository.kt b/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryRepository.kt
+index 9340ca0..14d4e2d 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryRepository.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryRepository.kt
+@@ -6,6 +6,10 @@ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.SupervisorJob
+ import kotlinx.coroutines.delay
+ import kotlinx.coroutines.launch
++import kotlinx.coroutines.sync.Mutex
++import kotlinx.coroutines.sync.Semaphore
++import kotlinx.coroutines.sync.withLock
++import kotlinx.coroutines.sync.withPermit
+ import kotlinx.serialization.Serializable
+ import kotlinx.serialization.json.Json
+ import org.jellyfin.sdk.model.serializer.toUUIDOrNull
+@@ -22,6 +26,7 @@ import org.jellyfin.androidtv.ui.home.modern.CardStyle
+ import org.jellyfin.androidtv.ui.home.modern.HeroSlide
+ import org.jellyfin.androidtv.ui.home.modern.HomeCard
+ import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
++import org.jellyfin.androidtv.ui.home.modern.slim
+ import org.jellyfin.sdk.api.client.ApiClient
+ import org.jellyfin.sdk.api.client.extensions.genresApi
+ import org.jellyfin.sdk.api.client.extensions.itemsApi
+@@ -74,12 +79,65 @@ class ModernLibraryRepository(
+ 		if (memorySession != session()) null else memory[libraryId]
+ 	}
+ 
+-	fun store(libraryId: UUID, hero: List<HeroSlide>, sections: List<LibrarySection>) = synchronized(memory) {
+-		if (memorySession != session()) {
+-			memory.clear()
+-			memorySession = session()
++	fun store(libraryId: UUID, hero: List<HeroSlide>, sections: List<LibrarySection>) {
++		synchronized(memory) {
++			if (memorySession != session()) {
++				memory.clear()
++				memorySession = session()
++			}
++			memory[libraryId] = hero to sections
++		}
++		scope.launch { writePage(libraryId, hero, sections) }
++	}
++
++	// What each library page showed the last time the app ran: the first visit after starting the
++	// app shows it at once too, while the page refreshes
++
++	@Serializable
++	private data class CachedPage(
++		/** Server and user (hashed token) it belongs to */
++		val owner: String,
++		val hero: List<HeroSlide>,
++		val sections: List<LibrarySection>,
++	)
++
++	private val pageJson = Json {
++		ignoreUnknownKeys = true
++		explicitNulls = false
++	}
++	private val pageMutex = Mutex()
++
++	private fun pageOwner() = "${api.baseUrl}|${api.accessToken?.hashCode()}"
++	private fun pageFile(libraryId: UUID) = File(context.cacheDir, "modern_library_$libraryId.json")
++
++	suspend fun savedPage(libraryId: UUID): Pair<List<HeroSlide>, List<LibrarySection>>? = withContext(Dispatchers.IO) {
++		pageMutex.withLock {
++			try {
++				val file = pageFile(libraryId)
++				if (!file.exists()) return@withContext null
++				val page = pageJson.decodeFromString<CachedPage>(file.readText())
++				if (page.owner != pageOwner() || page.sections.isEmpty()) null else page.hero to page.sections
++			} catch (err: CancellationException) {
++				throw err
++			} catch (err: Exception) {
++				Timber.w(err, "Unable to read the saved library page")
++				null
++			}
++		}
++	}
++
++	private suspend fun writePage(libraryId: UUID, hero: List<HeroSlide>, sections: List<LibrarySection>) = pageMutex.withLock {
++		try {
++			// Only what the cards need: small and quick to read on a Fire TV
++			val page = CachedPage(
++				owner = pageOwner(),
++				hero = hero.map { it.copy(item = it.item.slim()) },
++				sections = sections.map { section -> section.copy(cards = section.cards.map { it.copy(item = it.item.slim()) }) },
++			)
++			pageFile(libraryId).writeText(pageJson.encodeToString(page))
++		} catch (err: Exception) {
++			Timber.w(err, "Unable to save the library page")
+ 		}
+-		memory[libraryId] = hero to sections
+ 	}
+ 
+ 	/** Media bar: random titles of the library with a backdrop, the ones with a logo first */
+@@ -107,44 +165,64 @@ class ModernLibraryRepository(
+ 	}
+ 
+ 	/**
+-	 * Every row, loaded in parallel. [onPartial] gets the first rows (continue watching, recently
+-	 * added) as soon as they are there, the page doesn't wait for the slow ones.
++	 * The rows of a library in two steps. First the ones at the top of the page (continue watching,
++	 * latest, recently added) alone, given to [onPartial]: with every row and the media bar asked at
++	 * once the requests queued behind each other (a few per server at a time) and the page took
++	 * seconds to show anything. Then the media bar ([onHero], when asked) and the other rows.
+ 	 */
+ 	suspend fun sections(
+ 		libraryId: UUID,
+ 		kind: LibraryKind,
+ 		onPartial: (List<LibrarySection>) -> Unit,
++		onHero: ((List<HeroSlide>) -> Unit)? = null,
+ 	): List<LibrarySection> = withContext(Dispatchers.IO) {
+ 		coroutineScope {
+ 			val movies = kind == LibraryKind.MOVIES
+-			val genresAsync = async { safe("genres") { genres(libraryId, kind) }.orEmpty() }
+ 
+-			val continueAsync = async { safe("continue") { continueWatching(libraryId, kind) } }
++			// 1. The top of the page, without the slow parts (next up, series badges)
++			val resumeAsync = async { safe("continue") { resumeItems(libraryId, kind) }.orEmpty() }
+ 			// Shows: latest episodes; movies: latest releases, both as 16:9 cards with their badges
+-			val latestEpisodesAsync = async {
++			val latestAsync = async {
+ 				if (movies) safe("latest films") { latestFilms(libraryId) }
+ 				else safe("latest episodes") { latestEpisodes(libraryId) }
+ 			}
+ 			val recentAsync = async { safe("recent") { recentlyAdded(libraryId, kind) } }
+-			val watchedAsync = async { safe("because watched") { becauseWatched(libraryId, kind) } }
+-			val likedAsync = async { safe("because liked") { becauseLiked(libraryId, kind) } }
+-			val watchlistAsync = async { safe("because watchlist") { becauseWatchlist(libraryId, kind) } }
+-			val studioAsync = async { safe("studio") { studio(libraryId, kind) } }
+-			val tagAsync = async { safe("tag") { tagPick(libraryId, kind) } }
+-			val imdbAsync = async { if (movies) safe("imdb") { imdb() } else null }
+-			val collectionsAsync = async { if (movies) safe("collections") { collections() } else null }
+-			val spotlightAsync = async { if (movies) safe("collection") { collectionSpotlight() } else null }
+-			val genrePicksAsync = async { safe("genre picks") { genrePicks(libraryId, kind, genresAsync.await()) }.orEmpty() }
+-			val seasonalAsync = async { safe("seasonal") { seasonal(libraryId, kind, genresAsync.await()) }.orEmpty() }
+-
+-			// The quick rows first
+-			onPartial(listOfNotNull(continueAsync.await(), latestEpisodesAsync.await(), recentAsync.await()))
++			val resume = resumeAsync.await()
++			val latest = latestAsync.await()
++			val recent = recentAsync.await()
++			onPartial(listOfNotNull(continueSection(resume, emptyList()), latest, recent))
++
++			// 2. The media bar before the other rows, so it gets a free connection
++			val heroAsync = if (onHero != null) async { onHero(safe("hero") { hero(libraryId, kind) }.orEmpty()) } else null
++			// The other rows a few at a time: the media bar and the posters keep loading meanwhile
++			val permits = Semaphore(PARALLEL_ROWS)
++			fun <T> row(block: suspend () -> T) = async { permits.withPermit { block() } }
++
++			val nextUpAsync = row { if (movies) emptyList() else safe("next up") { nextUp(libraryId) }.orEmpty() }
++			val genresAsync = row { safe("genres") { genres(libraryId, kind) }.orEmpty() }
++			val watchedAsync = row { safe("because watched") { becauseWatched(libraryId, kind) } }
++			val imdbAsync = row { if (movies) safe("imdb") { imdb() } else null }
++			val collectionsAsync = row { if (movies) safe("collections") { collections() } else null }
++			val studioAsync = row { safe("studio") { studio(libraryId, kind) } }
++			val likedAsync = row { safe("because liked") { becauseLiked(libraryId, kind) } }
++			val spotlightAsync = row { if (movies) safe("collection") { collectionSpotlight() } else null }
++			val watchlistAsync = row { safe("because watchlist") { becauseWatchlist(libraryId, kind) } }
++			val tagAsync = row { safe("tag") { tagPick(libraryId, kind) } }
++			// The genres first, without holding a permit while waiting for them
++			val genrePicksAsync = async {
++				val genres = genresAsync.await()
++				permits.withPermit { safe("genre picks") { genrePicks(libraryId, kind, genres) }.orEmpty() }
++			}
++			val seasonalAsync = async {
++				val genres = genresAsync.await()
++				permits.withPermit { safe("seasonal") { seasonal(libraryId, kind, genres) }.orEmpty() }
++			}
+ 
+ 			val genrePicks = genrePicksAsync.await()
+-			listOfNotNull(
+-				continueAsync.await(),
+-				latestEpisodesAsync.await(),
+-				recentAsync.await(),
++			val sections = listOfNotNull(
++				continueSection(resume, nextUpAsync.await()),
++				latest,
++				recent,
+ 				watchedAsync.await(),
+ 				imdbAsync.await(),
+ 			) + seasonalAsync.await() + listOfNotNull(
+@@ -158,47 +236,45 @@ class ModernLibraryRepository(
+ 				genrePicks.getOrNull(2),
+ 				tagAsync.await(),
+ 			)
++			heroAsync?.await()
++			sections
+ 		}
+ 	}
+ 
+ 	// Rows
+ 
+-	private suspend fun continueWatching(libraryId: UUID, kind: LibraryKind): LibrarySection? = coroutineScope {
+-		val resumeAsync = async {
+-			api.itemsApi.getResumeItems(
+-				GetResumeItemsRequest(
+-					parentId = libraryId,
+-					includeItemTypes = setOf(if (kind == LibraryKind.MOVIES) BaseItemKind.MOVIE else BaseItemKind.EPISODE),
+-					mediaTypes = setOf(MediaType.VIDEO),
+-					fields = CARD_FIELDS,
+-					imageTypeLimit = 1,
+-					enableTotalRecordCount = false,
+-					limit = SECTION_LIMIT,
+-				)
+-			).content.items
+-		}
+-		// Shows: also the next episode of the series being watched
+-		val nextUpAsync = async {
+-			if (kind == LibraryKind.MOVIES) emptyList()
+-			else safe("next up") {
+-				api.tvShowsApi.getNextUp(
+-					GetNextUpRequest(
+-						parentId = libraryId,
+-						fields = CARD_FIELDS,
+-						imageTypeLimit = 1,
+-						enableResumable = false,
+-						enableTotalRecordCount = false,
+-						limit = SECTION_LIMIT,
+-					)
+-				).content.items
+-			}.orEmpty()
+-		}
++	private suspend fun resumeItems(libraryId: UUID, kind: LibraryKind): List<BaseItemDto> =
++		api.itemsApi.getResumeItems(
++			GetResumeItemsRequest(
++				parentId = libraryId,
++				includeItemTypes = setOf(if (kind == LibraryKind.MOVIES) BaseItemKind.MOVIE else BaseItemKind.EPISODE),
++				mediaTypes = setOf(MediaType.VIDEO),
++				fields = CARD_FIELDS,
++				imageTypeLimit = 1,
++				enableTotalRecordCount = false,
++				limit = SECTION_LIMIT,
++			)
++		).content.items
++
++	/** Shows: the next episode of the series being watched (slow on big libraries, comes later) */
++	private suspend fun nextUp(libraryId: UUID): List<BaseItemDto> =
++		api.tvShowsApi.getNextUp(
++			GetNextUpRequest(
++				parentId = libraryId,
++				fields = CARD_FIELDS,
++				imageTypeLimit = 1,
++				enableResumable = false,
++				enableTotalRecordCount = false,
++				limit = SECTION_LIMIT,
++			)
++		).content.items
+ 
+-		val resume = resumeAsync.await()
++	/** Started titles, then the next episodes of the series not already in it */
++	private fun continueSection(resume: List<BaseItemDto>, nextUp: List<BaseItemDto>): LibrarySection? {
+ 		val resumedSeries = resume.mapNotNull { it.seriesId }.toSet()
+-		val nextUp = nextUpAsync.await().filter { it.seriesId == null || it.seriesId !in resumedSeries }
+-		val cards = homeRepository.landscapeCards(resume + nextUp, withBadges = true)
+-		section("continue", context.getString(R.string.library_continue_watching), CardStyle.LANDSCAPE, cards)
++		val next = nextUp.filter { it.seriesId == null || it.seriesId !in resumedSeries }
++		val cards = homeRepository.landscapeCards(resume + next, withBadges = true)
++		return section("continue", context.getString(R.string.library_continue_watching), CardStyle.LANDSCAPE, cards)
+ 	}
+ 
+ 	/** Newest releases of the library (not the last ones added): 16:9 with quality and audio flags */
+@@ -643,10 +719,9 @@ class ModernLibraryRepository(
+ 
+ 	private suspend fun posterSection(key: String, title: String, items: List<BaseItemDto>, seeAll: BrowseFilter? = null): LibrarySection? {
+ 		if (items.isEmpty()) return null
+-		// Series badges need a request per series: the first rows look them up now, the others
+-		// get them in one go afterwards (withSeriesBadges)
+-		val lookup = key == "recent" || key == "because_watched"
+-		val cards = homeRepository.posterCards(items, lookupSeriesMedia = lookup, withNewContentLabels = true)
++		// Series badges need a request per series: the ones known this session show now, the
++		// others come for every row at once afterwards (withSeriesBadges)
++		val cards = homeRepository.posterCards(items, lookupSeriesMedia = false, withNewContentLabels = true)
+ 		return section(key, title, CardStyle.POSTER, cards, seeAll, items)
+ 	}
+ 
+@@ -712,6 +787,8 @@ class ModernLibraryRepository(
+ 		const val HERO_SLIDES = 8
+ 		const val HERO_CANDIDATES = 20
+ 		const val SECTION_LIMIT = 20
++		/** Rows loading at the same time after the first ones */
++		const val PARALLEL_ROWS = 3
+ 		const val LONG_SECTION_LIMIT = 40
+ 		const val SEED_CANDIDATES = 8
+ 		const val STUDIO_CANDIDATES = 80
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryScreen.kt
+index a89326c..c0c7e2a 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryScreen.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/library/modern/ModernLibraryScreen.kt
+@@ -11,11 +11,13 @@ import androidx.compose.animation.fadeOut
+ import androidx.compose.foundation.background
+ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+ import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Box
+ import androidx.compose.foundation.layout.BoxWithConstraints
+ import androidx.compose.foundation.layout.PaddingValues
+ import androidx.compose.foundation.layout.Row
+ import androidx.compose.foundation.layout.Spacer
+ import androidx.compose.foundation.layout.fillMaxSize
++import androidx.compose.foundation.layout.fillMaxWidth
+ import androidx.compose.foundation.layout.height
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
+@@ -42,10 +44,12 @@ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.focus.FocusRequester
+ import androidx.compose.ui.focus.focusRequester
+ import androidx.compose.ui.focus.onFocusChanged
++import androidx.compose.ui.graphics.Brush
+ import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.platform.LocalDensity
+ import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.unit.Dp
+ import androidx.compose.ui.unit.dp
+ import androidx.compose.ui.unit.sp
+ import androidx.fragment.app.Fragment
+@@ -115,61 +119,104 @@ class ModernLibraryViewModel(
+ 
+ 	var lastFocus: LibraryFocus? = null
+ 	private var library: BaseItemDto? = null
+-	private var heroJob: Job? = null
++	/** The media bar comes from the page saved last time: replaced by fresh titles when they come */
++	private var heroOutdated = false
+ 	private var sectionsJob: Job? = null
+ 	private var librariesJob: Job? = null
+ 
+ 	fun load(library: BaseItemDto) {
+ 		if (this.library?.id == library.id) return
+ 		this.library = library
++		observeLibraries(library)
++
+ 		// Opened before in this session: shown at once while it refreshes
+-		repository.cached(library.id)?.let { (hero, sections) ->
++		val cached = repository.cached(library.id)
++		if (cached != null) {
++			val (hero, sections) = cached
+ 			_state.update { it.copy(loading = false, heroLoaded = true, hero = hero, sections = sections) }
++			refresh()
++			return
++		}
++
++		// Otherwise what it showed the last time the app ran, unless the fresh rows are faster (a
++		// fresh media bar replaces its one)
++		viewModelScope.launch {
++			val (hero, sections) = repository.savedPage(library.id) ?: return@launch
++			val state = _state.value
++			if (state.sections.isNotEmpty()) return@launch
++			if (state.hero.isEmpty() && hero.isNotEmpty()) heroOutdated = true
++			_state.value = state.copy(loading = false, heroLoaded = true, hero = state.hero.ifEmpty { hero }, sections = sections)
+ 		}
+-		observeLibraries(library)
+ 		refresh()
+ 	}
+ 
+ 	fun refresh() {
+ 		val library = library ?: return
+ 		val kind = library.libraryKind ?: return
+-
+-		if (_state.value.hero.isEmpty() && heroJob?.isActive != true) {
+-			heroJob = viewModelScope.launch {
+-				val hero = try {
+-					repository.hero(library.id, kind)
+-				} catch (err: CancellationException) {
+-					throw err
+-				} catch (err: Exception) {
+-					Timber.w(err, "Unable to load the media bar of ${library.name}")
+-					emptyList()
+-				}
+-				_state.update { it.copy(hero = it.hero.ifEmpty { hero }, heroLoaded = true) }
+-			}
++		val wantHero = _state.value.hero.isEmpty() || heroOutdated
++		// On the main thread, like the saved page it can replace
++		val onHero = { hero: List<HeroSlide> ->
++			viewModelScope.launch { showHero(hero) }
++			Unit
+ 		}
+ 
+ 		sectionsJob?.cancel()
+ 		sectionsJob = viewModelScope.launch {
+ 			try {
+-				val sections = repository.sections(library.id, kind) { partial ->
+-					// The first rows, unless something is already on screen
+-					_state.update { if (it.sections.isEmpty()) it.copy(sections = partial, loading = false) else it }
+-				}
+-				_state.update { it.copy(sections = sections, loading = false) }
++				val sections = repository.sections(
++					libraryId = library.id,
++					kind = kind,
++					onPartial = { partial ->
++						// The first rows, unless something is already on screen
++						_state.update { if (it.sections.isEmpty()) it.copy(sections = partial, loading = false) else it }
++					},
++					// The media bar loads after the first rows: they show first
++					onHero = onHero.takeIf { wantHero },
++				)
++				_state.update { it.copy(sections = keepFocusedRow(sections, it.sections), loading = false, heroLoaded = true) }
+ 
+ 				// Then the badges of the series posters (one episode of each series is looked up)
+ 				val withBadges = repository.withSeriesBadges(sections)
+-				if (withBadges !== sections) _state.update { it.copy(sections = withBadges) }
++				if (withBadges !== sections) _state.update { it.copy(sections = keepFocusedRow(withBadges, it.sections)) }
+ 
+-				heroJob?.join()
+ 				repository.store(library.id, _state.value.hero, withBadges)
+ 			} catch (err: CancellationException) {
+ 				throw err
+ 			} catch (err: Exception) {
+ 				Timber.w(err, "Unable to load the rows of ${library.name}")
+-				_state.update { it.copy(loading = false) }
++				_state.update { it.copy(loading = false, heroLoaded = true) }
++			}
++		}
++	}
++
++	/**
++	 * Fresh rows over the ones on screen: the row with the focus stays as it is when its card is
++	 * gone from the fresh one (rows picked at random change on every load), or the focus would be
++	 * lost while browsing it.
++	 */
++	private fun keepFocusedRow(fresh: List<LibrarySection>, shown: List<LibrarySection>): List<LibrarySection> {
++		val focus = lastFocus?.takeIf { it.section != PILLS_SECTION } ?: return fresh
++		val focusedRow = shown.firstOrNull { it.key == focus.section } ?: return fresh
++		return fresh.map { section ->
++			if (section.key == focus.section && section.cards.none { it.key == focus.card }) focusedRow else section
++		}
++	}
++
++	/**
++	 * A fresh media bar. Over the one of the saved page, the slide on screen stays first so nothing
++	 * jumps; an empty answer (server error) keeps what is there.
++	 */
++	private fun showHero(hero: List<HeroSlide>) {
++		_state.update { state ->
++			val shown = state.hero.firstOrNull()
++			val merged = when {
++				hero.isEmpty() -> state.hero
++				shown == null || !heroOutdated -> state.hero.ifEmpty { hero }
++				else -> listOf(shown) + hero.filter { it.item.id != shown.item.id }
+ 			}
++			state.copy(hero = merged, heroLoaded = true)
+ 		}
++		if (hero.isNotEmpty()) heroOutdated = false
+ 	}
+ 
+ 	suspend fun resolvePlayableId(item: BaseItemDto): UUID? = homeRepository.resolvePlayableId(item)
+@@ -260,6 +307,7 @@ fun ModernLibraryScreen(
+ 	var userMoved by remember { mutableStateOf(false) }
+ 	val restoreFocus = remember { viewModel.lastFocus }
+ 	var initialFocusDone by remember { mutableStateOf(false) }
++	var focusHeroWhenLoaded by remember { mutableStateOf(false) }
+ 	val backgroundUrl = remember { mutableStateOf<String?>(null) }
+ 	var heroIndex by remember { mutableIntStateOf(0) }
+ 	val posterActions = rememberPosterActionsState()
+@@ -322,9 +370,10 @@ fun ModernLibraryScreen(
+ 		}
+ 	}
+ 
+-	// Focus: the card focused before, otherwise "Play" in the media bar
++	// Focus: the card focused before, otherwise "Play" in the media bar. The first rows come
++	// before the media bar: the pills meanwhile
+ 	LaunchedEffect(state.heroLoaded, state.sections.isNotEmpty()) {
+-		if (initialFocusDone || !state.heroLoaded) return@LaunchedEffect
++		if (initialFocusDone || (!state.heroLoaded && state.sections.isEmpty())) return@LaunchedEffect
+ 
+ 		// Back from Browse, Collections...: that pill again
+ 		// The page fades in when coming back: the element is focused again until it keeps the focus
+@@ -345,9 +394,26 @@ fun ModernLibraryScreen(
+ 				return@LaunchedEffect
+ 			}
+ 		}
++		// Its row isn't there yet (one of the later ones)
++		if (restoreFocus != null && restoreFocus.section != PILLS_SECTION && restoreIndex < 0 && !state.heroLoaded) return@LaunchedEffect
+ 
+ 		awaitFrames(1)
+-		initialFocusDone = focusTop()
++		if (state.heroLoaded) {
++			initialFocusDone = focusTop()
++		} else if (pillsFocusRequester.tryRequestFocus()) {
++			initialFocusDone = true
++			focusHeroWhenLoaded = true
++		}
++	}
++
++	// The media bar came after the first rows: its "Play" button, unless a key was pressed since
++	LaunchedEffect(focusHeroWhenLoaded, state.heroLoaded) {
++		if (!focusHeroWhenLoaded || !state.heroLoaded) return@LaunchedEffect
++		focusHeroWhenLoaded = false
++		if (!userMoved && state.hero.isNotEmpty()) {
++			awaitFrames(2)
++			if (!userMoved) heroFocusRequester.tryRequestFocus()
++		}
+ 	}
+ 
+ 	BoxWithConstraints(
+@@ -393,6 +459,9 @@ fun ModernLibraryScreen(
+ 								}
+ 							},
+ 						)
++					} else if (!state.heroLoaded && state.sections.isNotEmpty()) {
++						// Its place while it loads, so the rows don't jump when it comes
++						HeroPlaceholder(height = heroHeight)
+ 					} else {
+ 						Spacer(Modifier.height(TOP_BAR_SPACE))
+ 					}
+@@ -422,7 +491,8 @@ fun ModernLibraryScreen(
+ 						} else null,
+ 						modifier = Modifier
+ 							.padding(top = 4.dp, bottom = 4.dp)
+-							.onFocusChanged { if (it.hasFocus) scope.launch { scroller.scrollToItem(1) } },
++							// Not while the media bar loads: the page stays where it will be
++							.onFocusChanged { if (it.hasFocus && state.heroLoaded) scope.launch { scroller.scrollToItem(1) } },
+ 					)
+ 				}
+ 
+@@ -500,6 +570,23 @@ fun ModernLibraryScreen(
+ 	}
+ }
+ 
++/** Place of the media bar while its titles load */
++@Composable
++private fun HeroPlaceholder(height: Dp) {
++	Box(
++		contentAlignment = Alignment.Center,
++		modifier = Modifier
++			.fillMaxWidth()
++			.height(height)
++			.background(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.04f), 1f to Color.Transparent)),
++	) {
++		CircularProgressIndicator(
++			color = ModernHomeColors.Accent.copy(alpha = 0.7f),
++			modifier = Modifier.size(30.dp),
++		)
++	}
++}
++
+ /** The libraries of the same kind (Films, Películas...) and "Browse", under the media bar */
+ @Composable
+ private fun LibraryPills(
+diff --git a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt
+index 4ad5910..0ff2001 100644
+--- a/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt
++++ b/app/src/main/java/org/jellyfin/androidtv/ui/music/modern/ModernMusicScreen.kt
+@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
+ import androidx.compose.foundation.ExperimentalFoundationApi
+ import androidx.compose.foundation.background
+ import androidx.compose.foundation.clickable
+-import androidx.compose.foundation.focusGroup
+ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+ import androidx.compose.foundation.interaction.MutableInteractionSource
+ import androidx.compose.foundation.interaction.collectIsFocusedAsState
+@@ -50,7 +49,6 @@ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.draw.clip
+ import androidx.compose.ui.focus.FocusRequester
+ import androidx.compose.ui.focus.focusRequester
+-import androidx.compose.ui.focus.focusRestorer
+ import androidx.compose.ui.focus.onFocusChanged
+ import androidx.compose.ui.graphics.Brush
+ import androidx.compose.ui.graphics.Color
+@@ -94,6 +92,7 @@ import org.jellyfin.androidtv.ui.home.modern.NoAutoScrollBringIntoViewSpec
+ import org.jellyfin.androidtv.ui.home.modern.SectionHeader
+ import org.jellyfin.androidtv.ui.home.modern.awaitFrames
+ import org.jellyfin.androidtv.ui.home.modern.rememberSmoothListScroller
++import org.jellyfin.androidtv.ui.home.modern.rememberFocusMemory
+ import org.jellyfin.androidtv.ui.home.modern.restoreFocus
+ import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
+ import org.jellyfin.androidtv.ui.music.share.SharedQueueDialog
+@@ -523,6 +522,9 @@ private fun QuickLinks(
+ 	modifier: Modifier = Modifier,
+ ) {
+ 	val navigationRepository = koinInject<NavigationRepository>()
++	// Moving into the bar from the media bar or a row: the link focused last. Not focusRestorer():
++	// it sent the focus back to Genres when coming back from Stations, Albums...
++	val focusMemory = rememberFocusMemory()
+ 
+ 	// Each link remembers it was focused, to come back to it from its page
+ 	fun link(name: String, first: Boolean = false): Modifier {
+@@ -530,6 +532,7 @@ private fun QuickLinks(
+ 		return Modifier
+ 			.then(if (first) Modifier.focusRequester(firstFocusRequester) else Modifier)
+ 			.then(if (key == restoreKey) Modifier.focusRequester(restoreFocusRequester) else Modifier)
++			.then(focusMemory.child(key))
+ 			.onFocusChanged { if (it.isFocused) onLinkFocused(key) }
+ 	}
+ 
+@@ -538,8 +541,7 @@ private fun QuickLinks(
+ 			.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, top = 6.dp, bottom = 4.dp)
+ 			.background(Color.Black.copy(alpha = 0.35f), CircleShape)
+ 			.padding(4.dp)
+-			.focusRestorer()
+-			.focusGroup(),
++			.then(focusMemory.group),
+ 		horizontalArrangement = Arrangement.spacedBy(2.dp),
+ 	) {
+ 		QuickLink(stringResource(R.string.lbl_albums), link("albums", first = true)) {
+@@ -631,6 +633,7 @@ internal fun MusicSectionRow(
+ 	val bringIntoViewSpec = remember(density) {
+ 		KeepInViewBringIntoViewSpec(marginPx = with(density) { ModernHomeDimens.ScreenPaddingHorizontal.toPx() })
+ 	}
++	val focusMemory = rememberFocusMemory()
+ 
+ 	Column(modifier = modifier.fillMaxWidth().padding(top = ModernHomeDimens.SectionSpacing)) {
+ 		SectionHeader(title, compact = true)
+@@ -641,8 +644,7 @@ internal fun MusicSectionRow(
+ 				horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
+ 				modifier = Modifier
+ 					.fillMaxWidth()
+-					.focusRestorer()
+-					.focusGroup(),
++					.then(focusMemory.group),
+ 			) {
+ 				items(cards, key = { it.key }) { card ->
+ 					MusicCardView(
+@@ -652,6 +654,7 @@ internal fun MusicSectionRow(
+ 						onClick = { onClick(card) },
+ 						onLongClick = { onLongClick(card) },
+ 						onPlay = { onPlay(card) },
++						modifier = focusMemory.child(card.key),
+ 					)
+ 				}
+ 			}
+@@ -667,8 +670,9 @@ internal fun MusicCardView(
+ 	onClick: () -> Unit,
+ 	onLongClick: () -> Unit,
+ 	onPlay: () -> Unit,
++	modifier: Modifier = Modifier,
+ ) {
+-	Column(modifier = Modifier.width(CardSize)) {
++	Column(modifier = modifier.width(CardSize)) {
+ 		FocusableCardSurface(
+ 			onClick = onClick,
+ 			onLongClick = onLongClick,
+diff --git a/docs/MODERN_HOME.md b/docs/MODERN_HOME.md
+index 1ac67e2..9dd0db8 100644
+--- a/docs/MODERN_HOME.md
++++ b/docs/MODERN_HOME.md
+@@ -35,6 +35,9 @@ Si una película o serie está en varias bibliotecas (por ejemplo, una por idiom
+   "Latino"/"Latin" en el título o etiqueta `es-419`/`es-MX`) lleva bandera de México y el portugués de Brasil
+   la de Brasil. Idiomas sin bandera se muestran con su código ("ARA").
+ - En las series se usan los idiomas y la calidad de uno de sus episodios.
++- En **Seguir viendo** (inicio y bibliotecas) las tarjetas 16:9 llevan la calidad, HDR y Dolby Vision y las
++  banderas arriba a la derecha. En las que están a medias el tiempo restante ocupa la esquina de arriba a la
++  izquierda, así que la calidad va abajo a la izquierda, encima de la barra de progreso.
+ 
+ ## Orden de las filas del inicio
+ 
+@@ -79,6 +82,13 @@ el inicio:
+ - Las filas con más títulos acaban en una tarjeta **Ver todo** que abre la cuadrícula filtrada.
+ - Mantener OK en un póster: el mismo menú que en el inicio (reproducir, visto/no visto, identificar…).
+ 
++La página carga por partes para salir enseguida: primero *Seguir viendo*, *Últimas películas/episodios* y
++*Añadido recientemente* (solas, sin el resto de peticiones delante), después la media bar (su sitio queda
++reservado y el cursor espera en las pills; cuando llega pasa a *Reproducir* si no has tocado nada) y por último
++las demás filas, de tres en tres, y las etiquetas de las series. Además se guarda en el dispositivo lo que
++mostró la última vez, así que al abrirla tras reiniciar la app sale al momento y se actualiza por detrás (con
++una media bar nueva). Si una fila cambia mientras estás en ella, se queda como estaba hasta que salgas.
++
+ ### Explorar (cuadrícula)
+ 
+ Todos los títulos en una cuadrícula con título y año, cargados por páginas (sirve para miles de títulos):
+@@ -150,6 +160,10 @@ páginas de álbumes, listas, artistas y géneros (que también tienen la barra
+   en Música se detiene mientras la tienes enfocada).
+ - Las imágenes de la media bar (fondo y logo) se piden más ligeras (logo en WebP) y se cargan todas al
+   principio, así cada diapositiva aparece al momento.
++- Las filas, las pills y los accesos rápidos recuerdan su último elemento con el foco para cuando vuelves con
++  las flechas, pero sin `focusRestorer()` de Compose: ese guarda el elemento con la página y desviaba al
++  anterior cualquier intento de devolver el foco al volver (en Música siempre acababa en *Géneros*). Está en
++  `FocusMemory.kt`.
+ - La página de Música se abre al instante con lo que mostró la última vez (se guarda en el dispositivo) y
+   se actualiza por detrás: primero las filas rápidas, luego la media bar, radios y recomendaciones.
+ - **Usa la versión release** para el día a día: la debug (la que instala *Run ▶*) se puede depurar y por eso
+@@ -170,7 +184,8 @@ Al abrir una biblioteca de música desde la barra se muestra una página con el
+ - **Media bar** con álbumes recomendados ("Porque escuchas a …"): Reproducir, **Radio** (mezcla
+   instantánea a partir del álbum) e Ir al álbum. Izquierda/derecha en los botones de los extremos cambian
+   de recomendación; pasan solas cada 10 segundos cuando el foco no está en la barra.
+-- Accesos rápidos: Álbumes, Artistas del álbum, Artistas, Géneros y Aleatorio.
++- Accesos rápidos: Álbumes, Artistas del álbum, Artistas, Géneros, Radios, Aleatorio, Cola compartida y
++  búsqueda. Al volver de cualquiera de ellos el cursor vuelve a ese mismo acceso.
+ - Filas: Añadido recientemente, Escuchado recientemente, **Radios**, Recomendado para ti, Álbumes
+   favoritos y Listas de reproducción. El orden se cambia en Ajustes → **Secciones de música** (igual que
+   las del inicio).

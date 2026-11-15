@@ -1,7 +1,5 @@
 package org.jellyfin.playback.core.queue.order
 
-import kotlin.math.min
-
 internal class ShuffleOrderIndexProvider : OrderIndexProvider {
 	private val nextIndices = mutableListOf<Int>()
 
@@ -13,24 +11,21 @@ internal class ShuffleOrderIndexProvider : OrderIndexProvider {
 		playedIndices: Collection<Int>,
 		currentIndex: Int,
 	): Collection<Int> {
-		val remainingItemsSize = size - playedIndices.size
-		return if (remainingItemsSize <= 0) {
-			emptyList()
-		} else {
-			val remainingIndices = (0..size).filterNot {
-				it in playedIndices || it in nextIndices
-			}
+		// Forget picks that are no longer valid (the queue changed, or they were played already)
+		nextIndices.removeAll { it >= size || it == currentIndex || it in playedIndices }
 
-			List(min(amount, remainingItemsSize)) { i ->
-				if (i < nextIndices.lastIndex) {
-					nextIndices[i]
-				} else {
-					val index = remainingIndices.random()
-					nextIndices.add(index)
-					index
-				}
-			}
+		// Pick the missing ones among the entries that were not played yet. Only real indices:
+		// an index past the end stopped the playback
+		val remaining = (0 until size)
+			.filterNot { it == currentIndex || it in playedIndices || it in nextIndices }
+			.toMutableList()
+		while (nextIndices.size < amount && remaining.isNotEmpty()) {
+			val index = remaining.random()
+			remaining.remove(index)
+			nextIndices.add(index)
 		}
+
+		return nextIndices.take(amount)
 	}
 
 	override fun notifyRemoved(index: Int) {
@@ -39,6 +34,6 @@ internal class ShuffleOrderIndexProvider : OrderIndexProvider {
 	}
 
 	override fun useNextIndex() {
-		nextIndices.removeAt(0)
+		if (nextIndices.isNotEmpty()) nextIndices.removeAt(0)
 	}
 }

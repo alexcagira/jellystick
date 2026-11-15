@@ -53,6 +53,10 @@ public class ItemLauncher {
         switch (collectionType) {
             case MOVIES:
             case TVSHOWS:
+                // Modern page in the style of the home screen
+                Destination.Fragment modernLibrary = Destinations.INSTANCE.movieOrShowLibrary(baseItem);
+                if (modernLibrary != null) return modernLibrary;
+
                 LibraryPreferences displayPreferences = preferencesRepository.getValue().getLibraryPreferences(baseItem.getDisplayPreferencesId());
                 boolean enableSmartScreen = displayPreferences.get(LibraryPreferences.Companion.getEnableSmartScreen());
 

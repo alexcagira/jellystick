@@ -1,0 +1,161 @@
+package org.jellyfin.androidtv.ui.library.modern
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.ui.home.modern.MediaBadges
+import org.jellyfin.androidtv.ui.home.modern.posterImage
+import org.jellyfin.androidtv.util.apiclient.getUrl
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.filterApi
+import org.jellyfin.sdk.api.client.extensions.itemsApi
+import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.ItemFields
+import org.jellyfin.sdk.model.api.ItemSortBy
+import org.jellyfin.sdk.model.api.SortOrder
+import org.jellyfin.sdk.model.api.request.GetItemsRequest
+import java.util.UUID
+
+/**
+ * Items of the browse grid, page by page: a library can have thousands of titles.
+ */
+class LibraryBrowseRepository(
+	private val api: ApiClient,
+) {
+	data class Page(val cards: List<BrowseCard>, val total: Int)
+
+	suspend fun page(filter: BrowseFilter, start: Int, count: Int): Page = withContext(Dispatchers.IO) {
+		val result = api.itemsApi.getItems(filter.request(start = start, limit = count, withTotal = true)).content
+		Page(result.items.map { card(it) }, result.totalRecordCount)
+	}
+
+	/**
+	 * Random order: the server shuffles again on every request, so the whole list of ids is taken
+	 * once (small, without images) and the pages are loaded from it.
+	 */
+	suspend fun randomIds(filter: BrowseFilter): List<UUID> = withContext(Dispatchers.IO) {
+		api.itemsApi.getItems(
+			filter.request(start = 0, limit = MAX_RANDOM, withTotal = false).copy(
+				sortBy = setOf(ItemSortBy.RANDOM),
+				sortOrder = null,
+				fields = emptySet(),
+				enableImages = false,
+				enableUserData = false,
+			)
+		).content.items.map { it.id }
+	}
+
+	suspend fun cards(ids: List<UUID>): List<BrowseCard> = withContext(Dispatchers.IO) {
+		if (ids.isEmpty()) return@withContext emptyList()
+		val items = api.itemsApi.getItems(
+			GetItemsRequest(
+				ids = ids,
+				fields = CARD_FIELDS,
+				imageTypeLimit = 1,
+				enableTotalRecordCount = false,
+			)
+		).content.items.associateBy { it.id }
+		// The server doesn't keep the order of the ids
+		ids.mapNotNull { id -> items[id]?.let { card(it) } }
+	}
+
+	/** Position of the first title starting with [letter] in the list sorted by name ('#': 0) */
+	suspend fun indexOfLetter(filter: BrowseFilter, letter: Char): Int = withContext(Dispatchers.IO) {
+		if (letter == '#') return@withContext 0
+		api.itemsApi.getItems(
+			filter.copy(sort = BrowseSort.NAME).request(start = 0, limit = 0, withTotal = true).copy(
+				// Sort names are lowercase on the server
+				nameLessThan = letter.lowercase(),
+				enableImages = false,
+				enableUserData = false,
+				fields = emptySet(),
+			)
+		).content.totalRecordCount
+	}
+
+	/** A random title of the grid, for "Shuffle" */
+	suspend fun randomItem(filter: BrowseFilter): BaseItemDto? = withContext(Dispatchers.IO) {
+		api.itemsApi.getItems(
+			filter.request(start = 0, limit = 1, withTotal = false).copy(sortBy = setOf(ItemSortBy.RANDOM), sortOrder = null)
+		).content.items.firstOrNull()
+	}
+
+	/**
+	 * Spanish age ratings used in a library ("ES-7", "ES-12"...), youngest first. The server keeps
+	 * the rating of the country of the metadata, with its code in front (US ones have none).
+	 */
+	suspend fun officialRatings(filter: BrowseFilter): List<String> = withContext(Dispatchers.IO) {
+		api.filterApi.getQueryFiltersLegacy(
+			parentId = filter.libraryId,
+			includeItemTypes = filter.itemTypes,
+		).content.officialRatings.orEmpty()
+			.filter { it.startsWith(SPANISH_RATING, ignoreCase = true) }
+			.distinctBy { it.uppercase() }
+			.sortedWith(compareBy({ ratingAge(it) }, { it }))
+	}
+
+	private fun BrowseFilter.request(start: Int, limit: Int, withTotal: Boolean): GetItemsRequest {
+		val (sortBy, order) = when (sort) {
+			BrowseSort.NAME, BrowseSort.RANDOM -> listOf(ItemSortBy.SORT_NAME) to SortOrder.ASCENDING
+			BrowseSort.DATE_ADDED -> listOf(ItemSortBy.DATE_CREATED, ItemSortBy.SORT_NAME) to SortOrder.DESCENDING
+			BrowseSort.RELEASE_DATE -> listOf(ItemSortBy.PREMIERE_DATE, ItemSortBy.PRODUCTION_YEAR, ItemSortBy.SORT_NAME) to SortOrder.DESCENDING
+			BrowseSort.RATING -> listOf(ItemSortBy.COMMUNITY_RATING, ItemSortBy.SORT_NAME) to SortOrder.DESCENDING
+		}
+
+		return GetItemsRequest(
+			parentId = libraryId,
+			includeItemTypes = itemTypes,
+			recursive = true,
+			genres = genreNames.ifEmpty { listOfNotNull(genre) }.toSet().ifEmpty { null },
+			tags = tag?.let { setOf(it) },
+			officialRatings = officialRating?.let { setOf(it) },
+			isPlayed = when (played) {
+				PlayedFilter.UNWATCHED -> false
+				PlayedFilter.WATCHED -> true
+				else -> null
+			},
+			isFavorite = if (played == PlayedFilter.FAVORITES) true else null,
+			sortBy = sortBy,
+			sortOrder = sortBy.map { order },
+			fields = CARD_FIELDS,
+			imageTypeLimit = 1,
+			enableTotalRecordCount = withTotal,
+			startIndex = start,
+			limit = limit,
+		)
+	}
+
+	private fun card(item: BaseItemDto): BrowseCard {
+		val endYear = item.endDate?.year
+		val year = item.productionYear
+		val subtitle = when {
+			item.type == BaseItemKind.SERIES && year != null && endYear != null && endYear != year -> "$year – $endYear"
+			else -> year?.toString()
+		}
+		return BrowseCard(
+			item = item,
+			title = item.name.orEmpty(),
+			subtitle = subtitle,
+			imageUrl = item.posterImage()?.getUrl(api, maxWidth = POSTER_WIDTH),
+			// Movies have their own media streams; series get theirs afterwards from an episode
+			quality = MediaBadges.quality(item),
+			languages = MediaBadges.audioLanguages(item),
+		)
+	}
+
+	companion object {
+		private const val SPANISH_RATING = "ES-"
+
+		/** "ES-12" → "12", "ES-A" → "A" */
+		fun ratingLabel(rating: String): String =
+			if (rating.startsWith(SPANISH_RATING, ignoreCase = true)) rating.substring(SPANISH_RATING.length) else rating
+
+		/** Minimum age of a rating: "TP", "A" and "APTA" are for everyone */
+		private fun ratingAge(rating: String): Int = ratingLabel(rating).filter { it.isDigit() }.toIntOrNull()
+			?: if (ratingLabel(rating).uppercase().startsWith("X")) 99 else 0
+
+		private const val MAX_RANDOM = 5_000
+		private const val POSTER_WIDTH = 300
+		private val CARD_FIELDS = setOf(ItemFields.SORT_NAME, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO, ItemFields.MEDIA_STREAMS)
+	}
+}

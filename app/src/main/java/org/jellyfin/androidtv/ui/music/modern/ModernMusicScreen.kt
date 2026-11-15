@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -50,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -72,6 +70,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
+import coil3.request.ImageRequest
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +92,8 @@ import org.jellyfin.androidtv.ui.home.modern.NoAutoScrollBringIntoViewSpec
 import org.jellyfin.androidtv.ui.home.modern.SectionHeader
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
 import org.jellyfin.androidtv.ui.home.modern.rememberSmoothListScroller
+import org.jellyfin.androidtv.ui.home.modern.rememberFocusMemory
+import org.jellyfin.androidtv.ui.home.modern.restoreFocus
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
 import org.jellyfin.androidtv.ui.music.share.SharedQueueDialog
 import org.jellyfin.androidtv.ui.navigation.Destinations
@@ -106,6 +107,7 @@ import kotlin.math.absoluteValue
 
 private const val HERO_HEIGHT_FRACTION = 0.74f
 private const val HERO_AUTO_ADVANCE_MS = 10_000L
+private const val LINK_KEY_PREFIX = "link_"
 private const val BACKGROUND_DELAY_MS = 300L
 /** Size of the square music cards (also used to know how many fit in a grid line) */
 internal val MusicCardSize = 150.dp
@@ -134,6 +136,11 @@ fun ModernMusicScreen(
 	val heroFocusRequester = remember { FocusRequester() }
 	val linksFocusRequester = remember { FocusRequester() }
 	val restoreFocusRequester = remember { FocusRequester() }
+	val linkRestoreFocusRequester = remember { FocusRequester() }
+	// Quick link with the focus, to check it is still there when coming back from its page
+	var focusedLinkKey by remember { mutableStateOf<String?>(null) }
+	var linksFocused by remember { mutableStateOf(false) }
+	var userMoved by remember { mutableStateOf(false) }
 	val restoreKey = remember { viewModel.lastFocusKey }
 	var initialFocusDone by remember { mutableStateOf(false) }
 	var showSharedQueue by remember { mutableStateOf(false) }
@@ -143,6 +150,15 @@ fun ModernMusicScreen(
 	val pendingBackgroundUrl = remember { MutableStateFlow<String?>(null) }
 
 	val currentSlide = state.hero.getOrNull(heroIndex.coerceIn(0, (state.hero.size - 1).coerceAtLeast(0)))
+	var heroFocused by remember { mutableStateOf(false) }
+
+	// Next recommendation every few seconds while the media bar isn't focused, also while browsing
+	// the rows below (the media bar can be off screen, so the timer lives here)
+	LaunchedEffect(heroIndex, heroFocused, state.hero.size) {
+		if (heroFocused || state.hero.size < 2) return@LaunchedEffect
+		delay(HERO_AUTO_ADVANCE_MS)
+		heroIndex = (heroIndex + 1) % state.hero.size
+	}
 	val topBarThresholdPx = with(density) { 40.dp.toPx() }
 	val showTopBar by remember {
 		derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < topBarThresholdPx }
@@ -181,6 +197,15 @@ fun ModernMusicScreen(
 		openDetails(target)
 	}
 
+	// Media bar images in the cache before their slide shows: no empty cover while it changes
+	LaunchedEffect(state.hero) {
+		for (slide in state.hero) {
+			for (url in listOfNotNull(slide.coverUrl, slide.backgroundUrl)) {
+				imageLoader.enqueue(ImageRequest.Builder(context).data(url).build())
+			}
+		}
+	}
+
 	// Ambient background: the current slide while the media bar is visible, otherwise the focused card
 	LaunchedEffect(currentSlide, showTopBar) {
 		if (showTopBar && currentSlide != null) {
@@ -196,9 +221,22 @@ fun ModernMusicScreen(
 		}
 	}
 
-	// Initial focus: the card that was focused before, otherwise "Play" in the media bar
+	// Initial focus: the card or quick link that was focused before, otherwise "Play" in the media bar
 	LaunchedEffect(state.loading) {
 		if (state.loading || initialFocusDone) return@LaunchedEffect
+
+		// Back from Genres, Stations...: that link again
+		if (restoreKey?.startsWith(LINK_KEY_PREFIX) == true) {
+			listState.scrollToItem(if (state.hero.isEmpty()) 0 else 1)
+			val restored = linkRestoreFocusRequester.restoreFocus(
+				hasFocus = { linksFocused && focusedLinkKey == restoreKey },
+				interrupted = { userMoved },
+			)
+			if (restored || userMoved) {
+				initialFocusDone = true
+				return@LaunchedEffect
+			}
+		}
 
 		val restoreIndex = state.sections.indexOfFirst { section -> section.cards.any { focusKey(section, it) == restoreKey } }
 		if (restoreKey != null && restoreIndex >= 0) {
@@ -219,7 +257,11 @@ fun ModernMusicScreen(
 	BoxWithConstraints(
 		modifier = Modifier
 			.fillMaxSize()
-			.background(ModernHomeColors.Background),
+			.background(ModernHomeColors.Background)
+			.onPreviewKeyEvent { event ->
+				if (event.type == KeyEventType.KeyDown) userMoved = true
+				false
+			},
 	) {
 		val heroHeight = maxHeight * HERO_HEIGHT_FRACTION
 
@@ -244,7 +286,9 @@ fun ModernMusicScreen(
 							onRadio = { playStation(StationSource(albumId = currentSlide.album.id)) },
 							onOpen = { openDetails(currentSlide.album.id) },
 							modifier = Modifier.onFocusChanged {
+								heroFocused = it.hasFocus
 								if (it.hasFocus) {
+									viewModel.lastFocusKey = null
 									pendingBackgroundUrl.value = null
 									scope.launch { scroller.scrollToItem(0) }
 								}
@@ -259,6 +303,12 @@ fun ModernMusicScreen(
 					QuickLinks(
 						library = library,
 						firstFocusRequester = linksFocusRequester,
+						restoreKey = restoreKey,
+						restoreFocusRequester = linkRestoreFocusRequester,
+						onLinkFocused = { key ->
+							viewModel.lastFocusKey = key
+							focusedLinkKey = key
+						},
 						onShuffle = {
 							scope.launch {
 								val tracks = viewModel.shuffleTracks()
@@ -267,6 +317,7 @@ fun ModernMusicScreen(
 						},
 						onSharedQueue = { showSharedQueue = true },
 						modifier = Modifier.onFocusChanged {
+							linksFocused = it.hasFocus
 							if (it.hasFocus) scope.launch { scroller.scrollToItem(if (state.hero.isEmpty()) 0 else 1) }
 						},
 					)
@@ -321,6 +372,7 @@ fun ModernMusicScreen(
 				onNavigateDown = { heroFocusRequester.tryRequestFocus() || linksFocusRequester.tryRequestFocus() },
 				onHideLibrary = viewModel::hideLibrary,
 				onMoveLibrary = viewModel::moveLibrary,
+				activeLibraryId = library.id,
 			)
 		}
 	}
@@ -342,13 +394,6 @@ private fun MusicHero(
 	modifier: Modifier = Modifier,
 ) {
 	var hasFocus by remember { mutableStateOf(false) }
-
-	// Next recommendation every few seconds while the media bar isn't focused
-	LaunchedEffect(index, hasFocus, slideCount) {
-		if (hasFocus || slideCount < 2) return@LaunchedEffect
-		delay(HERO_AUTO_ADVANCE_MS)
-		onIndexChange((index + 1) % slideCount)
-	}
 
 	fun previous() = onIndexChange((index - 1 + slideCount) % slideCount)
 	fun next() = onIndexChange((index + 1) % slideCount)
@@ -469,40 +514,55 @@ private fun MusicHero(
 private fun QuickLinks(
 	library: BaseItemDto,
 	firstFocusRequester: FocusRequester,
+	restoreKey: String?,
+	restoreFocusRequester: FocusRequester,
+	onLinkFocused: (String) -> Unit,
 	onShuffle: () -> Unit,
 	onSharedQueue: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val navigationRepository = koinInject<NavigationRepository>()
+	// Moving into the bar from the media bar or a row: the link focused last. Not focusRestorer():
+	// it sent the focus back to Genres when coming back from Stations, Albums...
+	val focusMemory = rememberFocusMemory()
+
+	// Each link remembers it was focused, to come back to it from its page
+	fun link(name: String, first: Boolean = false): Modifier {
+		val key = LINK_KEY_PREFIX + name
+		return Modifier
+			.then(if (first) Modifier.focusRequester(firstFocusRequester) else Modifier)
+			.then(if (key == restoreKey) Modifier.focusRequester(restoreFocusRequester) else Modifier)
+			.then(focusMemory.child(key))
+			.onFocusChanged { if (it.isFocused) onLinkFocused(key) }
+	}
 
 	Row(
 		modifier = modifier
 			.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, top = 6.dp, bottom = 4.dp)
 			.background(Color.Black.copy(alpha = 0.35f), CircleShape)
 			.padding(4.dp)
-			.focusRestorer()
-			.focusGroup(),
+			.then(focusMemory.group),
 		horizontalArrangement = Arrangement.spacedBy(2.dp),
 	) {
-		QuickLink(stringResource(R.string.lbl_albums), Modifier.focusRequester(firstFocusRequester)) {
+		QuickLink(stringResource(R.string.lbl_albums), link("albums", first = true)) {
 			navigationRepository.navigate(Destinations.libraryBrowser(library.copy(displayPreferencesId = "${library.id}AL"), null))
 		}
-		QuickLink(stringResource(R.string.lbl_album_artists)) {
+		QuickLink(stringResource(R.string.lbl_album_artists), link("album_artists")) {
 			navigationRepository.navigate(Destinations.libraryBrowser(library.copy(displayPreferencesId = "${library.id}AR"), "AlbumArtist"))
 		}
-		QuickLink(stringResource(R.string.lbl_artists)) {
+		QuickLink(stringResource(R.string.lbl_artists), link("artists")) {
 			navigationRepository.navigate(Destinations.libraryBrowser(library.copy(displayPreferencesId = "${library.id}AR"), "Artist"))
 		}
-		QuickLink(stringResource(R.string.lbl_genres)) {
+		QuickLink(stringResource(R.string.lbl_genres), link("genres")) {
 			navigationRepository.navigate(Destinations.modernMusicBrowse(library, MusicBrowseMode.GENRES))
 		}
-		QuickLink(stringResource(R.string.modern_music_stations)) {
+		QuickLink(stringResource(R.string.modern_music_stations), link("stations")) {
 			navigationRepository.navigate(Destinations.modernMusicBrowse(library, MusicBrowseMode.STATIONS))
 		}
-		QuickLink(stringResource(R.string.modern_music_shuffle), onClick = onShuffle)
-		QuickLink(stringResource(R.string.shared_queue_title), onClick = onSharedQueue)
+		QuickLink(stringResource(R.string.modern_music_shuffle), link("shuffle"), onClick = onShuffle)
+		QuickLink(stringResource(R.string.shared_queue_title), link("shared_queue"), onClick = onSharedQueue)
 		// Music only search, with voice search
-		QuickLinkIcon(R.drawable.ic_search, stringResource(R.string.lbl_search)) {
+		QuickLinkIcon(R.drawable.ic_search, stringResource(R.string.lbl_search), link("search")) {
 			navigationRepository.navigate(Destinations.modernSearch(music = true))
 		}
 	}
@@ -512,6 +572,7 @@ private fun QuickLinks(
 private fun QuickLinkIcon(
 	icon: Int,
 	contentDescription: String,
+	modifier: Modifier = Modifier,
 	onClick: () -> Unit,
 ) {
 	val interactionSource = remember { MutableInteractionSource() }
@@ -519,7 +580,7 @@ private fun QuickLinkIcon(
 
 	Box(
 		contentAlignment = Alignment.Center,
-		modifier = Modifier
+		modifier = modifier
 			.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
 			.background(if (focused) Color.White else Color.Transparent, CircleShape)
 			.padding(horizontal = 14.dp, vertical = 7.dp),
@@ -572,6 +633,7 @@ internal fun MusicSectionRow(
 	val bringIntoViewSpec = remember(density) {
 		KeepInViewBringIntoViewSpec(marginPx = with(density) { ModernHomeDimens.ScreenPaddingHorizontal.toPx() })
 	}
+	val focusMemory = rememberFocusMemory()
 
 	Column(modifier = modifier.fillMaxWidth().padding(top = ModernHomeDimens.SectionSpacing)) {
 		SectionHeader(title, compact = true)
@@ -582,8 +644,7 @@ internal fun MusicSectionRow(
 				horizontalArrangement = Arrangement.spacedBy(ModernHomeDimens.CardSpacing),
 				modifier = Modifier
 					.fillMaxWidth()
-					.focusRestorer()
-					.focusGroup(),
+					.then(focusMemory.group),
 			) {
 				items(cards, key = { it.key }) { card ->
 					MusicCardView(
@@ -593,6 +654,7 @@ internal fun MusicSectionRow(
 						onClick = { onClick(card) },
 						onLongClick = { onLongClick(card) },
 						onPlay = { onPlay(card) },
+						modifier = focusMemory.child(card.key),
 					)
 				}
 			}
@@ -608,8 +670,9 @@ internal fun MusicCardView(
 	onClick: () -> Unit,
 	onLongClick: () -> Unit,
 	onPlay: () -> Unit,
+	modifier: Modifier = Modifier,
 ) {
-	Column(modifier = Modifier.width(CardSize)) {
+	Column(modifier = modifier.width(CardSize)) {
 		FocusableCardSurface(
 			onClick = onClick,
 			onLongClick = onLongClick,

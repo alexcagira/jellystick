@@ -15,7 +15,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.ui.home.modern.CardStyle
 import org.jellyfin.androidtv.ui.home.modern.HomeCard
+import org.jellyfin.androidtv.ui.library.modern.BrowseChip
+import org.jellyfin.androidtv.ui.library.modern.ModernLibraryRepository
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
 import org.jellyfin.androidtv.ui.music.modern.MusicCard
@@ -29,7 +32,7 @@ import java.util.UUID
 sealed interface SearchGroup {
 	val title: Int
 
-	data class Posters(override val title: Int, val cards: List<HomeCard>) : SearchGroup
+	data class Posters(override val title: Int, val cards: List<HomeCard>, val style: CardStyle = CardStyle.POSTER) : SearchGroup
 	data class Music(override val title: Int, val cards: List<MusicCard>) : SearchGroup
 }
 
@@ -38,17 +41,60 @@ data class SearchState(
 	val searching: Boolean = false,
 	val searched: Boolean = false,
 	val groups: List<SearchGroup> = emptyList(),
+	/** Shown while nothing is typed: genres as tiles and popular tags */
+	val genres: List<BrowseChip> = emptyList(),
+	val tags: List<String> = emptyList(),
 )
 
 class ModernSearchViewModel(
 	private val searchRepository: SearchRepository,
 	private val homeRepository: ModernHomeRepository,
 	private val musicRepository: ModernMusicRepository,
+	private val libraryRepository: ModernLibraryRepository,
 ) : ViewModel() {
 	private val _state = MutableStateFlow(SearchState())
 	val state: StateFlow<SearchState> = _state.asStateFlow()
 
 	var musicOnly = false
+		set(value) {
+			field = value
+			loadSuggestions()
+		}
+	private var suggestionsLoaded = false
+
+	/**
+	 * For the page without text: genres and tags of the movies and shows, or the music genres on
+	 * the music search.
+	 */
+	private fun loadSuggestions() {
+		if (suggestionsLoaded) return
+		suggestionsLoaded = true
+
+		if (musicOnly) {
+			viewModelScope.launch {
+				val genres = runCatching { musicRepository.allGenres() }
+					.onFailure { Timber.w(it, "Unable to load music genres") }
+					.getOrDefault(emptyList())
+				_state.update { it.copy(genres = genres) }
+			}
+			return
+		}
+
+		// The genres known already show at once (the server is slow to list them), then the fresh list
+		libraryRepository.cachedGenres(null, null)?.let { cached -> _state.update { it.copy(genres = cached) } }
+		viewModelScope.launch {
+			val genres = runCatching { libraryRepository.genres(null, null, refresh = _state.value.genres.isNotEmpty()) }
+				.onFailure { Timber.w(it, "Unable to load genres") }
+				.getOrNull() ?: return@launch
+			_state.update { it.copy(genres = genres) }
+		}
+		viewModelScope.launch {
+			val tags = runCatching { libraryRepository.popularTags(null, null) }
+				.onFailure { Timber.w(it, "Unable to load tags") }
+				.getOrDefault(emptyList())
+			_state.update { it.copy(tags = tags) }
+		}
+	}
 	var lastFocusKey: String? = null
 	private var searchJob: Job? = null
 
@@ -82,11 +128,12 @@ class ModernSearchViewModel(
 		suspend fun find(vararg types: BaseItemKind): List<BaseItemDto> =
 			searchRepository.search(term, types.toList()).getOrDefault(emptyList())
 
+		// Films, TV shows, collections, episodes and people, like the rows of the home screen
 		val video = if (musicOnly) null else listOf(
 			R.string.lbl_movies to async { find(BaseItemKind.MOVIE) },
 			R.string.lbl_tv_series to async { find(BaseItemKind.SERIES) },
-			R.string.lbl_episodes to async { find(BaseItemKind.EPISODE) },
 			R.string.lbl_collections to async { find(BaseItemKind.BOX_SET) },
+			R.string.lbl_episodes to async { find(BaseItemKind.EPISODE) },
 			R.string.lbl_people to async { find(BaseItemKind.PERSON) },
 		)
 		val songs = async { find(BaseItemKind.AUDIO) }
@@ -95,8 +142,14 @@ class ModernSearchViewModel(
 		val playlists = async { if (musicOnly) find(BaseItemKind.PLAYLIST).filter { it.mediaType == org.jellyfin.sdk.model.api.MediaType.AUDIO } else emptyList() }
 
 		val videoGroups = video.orEmpty().mapNotNull { (title, items) ->
-			val cards = withContext(Dispatchers.IO) { homeRepository.posterCards(items.await()) }
-			if (cards.isEmpty()) null else SearchGroup.Posters(title, cards)
+			if (title == R.string.lbl_episodes) {
+				// Episodes as 16:9 cards with their own image; OK opens the episode
+				val cards = homeRepository.landscapeCards(items.await()).map { it.copy(playOnClick = false, progress = null, remainingMinutes = null) }
+				if (cards.isEmpty()) null else SearchGroup.Posters(title, cards, CardStyle.LANDSCAPE)
+			} else {
+				val cards = withContext(Dispatchers.IO) { homeRepository.posterCards(items.await()) }
+				if (cards.isEmpty()) null else SearchGroup.Posters(title, cards)
+			}
 		}
 		val musicGroups = listOf(
 			SearchGroup.Music(R.string.lbl_songs, songs.await().map { musicRepository.trackCard(it) }),

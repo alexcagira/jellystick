@@ -61,6 +61,11 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.compose.content
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
+import org.jellyfin.androidtv.ui.home.modern.CardRow
+import org.jellyfin.androidtv.ui.home.modern.SectionHeader
+import org.jellyfin.androidtv.ui.library.modern.BrowseFilter
+import org.jellyfin.androidtv.ui.library.modern.GenreTileRow
+import org.jellyfin.androidtv.ui.library.modern.TagPillRows
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
 import org.jellyfin.androidtv.ui.base.Icon
@@ -202,10 +207,48 @@ fun ModernSearchScreen(viewModel: ModernSearchViewModel) {
 					)
 				}
 
+				// Nothing typed yet: genres and tags to browse (music genres on the music search)
+				val showSuggestions = state.query.trim().length < 2
+				if (showSuggestions && state.genres.isNotEmpty()) {
+					item(key = "genres_title") {
+						SectionHeader(stringResource(R.string.search_browse_genre), modifier = Modifier.padding(top = 18.dp, bottom = 10.dp))
+					}
+					val genreRows = state.genres.chunked(GENRE_COLUMNS)
+					itemsIndexed(genreRows, key = { index, _ -> "genres_$index" }) { _, row ->
+						GenreTileRow(
+							genres = row,
+							columns = GENRE_COLUMNS,
+							onGenre = { genre ->
+								if (viewModel.musicOnly) {
+									// The page of the music genre (its albums and radio)
+									genre.ids.firstOrNull()?.let { navigationRepository.navigate(Destinations.modernMusicItem(it)) }
+								} else {
+									navigationRepository.navigate(Destinations.modernBrowse(BrowseFilter(title = genre.name, genre = genre.name, genreNames = genre.names)))
+								}
+							},
+							music = viewModel.musicOnly,
+							modifier = Modifier.padding(vertical = 7.dp),
+						)
+					}
+				}
+				if (showSuggestions && state.tags.isNotEmpty()) {
+					item(key = "tags") {
+						Column {
+							SectionHeader(stringResource(R.string.search_browse_tag), modifier = Modifier.padding(top = 22.dp, bottom = 12.dp))
+							TagPillRows(
+								tags = state.tags,
+								rows = TAG_ROWS,
+								onTag = { tag -> navigationRepository.navigate(Destinations.modernBrowse(BrowseFilter(title = tag, tag = tag))) },
+							)
+						}
+					}
+				}
+
 				itemsIndexed(state.groups, key = { index, group -> "${group.title}_$index" }) { _, group ->
 					when (group) {
-						is SearchGroup.Posters -> HomeSectionRow(
-							section = HomeSection(HomeSectionType.FAVORITES, CardStyle.POSTER, group.cards),
+						is SearchGroup.Posters -> CardRow(
+							style = group.style,
+							cards = group.cards,
 							title = stringResource(group.title),
 							initialCardIndex = 0,
 							focusRequesterFor = { _, _ -> null },
@@ -411,3 +454,6 @@ private fun SearchBoxFrame(
 		Column(modifier = Modifier.weight(1f)) { content() }
 	}
 }
+
+private const val GENRE_COLUMNS = 6
+private const val TAG_ROWS = 3

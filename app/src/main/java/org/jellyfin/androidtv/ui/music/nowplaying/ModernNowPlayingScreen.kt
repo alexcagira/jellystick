@@ -55,6 +55,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -162,13 +163,14 @@ fun ModernNowPlayingScreen() {
 		upcoming = playbackManager.queue.peekNext(QUEUE_PEEK).toList()
 	}
 
-	val image = item?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
-	val coverUrl = image?.getUrl(api, maxWidth = 640)
+	val image = item?.songImage()
+	val coverUrl = image?.let { api.songCoverUrl(it) }
 	LaunchedEffect(image) {
-		backgroundState.value = image?.let {
-			api.imageApi.getItemImageUrl(itemId = it.item, imageType = it.type, tag = it.tag, maxWidth = 300, blur = 18, quality = 70)
-		}
+		backgroundState.value = image?.let { api.songBackgroundUrl(it) }
 	}
+	// The next song's cover and background are loaded while this one plays: no blank cover when it changes
+	PrefetchSongArtwork(upcoming.firstOrNull()?.baseItem)
+	val shownCoverUrl = rememberLoadedUrl(coverUrl)
 
 	fun open(id: UUID?) {
 		if (id != null) navigationRepository.navigate(Destinations.modernMusicItem(id))
@@ -195,7 +197,9 @@ fun ModernNowPlayingScreen() {
 	Box(
 		modifier = Modifier
 			.fillMaxSize()
-			.background(ModernHomeColors.Background),
+			.background(ModernHomeColors.Background)
+			// ⏪ / ⏩ of the remote: previous / next song, also over the screensaver
+			.onPreviewKeyEvent { event -> mediaManager.handleSongSkip(event) },
 	) {
 		AmbientBackground(urlState = backgroundState, imageLoader = imageLoader)
 
@@ -251,7 +255,7 @@ fun ModernNowPlayingScreen() {
 							.clip(RoundedCornerShape(14.dp))
 							.background(ModernHomeColors.CardSurface),
 					) {
-						Crossfade(targetState = coverUrl, label = "NowPlayingCover") { url ->
+						Crossfade(targetState = shownCoverUrl, label = "NowPlayingCover") { url ->
 							CardArtwork(url = url, fallbackTitle = item?.album ?: item?.name.orEmpty())
 						}
 					}

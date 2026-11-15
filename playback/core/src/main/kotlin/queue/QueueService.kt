@@ -65,10 +65,13 @@ class QueueService internal constructor() : PlayerService(), Queue {
 	// Entry management
 
 	override fun addSupplier(supplier: QueueSupplier) {
+		// Where the new entries start: when the queue already ran to its end, continue with the
+		// new entries instead of starting the whole queue again
+		val firstNewIndex = estimatedSize
 		suppliers.add(supplier)
 
 		if (_entryIndex.value == Queue.INDEX_NONE) {
-			coroutineScope.launch { setIndex(0) }
+			coroutineScope.launch { setIndex(if (fetchedEntries.isEmpty()) 0 else firstNewIndex) }
 		}
 	}
 
@@ -136,6 +139,9 @@ class QueueService internal constructor() : PlayerService(), Queue {
 		currentSupplierIndex = 0
 		currentSupplierEntryIndex = 0
 		fetchedEntries.clear()
+		// Songs removed from an earlier queue made the new one look shorter, so it stopped early
+		removedEntries = 0
+		orderIndexProvider.reset()
 		_entries.value = emptyList()
 		_entry.value = null
 		_entryIndex.value = Queue.INDEX_NONE

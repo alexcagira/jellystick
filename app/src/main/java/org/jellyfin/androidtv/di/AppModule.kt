@@ -40,7 +40,13 @@ import org.jellyfin.androidtv.ui.home.modern.ItemActions
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
 import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseViewModel
+import org.jellyfin.androidtv.ui.collections.ImdbTop250
+import org.jellyfin.androidtv.ui.library.modern.LibraryBrowseRepository
+import org.jellyfin.androidtv.ui.library.modern.ModernBrowseViewModel
+import org.jellyfin.androidtv.ui.library.modern.ModernLibraryRepository
+import org.jellyfin.androidtv.ui.library.modern.ModernLibraryViewModel
 import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
+import org.jellyfin.androidtv.ui.music.modern.MusicCache
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicItemViewModel
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
 import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
@@ -177,7 +183,11 @@ val appModule = module {
 	single { SharedQueueServer(androidContext(), get(), get()) }
 	single { HomeCache(androidContext()) }
 	single { ModernDetailsRepository(get(), get()) }
-	single { ModernMusicRepository(get()) }
+	single { MusicCache(androidContext()) }
+	single { ImdbTop250(androidContext(), get()) }
+	single { ModernLibraryRepository(androidContext(), get(), get(), get()) }
+	single { LibraryBrowseRepository(get()) }
+	single { ModernMusicRepository(get(), get()) }
 	single { MusicItemRepository(get(), get()) }
 	single { FavouriteTracks(get()) }
 	single { ThemeMusicPlayer(androidContext(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
@@ -203,8 +213,10 @@ val appModule = module {
 	viewModel { ModernWatchlistViewModel(get(), get()) }
 	viewModel { ModernMusicViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicItemViewModel(get(), get(), get(), get()) }
+	viewModel { ModernLibraryViewModel(get(), get(), get()) }
+	viewModel { ModernBrowseViewModel(get(), get(), get()) }
 	viewModel { ModernMusicBrowseViewModel(get()) }
-	viewModel { ModernSearchViewModel(get(), get(), get()) }
+	viewModel { ModernSearchViewModel(get(), get(), get(), get()) }
 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }
 	viewModel { SettingsViewModel() }
 	viewModel { SettingsLibrariesScreenViewModel(get()) }

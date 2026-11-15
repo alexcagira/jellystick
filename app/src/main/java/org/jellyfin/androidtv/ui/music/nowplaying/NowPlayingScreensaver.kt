@@ -111,6 +111,8 @@ internal fun NowPlayingScreensaver(
 			.background(Color.Black)
 			.focusRequester(focusRequester)
 			.onPreviewKeyEvent { event ->
+				// ⏪ / ⏩: previous / next song without leaving
+				if (mediaManager.handleSongSkip(event)) return@onPreviewKeyEvent true
 				val up = event.type == KeyEventType.KeyUp
 				when {
 					event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
@@ -127,7 +129,7 @@ internal fun NowPlayingScreensaver(
 			}
 			.focusable(),
 	) {
-		Crossfade(targetState = backgroundUrl, animationSpec = tween(1_200), label = "ScreensaverBackground") { url ->
+		Crossfade(targetState = rememberLoadedUrl(backgroundUrl), animationSpec = tween(1_200), label = "ScreensaverBackground") { url ->
 			if (url != null) {
 				AsyncImage(
 					model = url,
@@ -238,7 +240,7 @@ private fun Cover(url: String?, item: BaseItemDto?, size: Dp) {
 			.clip(RoundedCornerShape(18.dp))
 			.background(ModernHomeColors.CardSurface),
 	) {
-		Crossfade(targetState = url, animationSpec = tween(800), label = "ScreensaverCover") { coverUrl ->
+		Crossfade(targetState = rememberLoadedUrl(url), animationSpec = tween(800), label = "ScreensaverCover") { coverUrl ->
 			CardArtwork(url = coverUrl, fallbackTitle = item?.album ?: item?.name.orEmpty())
 		}
 	}
