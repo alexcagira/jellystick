@@ -28,7 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -66,6 +68,8 @@ internal fun ModernNowPlayingBubble(
 	glassBackdrop: GlassBackdrop?,
 	focusRequester: FocusRequester,
 	modifier: Modifier = Modifier,
+	focusable: Boolean = true,
+	onFocusChanged: (Boolean) -> Unit = {},
 ) {
 	val api = koinInject<ApiClient>()
 	val playbackManager = koinInject<PlaybackManager>()
@@ -105,6 +109,8 @@ internal fun ModernNowPlayingBubble(
 				}
 				.widthIn(max = 280.dp)
 				.focusRequester(focusRequester)
+				.onFocusChanged { onFocusChanged(it.isFocused) }
+				.focusProperties { canFocus = focusable }
 				.glassSurface(glassBackdrop, CircleShape)
 				.clickable(
 					interactionSource = interactionSource,

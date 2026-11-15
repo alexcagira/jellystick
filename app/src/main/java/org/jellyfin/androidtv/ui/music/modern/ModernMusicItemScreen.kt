@@ -1,8 +1,11 @@
 package org.jellyfin.androidtv.ui.music.modern
 
 import android.widget.Toast
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +52,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -69,9 +74,12 @@ import org.jellyfin.androidtv.ui.home.modern.ProvideKeepInViewScrolling
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
 import org.jellyfin.androidtv.ui.home.modern.ModernMenuDialog
 import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
+import org.jellyfin.androidtv.ui.home.modern.ModernTopBar
 import org.jellyfin.androidtv.ui.home.modern.SectionHeader
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
 import org.jellyfin.androidtv.ui.home.modern.isPlayKey
+import org.jellyfin.androidtv.ui.home.modern.rememberMusicPlaying
+import org.jellyfin.androidtv.ui.home.modern.rememberSmoothListScroller
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
 import org.jellyfin.androidtv.ui.navigation.Destinations
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository
@@ -90,7 +98,9 @@ fun ModernMusicItemScreen(
 	viewModel: ModernMusicItemViewModel,
 ) {
 	val state by viewModel.state.collectAsState()
+	val favouriteChanges by viewModel.favouriteChanges.collectAsState()
 	val context = LocalContext.current
+	val density = LocalDensity.current
 	val scope = rememberCoroutineScope()
 	val navigationRepository = koinInject<NavigationRepository>()
 	val playbackLauncher = koinInject<PlaybackLauncher>()
@@ -99,6 +109,7 @@ fun ModernMusicItemScreen(
 	val imageLoader = koinInject<ImageLoader>()
 
 	val listState = rememberLazyListState()
+	val scroller = rememberSmoothListScroller(listState)
 	val playFocusRequester = remember { FocusRequester() }
 	val restoreFocusRequester = remember { FocusRequester() }
 	val restoreKey = remember { viewModel.lastFocusKey }
@@ -112,6 +123,13 @@ fun ModernMusicItemScreen(
 
 	val entry by rememberQueueEntry(koinInject<PlaybackManager>())
 	val playingId = entry?.baseItem?.id
+	val musicPlaying = rememberMusicPlaying()
+
+	// Navigation bar (with the "now playing" bubble) at the top of the page
+	val topBarThresholdPx = with(density) { 40.dp.toPx() }
+	val showTopBar by remember {
+		derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < topBarThresholdPx }
+	}
 
 	val content = state.content
 	LaunchedEffect(content?.backgroundUrl) { backgroundState.value = content?.backgroundUrl }
@@ -151,13 +169,16 @@ fun ModernMusicItemScreen(
 			content != null -> ProvideKeepInViewScrolling {
 				LazyColumn(
 					state = listState,
-					contentPadding = PaddingValues(top = 44.dp, bottom = 80.dp),
+					// Room for the navigation bar
+					contentPadding = PaddingValues(top = 84.dp, bottom = 80.dp),
 					modifier = Modifier.fillMaxSize(),
 				) {
 					item(key = "header") {
 						MusicItemHeader(
 							content = content,
 							favorite = state.favorite,
+							// The bubble is under the navigation bar on the right, over the text
+							bubbleShown = musicPlaying,
 							playFocusRequester = playFocusRequester,
 							onPlay = {
 								when (content.kind) {
@@ -178,6 +199,14 @@ fun ModernMusicItemScreen(
 							},
 							onFavorite = viewModel::toggleFavorite,
 							onArtist = content.item.albumArtists?.firstOrNull()?.id?.let { id -> { open(id) } },
+							// Back to the buttons: the whole header again, not only the buttons
+							modifier = Modifier.onFocusChanged {
+								if (it.hasFocus) scope.launch {
+									// After the automatic scroll that only brings the button into view
+									awaitFrames(1)
+									scroller.scrollToItem(0)
+								}
+							},
 						)
 					}
 
@@ -236,9 +265,11 @@ fun ModernMusicItemScreen(
 									(track.artists.orEmpty().joinToString() != (track.albumArtist ?: content.item.albumArtist)),
 								showAlbum = content.kind != MusicItemKind.ALBUM,
 								playing = track.id == playingId,
+								favorite = viewModel.isSongFavorite(track, favouriteChanges),
 								focusRequester = if ("track_${track.id}" == restoreKey) restoreFocusRequester else null,
 								onFocused = { viewModel.lastFocusKey = "track_${track.id}" },
 								onClick = { playTracks(content.tracks, index) },
+								onFavorite = { viewModel.toggleSongFavorite(track) },
 								onLongClick = {
 									lastMenuTrack = index to track
 									menuTrack = index to track
@@ -279,6 +310,22 @@ fun ModernMusicItemScreen(
 			)
 		}
 
+		AnimatedVisibility(
+			visible = showTopBar,
+			enter = fadeIn(),
+			exit = fadeOut(),
+			modifier = Modifier.align(Alignment.TopCenter),
+		) {
+			ModernTopBar(
+				libraries = state.libraries,
+				glassBackdrop = null,
+				homeActive = false,
+				onNavigateDown = { playFocusRequester.tryRequestFocus() },
+				onHideLibrary = viewModel::hideLibrary,
+				onMoveLibrary = viewModel::moveLibrary,
+			)
+		}
+
 		// Hold OK on a song
 		val menu = lastMenuTrack
 		ModernMenuDialog(
@@ -294,11 +341,9 @@ fun ModernMusicItemScreen(
 					Toast.makeText(context, R.string.music_added_to_queue, Toast.LENGTH_SHORT).show()
 				})
 				add(ModernMenuOption(stringResource(R.string.music_add_to_playlist), R.drawable.ic_grid) { playlistItems = listOf(track.id) })
-				val favorite = track.userData?.isFavorite == true
+				val favorite = viewModel.isSongFavorite(track, favouriteChanges)
 				add(ModernMenuOption(stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite), if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart) {
-					scope.launch {
-						if (viewModel.setSongFavorite(track, !favorite)) viewModel.refresh()
-					}
+					viewModel.toggleSongFavorite(track)
 				})
 				val albumId = track.albumId
 				if (albumId != null && albumId != content?.item?.id) add(ModernMenuOption(stringResource(R.string.music_go_to_album), R.drawable.ic_album) { open(albumId) })
@@ -327,12 +372,14 @@ private fun trackListOffset(content: MusicItemContent, columns: Int): Int {
 private fun MusicItemHeader(
 	content: MusicItemContent,
 	favorite: Boolean,
+	bubbleShown: Boolean,
 	playFocusRequester: FocusRequester,
 	onPlay: () -> Unit,
 	onShuffle: () -> Unit,
 	onRadio: () -> Unit,
 	onFavorite: () -> Unit,
 	onArtist: (() -> Unit)?,
+	modifier: Modifier = Modifier,
 ) {
 	val item = content.item
 	val isArtist = content.kind == MusicItemKind.ARTIST
@@ -363,7 +410,7 @@ private fun MusicItemHeader(
 
 	Row(
 		verticalAlignment = Alignment.Bottom,
-		modifier = Modifier
+		modifier = modifier
 			.fillMaxWidth()
 			.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal),
 	) {
@@ -380,7 +427,8 @@ private fun MusicItemHeader(
 
 		Spacer(Modifier.width(32.dp))
 
-		Column(modifier = Modifier.weight(1f)) {
+		// Long texts (the biography of an artist) start under the bubble
+		Column(modifier = Modifier.weight(1f).padding(top = if (bubbleShown) 50.dp else 0.dp)) {
 			Text(
 				text = typeLabel.uppercase(),
 				color = ModernHomeColors.Accent,
@@ -477,8 +525,9 @@ private fun HeartButton(
 }
 
 /**
- * Song of the list: number (or a play icon when it is playing), name, artist, album and length.
- * OK plays from this song, holding OK opens its menu.
+ * Song of the list: number (or a play icon when it is playing), name, artist, album and length, and
+ * a heart on the right to make it a favourite (Right from the song). OK plays from this song,
+ * holding OK opens its menu.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -488,9 +537,11 @@ internal fun TrackRow(
 	showArtist: Boolean,
 	showAlbum: Boolean,
 	playing: Boolean,
+	favorite: Boolean,
 	focusRequester: FocusRequester?,
 	onFocused: () -> Unit,
 	onClick: () -> Unit,
+	onFavorite: () -> Unit,
 	onLongClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -512,42 +563,84 @@ internal fun TrackRow(
 		verticalAlignment = Alignment.CenterVertically,
 		modifier = modifier
 			.fillMaxWidth()
-			.padding(horizontal = ModernHomeDimens.ScreenPaddingHorizontal - 12.dp, vertical = 2.dp)
-			.then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-			.onFocusChanged { if (it.isFocused) onFocused() }
-			.onPreviewKeyEvent { event ->
-				if (!event.isPlayKey) return@onPreviewKeyEvent false
-				if (event.type == KeyEventType.KeyDown) onClick()
-				true
-			}
-			.combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
-			.background(if (focused) Color.White else Color.Transparent, shape)
-			.padding(horizontal = 12.dp, vertical = 9.dp),
+			.padding(start = ModernHomeDimens.ScreenPaddingHorizontal - 12.dp, end = ModernHomeDimens.ScreenPaddingHorizontal - 8.dp, top = 2.dp, bottom = 2.dp),
 	) {
-		Box(modifier = Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
-			if (playing) {
-				Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = primary, modifier = Modifier.size(16.dp))
-			} else if (number != null) {
-				Text(text = "$number", color = secondary, fontSize = 14.sp)
+		Row(
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier
+				.weight(1f)
+				.then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+				.onFocusChanged { if (it.isFocused) onFocused() }
+				.onPreviewKeyEvent { event ->
+					if (!event.isPlayKey) return@onPreviewKeyEvent false
+					if (event.type == KeyEventType.KeyDown) onClick()
+					true
+				}
+				.combinedClickable(interactionSource = interactionSource, indication = null, onClick = onClick, onLongClick = onLongClick)
+				.background(if (focused) Color.White else Color.Transparent, shape)
+				.padding(horizontal = 12.dp, vertical = 9.dp),
+		) {
+			Box(modifier = Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
+				if (playing) {
+					Icon(ImageVector.vectorResource(R.drawable.ic_play), contentDescription = null, tint = primary, modifier = Modifier.size(16.dp))
+				} else if (number != null) {
+					Text(text = "$number", color = secondary, fontSize = 14.sp)
+				}
 			}
-		}
-		Column(modifier = Modifier.weight(1f)) {
-			Text(
-				text = track.name.orEmpty(),
-				color = primary,
-				fontSize = 15.sp,
-				fontWeight = FontWeight.SemiBold,
-				maxLines = 1,
-				overflow = TextOverflow.Ellipsis,
-			)
-			if (subtitle.isNotEmpty()) {
-				Text(text = subtitle, color = secondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+			Column(modifier = Modifier.weight(1f)) {
+				Text(
+					text = track.name.orEmpty(),
+					color = primary,
+					fontSize = 15.sp,
+					fontWeight = FontWeight.SemiBold,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+				if (subtitle.isNotEmpty()) {
+					Text(text = subtitle, color = secondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+				}
 			}
+			formatDuration(track.runTimeTicks)?.let { Text(text = it, color = secondary, fontSize = 13.sp) }
 		}
-		if (track.userData?.isFavorite == true) {
-			Icon(ImageVector.vectorResource(R.drawable.ic_heart_red), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(14.dp))
-			Spacer(Modifier.width(12.dp))
-		}
-		formatDuration(track.runTimeTicks)?.let { Text(text = it, color = secondary, fontSize = 13.sp) }
+
+		Spacer(Modifier.width(8.dp))
+		TrackHeartButton(favorite = favorite, rowFocused = focused, onClick = onFavorite)
+	}
+}
+
+/** Heart of a song: outlined, or red when the song is a favourite */
+@Composable
+private fun TrackHeartButton(
+	favorite: Boolean,
+	rowFocused: Boolean,
+	onClick: () -> Unit,
+) {
+	val interactionSource = remember { MutableInteractionSource() }
+	val focused by interactionSource.collectIsFocusedAsState()
+	val scale by animateFloatAsState(if (focused) 1.12f else 1f, label = "TrackHeartScale")
+
+	Box(
+		contentAlignment = Alignment.Center,
+		modifier = Modifier
+			.graphicsLayer {
+				scaleX = scale
+				scaleY = scale
+			}
+			.size(36.dp)
+			.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+			.background(if (focused) Color.White else Color.Transparent, CircleShape),
+	) {
+		Icon(
+			imageVector = ImageVector.vectorResource(if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart_outline),
+			contentDescription = stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite),
+			// The red heart keeps its color, the outline is soft until the song is focused
+			tint = when {
+				favorite -> Color.Unspecified
+				focused -> Color.Black
+				rowFocused -> ModernHomeColors.TextPrimary
+				else -> ModernHomeColors.TextMuted.copy(alpha = 0.6f)
+			},
+			modifier = Modifier.size(17.dp),
+		)
 	}
 }

@@ -271,4 +271,5 @@
     <string name="music_stop">Detener</string>
     <string name="music_screensaver_show_lyrics">OK · Mostrar letra</string>
     <string name="music_screensaver_hide_lyrics">OK · Ocultar letra</string>
+    <string name="shared_queue_requests">Pedidas que no están en tu biblioteca</string>
 </resources>

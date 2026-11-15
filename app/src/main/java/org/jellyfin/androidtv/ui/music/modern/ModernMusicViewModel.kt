@@ -19,6 +19,7 @@ class ModernMusicViewModel(
 	private val repository: ModernMusicRepository,
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
 	private val userPreferences: UserPreferences,
+	private val favouriteTracks: FavouriteTracks,
 ) : ViewModel() {
 	private val _state = MutableStateFlow(ModernMusicState())
 	val state: StateFlow<ModernMusicState> = _state.asStateFlow()
@@ -37,6 +38,8 @@ class ModernMusicViewModel(
 		this.labels = labels
 		observeLibraries()
 		refresh()
+		// "Favourite Tracks" playlist up to date with the songs marked in other apps
+		favouriteTracks.syncInBackground()
 	}
 
 	fun refresh() {

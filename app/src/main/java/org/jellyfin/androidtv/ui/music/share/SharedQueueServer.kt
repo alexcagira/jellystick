@@ -64,6 +64,15 @@ data class SharedQueueState(
 	val url: String? = null,
 	/** Songs added by guests that did not play yet */
 	val guestSongs: List<GuestSong> = emptyList(),
+	/** Songs shared from Spotify, Apple Music... that are not in the library (to add them later) */
+	val requests: List<SongRequest> = emptyList(),
+)
+
+/** A song asked for with a link that the library does not have */
+data class SongRequest(
+	val title: String,
+	val artist: String?,
+	val requestedBy: String,
 )
 
 /**
@@ -336,7 +345,16 @@ class SharedQueueServer(
 		}
 
 		val linked = StreamingLinkResolver.resolve(text) ?: return failure("link")
-		val match = findInLibrary(linked) ?: return failure("missing", linked)
+		val match = findInLibrary(linked)
+		if (match == null) {
+			// Not in the library: remember it, so it can be added to the server later
+			_state.update { state ->
+				val request = SongRequest(linked.title, linked.artist, addedBy)
+				val others = state.requests.filterNot { it.title.equals(linked.title, ignoreCase = true) && it.artist == linked.artist }
+				state.copy(requests = (listOf(request) + others).take(MAX_REQUESTS))
+			}
+			return failure("missing", linked)
+		}
 		if (!add(match.id, addedBy)) return failure("full", linked)
 
 		return buildJsonObject {
@@ -467,6 +485,7 @@ class SharedQueueServer(
 		private const val SEARCH_ALBUMS = 8
 		private const val MAX_ALBUM_SONGS = 60
 		private const val MAX_GUEST_SONGS = 150
+		private const val MAX_REQUESTS = 50
 		private const val LINK_CANDIDATES = 40
 		private const val MIN_LINK_SCORE = 3
 		private const val IMAGE_SIZE = 200

@@ -40,6 +40,7 @@ import org.jellyfin.androidtv.ui.home.modern.ItemActions
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
 import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseViewModel
+import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicItemViewModel
 import org.jellyfin.androidtv.ui.music.modern.ModernMusicRepository
 import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
@@ -178,6 +179,7 @@ val appModule = module {
 	single { ModernDetailsRepository(get(), get()) }
 	single { ModernMusicRepository(get()) }
 	single { MusicItemRepository(get(), get()) }
+	single { FavouriteTracks(get()) }
 	single { ThemeMusicPlayer(androidContext(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
 	single<MediaSegmentRepository> { MediaSegmentRepositoryImpl(get(), get()) }
 	single<ExternalAppRepository> { ExternalAppRepository(get(), getAll(), get<DefaultExternalPlayerApi>()) }
@@ -199,8 +201,8 @@ val appModule = module {
 	viewModel { ModernHomeViewModel(get(), get(), get(), get()) }
 	viewModel { ModernDetailsViewModel(get(), get()) }
 	viewModel { ModernWatchlistViewModel(get(), get()) }
-	viewModel { ModernMusicViewModel(get(), get(), get()) }
-	viewModel { ModernMusicItemViewModel(get(), get()) }
+	viewModel { ModernMusicViewModel(get(), get(), get(), get()) }
+	viewModel { ModernMusicItemViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicBrowseViewModel(get()) }
 	viewModel { ModernSearchViewModel(get(), get(), get()) }
 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }

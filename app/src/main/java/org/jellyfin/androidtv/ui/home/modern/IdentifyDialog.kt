@@ -40,8 +40,14 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -294,7 +300,11 @@ internal fun EditableField(
 	modifier: Modifier = Modifier,
 	keyboardType: KeyboardType = KeyboardType.Text,
 ) {
+	val keyboard = LocalSoftwareKeyboardController.current
 	var editing by remember { mutableStateOf(false) }
+	// The text box reports "not focused" as soon as it appears: only leaving it after it had the
+	// focus ends the editing
+	var textHadFocus by remember { mutableStateOf(false) }
 	// Back on the button after typing (not when the focus left the text box on its own)
 	var refocusButton by remember { mutableStateOf(false) }
 	val buttonFocusRequester = remember { FocusRequester() }
@@ -303,7 +313,9 @@ internal fun EditableField(
 	val focused by interactionSource.collectIsFocusedAsState()
 
 	fun finish(refocus: Boolean) {
+		keyboard?.hide()
 		refocusButton = refocus
+		textHadFocus = false
 		editing = false
 	}
 
@@ -336,7 +348,16 @@ internal fun EditableField(
 				modifier = Modifier
 					.fillMaxWidth()
 					.focusRequester(textFocusRequester)
-					.onFocusChanged { if (!it.isFocused && editing) finish(refocus = false) }
+					.onFocusChanged { state ->
+						if (state.isFocused) textHadFocus = true
+						else if (textHadFocus && editing) finish(refocus = false)
+					}
+					// Back with the keyboard closed: stop typing, without closing the whole dialog
+					.onPreviewKeyEvent { event ->
+						if (event.key != Key.Back) return@onPreviewKeyEvent false
+						if (event.type == KeyEventType.KeyUp) finish(refocus = true)
+						true
+					}
 					.border(2.dp, ModernHomeColors.Accent, fieldShape)
 					.background(Color.White.copy(alpha = 0.08f), fieldShape)
 					.padding(horizontal = 14.dp, vertical = 11.dp),
@@ -344,6 +365,8 @@ internal fun EditableField(
 			LaunchedEffect(Unit) {
 				awaitFrames(1)
 				textFocusRequester.tryRequestFocus()
+				// The Fire TV keyboard does not always open by itself
+				keyboard?.show()
 			}
 		} else {
 			Text(

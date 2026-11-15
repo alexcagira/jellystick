@@ -277,6 +277,9 @@ private fun SearchField(
 ) {
 	val keyboard = LocalSoftwareKeyboardController.current
 	var editing by remember { mutableStateOf(startEditing) }
+	// The text field reports "not focused" as soon as it appears: only leaving it after it had
+	// the focus ends the editing
+	var textHadFocus by remember { mutableStateOf(false) }
 	// Back on the box after typing (not when the focus left the text field on its own)
 	var refocusBox by remember { mutableStateOf(false) }
 	val textFocusRequester = remember { FocusRequester() }
@@ -287,6 +290,7 @@ private fun SearchField(
 	fun stopEditing(refocus: Boolean) {
 		keyboard?.hide()
 		refocusBox = refocus
+		textHadFocus = false
 		editing = false
 	}
 
@@ -328,7 +332,10 @@ private fun SearchField(
 				modifier = Modifier
 					.fillMaxWidth()
 					.focusRequester(textFocusRequester)
-					.onFocusChanged { if (!it.isFocused && editing) stopEditing(refocus = false) }
+					.onFocusChanged { state ->
+						if (state.isFocused) textHadFocus = true
+						else if (textHadFocus && editing) stopEditing(refocus = false)
+					}
 					// Up/down without the keyboard: back to the box, then the results
 					.onPreviewKeyEvent { event ->
 						if ((event.key == Key.DirectionDown || event.key == Key.DirectionUp) && event.type == KeyEventType.KeyDown) {

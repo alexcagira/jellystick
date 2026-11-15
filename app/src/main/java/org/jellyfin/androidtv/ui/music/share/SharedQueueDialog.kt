@@ -147,6 +147,32 @@ fun SharedQueueDialog(
 						}
 					}
 
+					// Shared from Spotify, Apple Music... but not in the library
+					if (state.requests.isNotEmpty()) {
+						Spacer(Modifier.height(12.dp))
+						Text(
+							text = stringResource(R.string.shared_queue_requests).uppercase(),
+							color = ModernHomeColors.TextMuted,
+							fontSize = 11.sp,
+							fontWeight = FontWeight.Bold,
+							letterSpacing = 1.sp,
+						)
+						Spacer(Modifier.height(6.dp))
+						for (request in state.requests.take(VISIBLE_SONGS)) {
+							Text(
+								text = stringResource(
+									R.string.shared_queue_song,
+									listOfNotNull(request.title, request.artist).joinToString(" · "),
+									request.requestedBy,
+								),
+								color = ModernHomeColors.TextSecondary,
+								fontSize = 13.sp,
+								maxLines = 1,
+								overflow = TextOverflow.Ellipsis,
+							)
+						}
+					}
+
 					Spacer(Modifier.height(18.dp))
 					Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
 						HeroButton(text = stringResource(R.string.shared_queue_done), icon = null, primary = true, onClick = onDismissRequest)

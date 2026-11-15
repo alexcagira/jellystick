@@ -1,7 +1,6 @@
 package org.jellyfin.androidtv.ui.collections
 
 import android.content.Context
-import android.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +35,6 @@ import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import org.jellyfin.sdk.model.serializer.UUIDSerializer
-import org.jellyfin.sdk.model.toFileInfo
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
@@ -394,16 +392,7 @@ class LanguageCollectionsRepository(
 		}
 	}
 
-	/** The server expects the image encoded as base64 (raw bytes as a fallback for other versions) */
-	private suspend fun uploadPoster(collectionId: UUID, jpeg: ByteArray) {
-		val base64 = Base64.encode(jpeg, Base64.NO_WRAP)
-		try {
-			api.imageApi.setItemImage(collectionId, ImageType.PRIMARY, base64.toFileInfo("image/jpeg"))
-		} catch (err: InvalidStatusException) {
-			if (err.status != 400) throw err
-			api.imageApi.setItemImage(collectionId, ImageType.PRIMARY, jpeg.toFileInfo("image/jpeg"))
-		}
-	}
+	private suspend fun uploadPoster(collectionId: UUID, jpeg: ByteArray) = api.uploadPrimaryImage(collectionId, jpeg)
 
 	// Daily update
 

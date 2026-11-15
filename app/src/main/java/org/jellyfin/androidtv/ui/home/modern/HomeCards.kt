@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,27 +128,32 @@ internal fun CardArtwork(
 	fallbackTitle: String,
 	modifier: Modifier = Modifier,
 ) {
+	// The title is only laid out when there is no image: measuring it under every poster cost time
+	// on each new card while scrolling
+	var failed by remember(url) { mutableStateOf(false) }
+
 	Box(
 		modifier = modifier.fillMaxSize(),
 		contentAlignment = Alignment.Center,
 	) {
-		Text(
-			text = fallbackTitle,
-			color = ModernHomeColors.TextSecondary,
-			fontSize = 12.sp,
-			fontWeight = FontWeight.SemiBold,
-			textAlign = TextAlign.Center,
-			maxLines = 3,
-			overflow = TextOverflow.Ellipsis,
-			modifier = Modifier.padding(8.dp),
-		)
-
-		if (url != null) {
+		if (url == null || failed) {
+			Text(
+				text = fallbackTitle,
+				color = ModernHomeColors.TextSecondary,
+				fontSize = 12.sp,
+				fontWeight = FontWeight.SemiBold,
+				textAlign = TextAlign.Center,
+				maxLines = 3,
+				overflow = TextOverflow.Ellipsis,
+				modifier = Modifier.padding(8.dp),
+			)
+		} else {
 			val imageLoader = koinInject<ImageLoader>()
 			AsyncImage(
 				model = url,
 				contentDescription = null,
 				imageLoader = imageLoader,
+				onError = { failed = true },
 				contentScale = ContentScale.Crop,
 				modifier = Modifier.fillMaxSize(),
 			)

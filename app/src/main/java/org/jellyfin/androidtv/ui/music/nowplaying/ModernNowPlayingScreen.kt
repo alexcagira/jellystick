@@ -42,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -87,7 +86,7 @@ import org.jellyfin.androidtv.ui.home.modern.ModernMenuOption
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
 import org.jellyfin.androidtv.ui.music.modern.AddToPlaylistDialog
-import org.jellyfin.androidtv.ui.music.modern.MusicItemRepository
+import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
 import org.jellyfin.androidtv.ui.music.modern.formatDuration
 import org.jellyfin.androidtv.ui.navigation.Destinations
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository
@@ -111,6 +110,7 @@ import org.jellyfin.sdk.api.client.extensions.imageApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.koin.compose.koinInject
+import timber.log.Timber
 import java.util.Date
 import java.util.UUID
 
@@ -133,7 +133,7 @@ fun ModernNowPlayingScreen() {
 	val playbackManager = koinInject<PlaybackManager>()
 	val mediaManager = koinInject<MediaManager>()
 	val navigationRepository = koinInject<NavigationRepository>()
-	val musicItemRepository = koinInject<MusicItemRepository>()
+	val favouriteTracks = koinInject<FavouriteTracks>()
 	val imageLoader = koinInject<ImageLoader>()
 	val context = LocalContext.current
 	val scope = rememberCoroutineScope()
@@ -152,8 +152,8 @@ fun ModernNowPlayingScreen() {
 	var menuEntry by remember { mutableStateOf<QueueEntry?>(null) }
 	var lastMenuEntry by remember { mutableStateOf<QueueEntry?>(null) }
 	var playlistItems by remember { mutableStateOf<List<UUID>?>(null) }
-	// Favorite changes made here, before the queue item is refreshed
-	val favorites = remember { mutableStateMapOf<UUID, Boolean>() }
+	// Favourite changes of this session: the songs of the queue keep the state they were loaded with
+	val favouriteChanges by favouriteTracks.changes.collectAsState()
 	val playFocusRequester = remember { FocusRequester() }
 	val backgroundState = remember { mutableStateOf<String?>(null) }
 
@@ -174,16 +174,16 @@ fun ModernNowPlayingScreen() {
 		if (id != null) navigationRepository.navigate(Destinations.modernMusicItem(id))
 	}
 	fun artistId(song: BaseItemDto?) = song?.artistItems?.firstOrNull()?.id ?: song?.albumArtists?.firstOrNull()?.id
-	fun isFavorite(song: BaseItemDto) = favorites[song.id] ?: (song.userData?.isFavorite == true)
+	fun isFavorite(song: BaseItemDto) = favouriteTracks.isFavorite(song, favouriteChanges)
 	fun toggleFavorite(song: BaseItemDto) {
 		val favorite = !isFavorite(song)
-		favorites[song.id] = favorite
 		scope.launch {
-			runCatching { musicItemRepository.setFavorite(song.id, favorite) }
+			// Also adds it to (or takes it out of) the "Favourite Tracks" playlist
+			runCatching { favouriteTracks.setFavorite(song, favorite) }
 				.onSuccess {
 					Toast.makeText(context, if (favorite) R.string.music_added_favorite else R.string.music_removed_favorite, Toast.LENGTH_SHORT).show()
 				}
-				.onFailure { favorites[song.id] = !favorite }
+				.onFailure { Timber.w(it, "Unable to change the favourite state") }
 		}
 	}
 
@@ -304,6 +304,13 @@ fun ModernNowPlayingScreen() {
 					mediaManager.stopAudio(true)
 					navigationRepository.goBack()
 				}
+				// Favourite: only the heart, red when the song is a favourite
+				val favorite = item?.let { isFavorite(it) } == true
+				ControlButton(
+					icon = if (favorite) R.drawable.ic_heart_red else R.drawable.ic_heart_outline,
+					label = stringResource(if (favorite) R.string.music_remove_favorite else R.string.music_add_favorite),
+					keepIconColor = favorite,
+				) { item?.let { toggleFavorite(it) } }
 				ControlButton(R.drawable.ic_add, stringResource(R.string.music_add_to_playlist)) { item?.let { playlistItems = listOf(it.id) } }
 				ControlButton(
 					icon = R.drawable.ic_shuffle,
@@ -451,7 +458,11 @@ internal fun NowPlayingLyrics(
 		paused = playState != PlayState.PLAYING,
 		fontSize = fontSize.sp,
 		color = Color.White,
-		modifier = modifier.fadingEdges(vertical = 40.dp),
+		modifier = modifier
+			.fadingEdges(vertical = 40.dp)
+			// Room for the line that is sung, drawn 10% bigger, so its first and last letters
+			// are not cut on the sides
+			.padding(horizontal = (fontSize * 1.3f).dp),
 	)
 }
 
@@ -500,6 +511,8 @@ private fun ControlButton(
 	modifier: Modifier = Modifier,
 	primary: Boolean = false,
 	active: Boolean = false,
+	// Icons with their own color, like the red heart
+	keepIconColor: Boolean = false,
 	onClick: () -> Unit,
 ) {
 	val interactionSource = remember { MutableInteractionSource() }
@@ -531,7 +544,11 @@ private fun ControlButton(
 			Icon(
 				imageVector = ImageVector.vectorResource(icon),
 				contentDescription = label,
-				tint = if (focused || primary) Color.Black else ModernHomeColors.TextPrimary,
+				tint = when {
+					keepIconColor -> Color.Unspecified
+					focused || primary -> Color.Black
+					else -> ModernHomeColors.TextPrimary
+				},
 				modifier = Modifier.size(if (primary) 20.dp else 15.dp),
 			)
 		}

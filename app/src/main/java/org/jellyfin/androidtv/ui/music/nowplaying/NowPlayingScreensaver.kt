@@ -16,7 +16,6 @@ import org.jellyfin.androidtv.ui.base.Icon
 import org.jellyfin.androidtv.ui.home.modern.isPlayKey
 import org.jellyfin.androidtv.ui.playback.MediaManager
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,9 +67,6 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.LyricDto
 import org.koin.compose.koinInject
 
-/** Positions the content moves through, so nothing stays at the same place on the TV */
-private val driftOffsets = listOf(0 to 0, 24 to -14, -20 to 12, 14 to 18, -26 to -10)
-private const val DRIFT_MS = 25_000L
 private const val BUTTON_HIGHLIGHT_MS = 3_000L
 
 /**
@@ -92,10 +87,6 @@ internal fun NowPlayingScreensaver(
 	val mediaManager = koinInject<MediaManager>()
 	val focusRequester = remember { FocusRequester() }
 	val progress by rememberPlayerProgress(playbackManager)
-	var drift by remember { mutableIntStateOf(0) }
-	val (driftX, driftY) = driftOffsets[drift % driftOffsets.size]
-	val offsetX by animateDpAsState(driftX.dp, tween(6_000), label = "DriftX")
-	val offsetY by animateDpAsState(driftY.dp, tween(6_000), label = "DriftY")
 	val showLyrics = NowPlayingPreferences.showLyrics && lyrics != null
 	// The lyrics button is barely visible, and lights up for a moment when used
 	var buttonActive by remember { mutableStateOf(false) }
@@ -106,10 +97,6 @@ internal fun NowPlayingScreensaver(
 
 	LaunchedEffect(Unit) {
 		focusRequester.tryRequestFocus()
-		while (true) {
-			delay(DRIFT_MS)
-			drift++
-		}
 	}
 	LaunchedEffect(buttonTouch) {
 		if (buttonTouch == 0) return@LaunchedEffect
@@ -164,7 +151,6 @@ internal fun NowPlayingScreensaver(
 		BoxWithConstraints(
 			modifier = Modifier
 				.fillMaxSize()
-				.offset(offsetX, offsetY)
 				.padding(horizontal = 72.dp, vertical = 52.dp),
 			contentAlignment = Alignment.Center,
 		) {
@@ -176,7 +162,7 @@ internal fun NowPlayingScreensaver(
 						Spacer(Modifier.height(18.dp))
 						SongInfo(item, align = TextAlign.Start, large = false)
 					}
-					Spacer(Modifier.width(56.dp))
+					Spacer(Modifier.width(32.dp))
 					NowPlayingLyrics(
 						lyrics = lyrics!!,
 						playbackManager = playbackManager,

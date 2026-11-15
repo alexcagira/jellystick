@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -106,6 +107,12 @@ internal fun ModernTopBar(
 	val musicPlaying = rememberMusicPlaying()
 	val bubbleFocusRequester = remember { FocusRequester() }
 	var endButtonsFocused by remember { mutableStateOf(false) }
+	var bubbleFocused by remember { mutableStateOf(false) }
+	var watchlistFocused by remember { mutableStateOf(false) }
+	// Explicit moves between the buttons on the right, the bubble and the menu: with the bubble
+	// under the buttons the automatic search could leave the focus stuck on the right
+	val searchFocusRequester = remember { FocusRequester() }
+	val watchlistFocusRequester = remember { FocusRequester() }
 
 	Column(
 		horizontalAlignment = Alignment.End,
@@ -173,6 +180,7 @@ internal fun ModernTopBar(
 						icon = R.drawable.ic_search,
 						active = false,
 						onClick = { navigationRepository.navigate(Destinations.modernSearch()) },
+						modifier = Modifier.focusRequester(searchFocusRequester),
 					)
 				}
 			},
@@ -180,7 +188,14 @@ internal fun ModernTopBar(
 				Row(
 					horizontalArrangement = Arrangement.spacedBy(10.dp),
 					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier.onFocusChanged { endButtonsFocused = it.hasFocus },
+					modifier = Modifier
+						.onFocusChanged { endButtonsFocused = it.hasFocus }
+						// Left from the first button: into the menu
+						.onPreviewKeyEvent { event ->
+							if (event.key != Key.DirectionLeft || !watchlistFocused) return@onPreviewKeyEvent false
+							if (event.type == KeyEventType.KeyDown) searchFocusRequester.tryRequestFocus()
+							true
+						},
 				) {
 					CircleIconButton(
 						icon = if (watchlistActive) R.drawable.ic_watchlist_added else R.drawable.ic_watchlist,
@@ -188,6 +203,9 @@ internal fun ModernTopBar(
 						glassBackdrop = glassBackdrop,
 						active = watchlistActive,
 						onClick = { if (!watchlistActive) navigationRepository.navigate(Destinations.modernWatchlist) },
+						modifier = Modifier
+							.focusRequester(watchlistFocusRequester)
+							.onFocusChanged { watchlistFocused = it.isFocused },
 					)
 					CircleIconButton(
 						icon = R.drawable.ic_settings,
@@ -203,15 +221,29 @@ internal fun ModernTopBar(
 		ModernNowPlayingBubble(
 			glassBackdrop = glassBackdrop,
 			focusRequester = bubbleFocusRequester,
+			// Only reachable with Down from the buttons on the right: going up from the page
+			// reaches the menu as before
+			focusable = endButtonsFocused || bubbleFocused,
+			onFocusChanged = { bubbleFocused = it },
 			modifier = Modifier.onPreviewKeyEvent { event ->
-				// Down: to the page, like the rest of the bar. Left/right stay on the bubble
+				val down = event.type == KeyEventType.KeyDown
 				when (event.key) {
 					Key.DirectionDown -> {
-						if (event.type == KeyEventType.KeyDown) onNavigateDown()
+						if (down) onNavigateDown()
 						true
 					}
 
-					Key.DirectionLeft, Key.DirectionRight -> true
+					Key.DirectionUp -> {
+						if (down) watchlistFocusRequester.tryRequestFocus()
+						true
+					}
+
+					Key.DirectionLeft -> {
+						if (down) searchFocusRequester.tryRequestFocus()
+						true
+					}
+
+					Key.DirectionRight -> true
 					else -> false
 				}
 			},
@@ -299,6 +331,7 @@ private fun NavigationPillButton(
 	moving: Boolean = false,
 	onMove: (Int) -> Unit = {},
 	onMoveDone: () -> Unit = {},
+	modifier: Modifier = Modifier,
 ) {
 	val interactionSource = remember { MutableInteractionSource() }
 	val focused by interactionSource.collectIsFocusedAsState()
@@ -312,7 +345,7 @@ private fun NavigationPillButton(
 	val contentColor = if (focused && !moving) Color.Black else ModernHomeColors.TextPrimary
 
 	Row(
-		modifier = Modifier
+		modifier = modifier
 			// Leaving the library ends the move
 			.onFocusChanged { state -> if (moving && !state.isFocused) onMoveDone() }
 			// While moving, left/right move the library instead of the focus
@@ -377,12 +410,13 @@ private fun CircleIconButton(
 	glassBackdrop: GlassBackdrop?,
 	onClick: () -> Unit,
 	active: Boolean = false,
+	modifier: Modifier = Modifier,
 ) {
 	val interactionSource = remember { MutableInteractionSource() }
 	val focused by interactionSource.collectIsFocusedAsState()
 
 	Box(
-		modifier = Modifier
+		modifier = modifier
 			.size(36.dp)
 			.glassSurface(glassBackdrop, CircleShape)
 			.clickable(

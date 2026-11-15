@@ -271,4 +271,5 @@
     <string name="music_stop">Stop</string>
     <string name="music_screensaver_show_lyrics">OK · Show lyrics</string>
     <string name="music_screensaver_hide_lyrics">OK · Hide lyrics</string>
+    <string name="shared_queue_requests">Asked for, not in your library</string>
 </resources>

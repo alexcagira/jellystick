@@ -7,18 +7,25 @@ plugins {
 	alias(libs.plugins.kotlin.serialization)
 }
 
+// Values from local.properties (never committed), then Gradle properties and environment variables
+val localProperties = Properties().apply {
+	val localPropertiesFile = rootProject.file("local.properties")
+	if (localPropertiesFile.exists()) localPropertiesFile.inputStream().use { load(it) }
+}
+fun localProperty(name: String): String? = localProperties.getProperty(name)?.trim() ?: getProperty(name)
+
 // TMDB key for the "Trending this week" row of the modern home screen.
 // Add `tmdb.api.key=YOUR_KEY` to local.properties (never committed) or set the TMDB_API_KEY environment variable.
-val tmdbApiKey: String = run {
-	val localProperties = Properties()
-	val localPropertiesFile = rootProject.file("local.properties")
-	if (localPropertiesFile.exists()) localPropertiesFile.inputStream().use { localProperties.load(it) }
+val tmdbApiKey: String = (localProperty("tmdb.api.key") ?: "").trim().replace("\"", "")
 
-	localProperties.getProperty("tmdb.api.key")
-		?: findProperty("tmdb.api.key")?.toString()
-		?: System.getenv("TMDB_API_KEY")
-		?: ""
-}.trim().replace("\"", "")
+// Jellystick: its own application id, so the release APK installs next to the official Jellyfin app
+// (same id = "App not installed"). The debug build keeps the old id and with it its login and settings.
+val jellystickApplicationId = "com.jellystick.tv"
+val debugApplicationId = "org.jellyfin.androidtv.debug"
+
+// Version shown in Settings → About. Raise it before every APK you publish: Android only installs an
+// update over the old one when its version code (made from this) is higher
+val jellystickVersion: String = getProperty("jellystick.version") ?: project.getVersionName()
 
 android {
 	namespace = "org.jellyfin.androidtv"
@@ -29,8 +36,8 @@ android {
 		targetSdk = libs.versions.android.targetSdk.get().toInt()
 
 		// Release version
-		applicationId = namespace
-		versionName = project.getVersionName()
+		applicationId = jellystickApplicationId
+		versionName = jellystickVersion
 		versionCode = getVersionCode(versionName!!)
 
 		buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
@@ -48,10 +55,11 @@ android {
 	}
 
 	signingConfigs {
-		val keystoreFile = getProperty("keystore.file")
-		val keystorePassword = getProperty("keystore.password")
-		val signingKeyAlias = getProperty("signing.key.alias")
-		val signingKeyPassword = getProperty("signing.key.password")
+		// Release signing, from local.properties (see docs/MODERN_HOME.md, "Publicar el APK")
+		val keystoreFile = localProperty("keystore.file")
+		val keystorePassword = localProperty("keystore.password")
+		val signingKeyAlias = localProperty("signing.key.alias")
+		val signingKeyPassword = localProperty("signing.key.password")
 
 		if (keystoreFile != null && keystorePassword != null && signingKeyAlias != null && signingKeyPassword != null) {
 			create("release") {
@@ -75,12 +83,12 @@ android {
 			proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
 
 			// Set package names used in various XML files
-			resValue("string", "app_id", namespace!!)
-			resValue("string", "app_search_suggest_authority", "${namespace}.content")
-			resValue("string", "app_search_suggest_intent_data", "content://${namespace}.content/intent")
+			resValue("string", "app_id", jellystickApplicationId)
+			resValue("string", "app_search_suggest_authority", "$jellystickApplicationId.content")
+			resValue("string", "app_search_suggest_intent_data", "content://$jellystickApplicationId.content/intent")
 
 			// Set flavored application name
-			resValue("string", "app_name", "Jellystick")
+			resValue("string", "app_name", "@string/app_name_release")
 
 			buildConfigField("boolean", "DEVELOPMENT", "false")
 
@@ -88,18 +96,17 @@ android {
 		}
 
 		debug {
-			// Use different application id to run release and debug at the same time
-			applicationIdSuffix = ".debug"
+			// Different application id (set below) to run release and debug at the same time
 
 			// Set package names used in various XML files
-			resValue("string", "app_id", namespace + applicationIdSuffix)
-			resValue("string", "app_search_suggest_authority", "${namespace + applicationIdSuffix}.content")
-			resValue("string", "app_search_suggest_intent_data", "content://${namespace + applicationIdSuffix}.content/intent")
+			resValue("string", "app_id", debugApplicationId)
+			resValue("string", "app_search_suggest_authority", "$debugApplicationId.content")
+			resValue("string", "app_search_suggest_intent_data", "content://$debugApplicationId.content/intent")
 
 			// Set flavored application name
-			resValue("string", "app_name", "Jellystick")
+			resValue("string", "app_name", "@string/app_name_debug")
 
-			buildConfigField("boolean", "DEVELOPMENT", (defaultConfig.versionCode!! < 100).toString())
+			buildConfigField("boolean", "DEVELOPMENT", "true")
 		}
 	}
 
@@ -114,7 +121,14 @@ android {
 	}
 }
 
-base.archivesName.set("jellyfin-androidtv-v${project.getVersionName()}")
+androidComponents {
+	onVariants(selector().withBuildType("debug")) { variant ->
+		variant.applicationId.set(debugApplicationId)
+	}
+}
+
+// Output: jellystick-v13.2.0-release.apk
+base.archivesName.set("jellystick-v$jellystickVersion")
 
 tasks.register("versionTxt") {
 	val path = layout.buildDirectory.asFile.get().resolve("version.txt")

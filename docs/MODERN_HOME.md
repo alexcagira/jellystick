@@ -74,7 +74,8 @@ de la app. Suena una vez, no en bucle.
 
 Mientras suena música, debajo de los botones de Watchlist, ajustes y usuario aparece una burbuja con la
 portada (con un anillo de progreso), la canción y el artista. Abajo desde esos botones llega a la burbuja
-y OK abre *Reproduciendo ahora*. Sale en el inicio, las fichas, la Watchlist y la página de Música.
+y OK abre *Reproduciendo ahora*. Sale en el inicio, las fichas, la Watchlist, la página de Música y las
+páginas de álbumes, listas, artistas y géneros (que también tienen la barra de navegación arriba).
 
 ## Fluidez
 
@@ -82,6 +83,16 @@ y OK abre *Reproduciendo ahora*. Sale en el inicio, las fichas, la Watchlist y l
   empezar, en vez de ir midiendo mientras se mueve).
 - El fondo difuminado cambia sin volver a dibujar la pantalla entera.
 - La etiqueta de resolución (4K, 1080p...) se dibuja una sola vez y se reutiliza en todos los pósters.
+- **Usa la versión release** para el día a día: la debug (la que instala *Run ▶*) se puede depurar y por eso
+  Android no optimiza su código; en Compose eso se nota mucho al moverse por las filas. La release va
+  optimizada con R8 y lleva un *baseline profile* (`app/src/main/baseline-prof.txt`): las pantallas nuevas y
+  Compose se compilan a código nativo al instalarla, así que va fluida desde el primer momento.
+- Tras instalar una release nueva con el PC conectado, puedes forzar esa compilación al momento (si no, el
+  Fire TV la hace solo cuando está en reposo):
+
+  ```powershell
+  & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" shell cmd package compile -m speed-profile -f com.jellystick.tv
+  ```
 
 ## Biblioteca de música
 
@@ -120,8 +131,17 @@ Al abrir un álbum, una lista de reproducción, un artista o un género (desde l
 - Botones: Reproducir, Aleatorio, Radio (mezcla instantánea), Favorito e Ir al artista (álbumes).
 - **Las canciones**: OK reproduce desde esa canción, el botón play/pausa también. Mantener OK:
   Reproducir desde aquí, Añadir a la cola, Añadir a una lista, Favoritos, Ir al álbum, Ir al artista.
+- **Corazón** a la derecha de cada canción (Derecha desde la canción; arriba/abajo pasa de corazón en corazón):
+  la marca como favorita (rojo) o la quita (contorno).
+- Al volver arriba a los botones desde las canciones o los álbumes, la página sube del todo.
 - Artistas: sus álbumes en cuadrícula y sus canciones más escuchadas. Géneros: sus álbumes y la radio del género.
 - Álbumes: "More like this" con álbumes parecidos.
+
+**Favourite Tracks**: las canciones favoritas (desde el corazón, el menú de una canción o *Reproduciendo
+ahora*) se añaden a una lista de reproducción llamada *Favourite Tracks*, y se quitan al desmarcarlas. La
+lista se crea con la primera favorita (con todas las que ya tenías) y lleva una portada propia: un corazón
+verde doble como el logo de Jellystick (subirla requiere ser administrador). Al abrir Música se comprueba
+una vez por sesión, para incluir las favoritas marcadas desde otras apps.
 
 En la barra de accesos de Música: Álbumes, Artistas del álbum, Artistas, **Géneros** (cuadrícula de géneros
 como cuadrados de color con su nombre), **Radios** (todas: para ti, una por género y una por artista), Aleatorio, Cola compartida y
@@ -133,11 +153,11 @@ la **lupa** para buscar solo música.
 - Portada y canción, álbum y artista. La letra está **oculta por defecto**; con el botón de letra se muestra
   más grande (y la portada crece un poco). Se recuerda mientras la app está abierta.
 - Botones bajo la barra de tiempo: Anterior, Reproducir/Pausa, Siguiente, **Detener** (vacía la cola y sale de
-  la pantalla), Añadir a una lista, Aleatorio, Letra, Ir al artista, Ir al álbum y **Salvapantallas**.
+  la pantalla), **Favorito** (solo el corazón, rojo si ya lo es), Añadir a una lista, Aleatorio, Letra, Ir al artista, Ir al álbum y **Salvapantallas**.
   El nombre del botón aparece al enfocarlo.
 - La pantalla no tiene scroll: la portada se ajusta al espacio que queda, así que siempre se ve entera.
 - **Salvapantallas**: portada, canción, álbum y artista sobre la portada difuminada; con la letra activada,
-  la letra grande al lado. Se mueve un poco cada 25 s para no marcar la pantalla. **OK** muestra u oculta la
+  la letra grande al lado, sin moverse. **OK** muestra u oculta la
   letra (botón discreto abajo a la derecha), play/pausa pausa, y cualquier otro botón lo cierra.
 - **Cola**: portadas con canción y artista · álbum debajo, y la posición ("3 / 24"). OK salta a esa canción;
   mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista.
@@ -153,6 +173,10 @@ al final de la cola. No necesitan app ni cuenta de Jellyfin; la web la sirve la 
   Copiar enlace). La tele lee el nombre de la canción (o del álbum) y su artista y busca la misma en tu
   biblioteca de Jellyfin: solo puede sonar música que tengas en el servidor.
 - Si no sonaba nada, empieza a sonar lo que añadan; si tenías la música en pausa, sigue en pausa.
+- Las canciones de enlaces que no están en tu biblioteca quedan apuntadas como **peticiones** (se ven en la
+  ventana de la cola compartida en la tele), para añadirlas al servidor más tarde. La tele no puede reproducir
+  música de Spotify, Apple Music o YouTube Music: es contenido protegido que solo sus propias apps pueden
+  reproducir, con la cuenta de quien paga la suscripción.
 - Si la página no abre: el móvil tiene que estar en el mismo Wi-Fi que la tele (no en la red de invitados,
   que suele aislar los dispositivos). La dirección usa ahora la IP de la red activa de la tele; antes podía
   salir la de Wi-Fi Direct (192.168.49.1), que los móviles no alcanzan.
@@ -187,7 +211,8 @@ Mantén OK sobre cualquier póster del inicio o de la Watchlist:
 **Identificar** funciona como en la web: busca en los proveedores de metadatos del servidor (TMDb, TVDb...)
 con el nombre y el año, o con el ID de IMDb (`tt0120737`) o de TMDb. Al elegir el resultado se aplican
 los metadatos y las imágenes nuevas (tardan unos segundos). Solo aparece para administradores.
-Los campos de texto solo abren el teclado al pulsar OK sobre ellos.
+Los campos de texto (nombre, año, ID) abren el teclado al pulsar OK sobre ellos; la tecla de buscar del
+teclado vuelve a buscar, y Atrás deja de escribir sin cerrar el diálogo.
 
 ## Colecciones por idioma de audio
 
@@ -266,6 +291,10 @@ La app se llama **Jellystick** (también la versión debug: `app_name_release` y
 nombre Jellystick, igual que el logo de dentro de la app (`drawable/app_logo.xml`, `drawable-v24/app_logo.xml`,
 colores en `values/logo.xml` y `src/debug/res/values/logo.xml`): arranque, barra y salvapantallas.
 
+En la pantalla de inicio del Fire TV las apps instaladas a mano se dibujan con su **icono** (no con el banner) en
+una casilla rectangular, así que `android:icon` apunta también al banner (`@mipmap/app_banner`); el icono cuadrado
+(`@mipmap/app_icon`) se sigue usando dentro de la app.
+
 Si el Fire TV sigue enseñando el banner o el nombre antiguos, desinstala la app y vuelve a instalarla (el
 launcher guarda la imagen de las apps ya instaladas); si aun así no cambia, reinicia el Fire TV. El icono
 (`mipmap-*/app_icon.png` y `drawable/app_icon_foreground.xml`) es el mismo logo en verde. El logo de Jellyfin
@@ -300,8 +329,9 @@ El ordenador y el Fire TV tienen que estar en la misma red (Wi-Fi o cable).
    `connected to 192.168.1.50:5555`.
 4. Arriba en Android Studio, en el selector de dispositivos, elige el Fire TV (aparece como *Amazon AFT…*).
    Variante `debug` (View → Tool Windows → Build Variants) y pulsa **Run ▶**. Se instala y se abre sola.
-   La versión debug se llama "Jellyfin Debug" y convive con la oficial, así no pierdes nada.
-5. Para volver a abrirla: Inicio del Fire TV → Tus apps → *Jellyfin Debug*.
+   La versión debug también se llama "Jellystick" y convive con la oficial, así no pierdes nada. Es la
+   versión para probar cambios: es bastante **más lenta** que la release (ver "Publicar el APK").
+5. Para volver a abrirla: Inicio del Fire TV → Tus apps → *Jellystick*.
 6. Si algo falla, abre **Logcat** (abajo en Android Studio), elige el Fire TV y filtra por `org.jellyfin`.
 
 Problemas habituales:
@@ -310,6 +340,55 @@ Problemas habituales:
   activado y que no haya una VPN en el PC. Prueba `adb kill-server` y vuelve a conectar.
 - El Fire TV desaparece del selector tras reiniciarlo: repite el `adb connect`.
 - Para desinstalar la versión debug: `adb uninstall org.jellyfin.androidtv.debug`.
+
+## Publicar el APK (para instalarlo con Downloader)
+
+La versión release se llama `com.jellystick.tv`, así que se instala al lado de la app oficial de Jellyfin
+y de la versión debug (cada una con su propia sesión).
+
+**1. Clave de firma (solo la primera vez).** Android Studio → *Build* → *Generate Signed App Bundle or APK*
+→ **APK** → *Create new…*. Guárdala fuera del proyecto (p. ej. `C:/Users/Alex/jellystick.jks`) y apunta las
+contraseñas y el alias. **No la pierdas**: las actualizaciones tienen que ir firmadas con la misma clave, o
+habrá que desinstalar la app (y perder la sesión) para instalar la nueva.
+
+**2. Configúrala en `local.properties`** (no se sube a Git; usa `/` en la ruta):
+
+```properties
+keystore.file=C:/Users/Alex/jellystick.jks
+keystore.password=CONTRASEÑA_DEL_ALMACEN
+signing.key.alias=jellystick
+signing.key.password=CONTRASEÑA_DE_LA_CLAVE
+```
+
+**3. Versión.** En `gradle.properties`, sube `jellystick.version` antes de cada publicación
+(`13.2.0` → `13.2.1`...). Android solo instala una actualización si su versión es mayor.
+
+**4. Compilar.** *Build Variants* → `release`, y *Build* → *Generate App Bundles or APKs* → *Generate APKs*
+(o `.\gradlew assembleRelease` en la Terminal). El APK queda en
+`app/build/outputs/apk/release/jellystick-v13.2.0-release.apk`.
+
+**5. Subirlo a GitHub.** Crea un repositorio **público** (p. ej. `jellystick`; puede tener solo un README) →
+*Releases* → *Draft a new release* → etiqueta `v13.2.0` → arrastra el APK **renombrado a `jellystick.apk`**
+→ *Publish release*. Este enlace apunta siempre al APK de la última release:
+
+```
+https://github.com/TU_USUARIO/jellystick/releases/latest/download/jellystick.apk
+```
+
+**6. Crear el código.** En [go.aftvnews.com](https://go.aftvnews.com/) pega ese enlace y te da un código
+numérico (es permanente y público: cualquiera que lo escriba descarga el APK).
+
+**7. Instalar en el Fire TV.** Ajustes → Mi Fire TV → Opciones para desarrolladores → *Instalar apps
+desconocidas* → **Downloader: activado**. En Downloader escribe el código → se descarga → *Instalar*.
+
+**Actualizar:** sube la versión, compila con la misma clave y publica una release nueva con el archivo
+llamado igual (`jellystick.apk`). El mismo código descarga siempre la última y se instala encima,
+sin perder la sesión.
+
+Notas:
+
+- La clave de TMDB de `local.properties` va dentro del APK; si lo compartes, cualquiera podría sacarla.
+- Los Fire TV nuevos con Vega OS (p. ej. el Fire TV Stick 4K Select) no instalan APKs; el 4K Max sí.
 
 ## Controles
 
