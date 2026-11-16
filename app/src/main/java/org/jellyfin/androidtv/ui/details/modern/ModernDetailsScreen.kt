@@ -69,6 +69,7 @@ import org.jellyfin.androidtv.util.sdk.TrailerUtils
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.koin.compose.koinInject
 import timber.log.Timber
+import java.util.Locale
 import java.util.UUID
 
 /** Fraction of the screen height used by the hero, the first section peeks out below it */
@@ -134,6 +135,12 @@ private fun episodeKey(entry: EpisodeEntry) = "episode_${entry.item.id}"
  */
 @Composable
 private fun playLabel(state: DetailsState): String {
+	// Movies started more than a minute ago: "Resume from 1:05:32"
+	val moviePosition = state.movieResumeTicks
+	if (moviePosition != null) {
+		return stringResource(R.string.modern_details_resume_from, formatResumeTime(moviePosition))
+	}
+
 	val target = state.playTarget
 	if (target == null || (state.kind != DetailsKind.SERIES && state.kind != DetailsKind.SEASON)) {
 		return stringResource(R.string.lbl_play)
@@ -196,6 +203,15 @@ fun ModernDetailsScreen(
 
 	fun onPlay() {
 		scope.launch { viewModel.resolvePlayId()?.let { play(it) } }
+	}
+
+	// ⏮: the movie, or the episode of the Play button, from the beginning
+	fun onRestart() {
+		scope.launch {
+			val id = viewModel.resolvePlayId() ?: return@launch
+			themeMusicPlayer.stop()
+			playbackHelper.retrieveAndPlay(id, false, fromStart = true, context = context)
+		}
 	}
 
 	fun onTrailer() {
@@ -315,6 +331,7 @@ fun ModernDetailsScreen(
 								restoreFocusRequester = requesterFor("hero"),
 								onFocused = { rememberFocus(index, "hero", null) },
 								onPlay = ::onPlay,
+								onRestart = if (state.canRestart) ::onRestart else null,
 								onFavorite = viewModel::toggleFavorite,
 								onTrailer = ::onTrailer,
 								onPlayed = viewModel::togglePlayed,
@@ -474,3 +491,15 @@ fun ModernDetailsScreen(
 		)
 	}
 }
+
+/** "1:05:32", or "45:12" under an hour */
+private fun formatResumeTime(ticks: Long): String {
+	val totalSeconds = ticks / TICKS_PER_SECOND
+	val hours = totalSeconds / 3600
+	val minutes = (totalSeconds % 3600) / 60
+	val seconds = totalSeconds % 60
+	return if (hours > 0) String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
+	else String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
+}
+
+private const val TICKS_PER_SECOND = 10_000_000L

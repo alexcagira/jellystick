@@ -16,6 +16,9 @@ interface PlaybackHelper {
 
 	fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, context: Context)
 
+	/** [fromStart]: from the beginning, not where it was left (the restart button of the details page) */
+	fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, fromStart: Boolean, context: Context)
+
 	fun retrieveAndPlay(itemIds: List<UUID>, shuffle: Boolean, position: Long?, index: Int?, context: Context)
 
 	fun playInstantMix(context: Context, item: BaseItemDto)

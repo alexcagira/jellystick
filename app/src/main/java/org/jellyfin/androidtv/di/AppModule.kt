@@ -237,7 +237,7 @@ val appModule = module {
 	viewModel { PhotoPlayerViewModel(get(), get()) }
 	viewModel { SearchViewModel(get()) }
 	viewModel { ModernHomeViewModel(get(), get(), get(), get(), get()) }
-	viewModel { ModernDetailsViewModel(get(), get()) }
+	viewModel { ModernDetailsViewModel(get(), get(), get()) }
 	viewModel { ModernWatchlistViewModel(get(), get()) }
 	viewModel { ModernMusicViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicItemViewModel(get(), get(), get(), get()) }

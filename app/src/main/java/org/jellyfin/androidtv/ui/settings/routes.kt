@@ -22,6 +22,7 @@ import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.Settings
 import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SettingsSubtitlesScreen
 import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SettingsSubtitlesTextColorScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeSectionsOrderScreen
+import org.jellyfin.androidtv.ui.settings.screen.language.SettingsLanguageScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsMusicSectionsOrderScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeLibrariesScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeNextUpCutoffScreen
@@ -122,6 +123,7 @@ object Routes {
 	const val PLAYBACK_AVC_LEVEL = "/playback/codec/avc-level"
 	const val PLAYBACK_HEVC_LEVEL = "/playback/codec/hevc-level"
 	const val TELEMETRY = "/telemetry"
+	const val LANGUAGE = "/language"
 	const val DEVELOPER = "/developer"
 	const val ABOUT = "/about"
 	const val LICENSES = "/licenses"
@@ -181,6 +183,9 @@ val routes = mapOf<String, RouteComposable>(
 	},
 	Routes.CUSTOMIZATION_SUBTITLES to {
 		SettingsSubtitlesScreen()
+	},
+	Routes.LANGUAGE to {
+		SettingsLanguageScreen()
 	},
 	Routes.CUSTOMIZATION_SUBTITLES_TEXT_COLOR to {
 		SettingsSubtitlesTextColorScreen()

@@ -122,4 +122,23 @@ data class DetailsState(
 	val seasonTabs: List<SeasonTab> = emptyList(),
 	/** First part of the page (header and buttons): the slower rows (seasons, similar...) come later */
 	val partial: Boolean = false,
-)
+) {
+	/** Where a movie was left, when it is more than a minute in ("Resume from…"), otherwise null */
+	val movieResumeTicks: Long?
+		get() = item?.takeIf { kind == DetailsKind.MOVIE }
+			?.userData?.playbackPositionTicks
+			?.takeIf { it >= MIN_RESUME_TICKS }
+
+	/** The ⏮ button: a movie with "Resume from…", or a series / season whose Play button resumes an episode */
+	val canRestart: Boolean
+		get() = when (kind) {
+			DetailsKind.MOVIE -> movieResumeTicks != null
+			DetailsKind.SERIES, DetailsKind.SEASON -> playTarget?.resume == true
+			else -> false
+		}
+
+	private companion object {
+		/** One minute: before that, "Play" (from the beginning anyway) */
+		const val MIN_RESUME_TICKS = 60L * 10_000_000L
+	}
+}

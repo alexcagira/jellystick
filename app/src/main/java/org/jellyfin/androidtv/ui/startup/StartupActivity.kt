@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.startup
 
+import android.content.Context
 import android.Manifest
 import android.app.SearchManager
 import android.content.Intent
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.util.AppLanguage
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.auth.repository.SessionRepositoryState
@@ -54,6 +56,11 @@ import timber.log.Timber
 import java.util.UUID
 
 class StartupActivity : FragmentActivity() {
+	// The language chosen in the settings for the texts of this screen
+	override fun attachBaseContext(newBase: Context) {
+		super.attachBaseContext(AppLanguage.wrap(newBase))
+	}
+
 	companion object {
 		const val EXTRA_ITEM_ID = "ItemId"
 		const val EXTRA_ITEM_IS_USER_VIEW = "ItemIsUserView"

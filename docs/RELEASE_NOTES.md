@@ -23,7 +23,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 
 ### Fichas
 - Fichas nuevas de películas, series, temporadas y personas: fondo a pantalla completa con logo, valoración, géneros y sinopsis; Next up, temporadas, carrusel de episodios, reparto y similares. Se abren al momento y lo más lento (*Más como esto*) llega después.
-- Botón **Reproducir/Reanudar T01:E05**, favoritos, tráiler, visto, información del archivo y **Watchlist** (sincronizada con la de KefinTweaks en la web).
+- Botón **Reproducir / Reanudar T01:E05 / Reanudar desde 1:05:32** con **⏮** al lado para empezar desde el principio, favoritos, tráiler, visto, información del archivo y **Watchlist** (sincronizada con la de KefinTweaks en la web).
 - Cambio de temporada sin salir de la página, ✓ para marcar episodios como vistos y **calidad y banderas en cada episodio**.
 - **Sintonía de la serie** (theme song) con fundidos.
 - Menú de los pósters (mantener OK): reproducir, visto/no visto, **añadir a la watchlist**, más información, ir a la serie o la temporada, información del archivo e **Identificar** como en la web (admin).
@@ -53,5 +53,6 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 ### Fire TV
 - App propia **Jellystick** (`com.jellystick.tv`) con nombre, logo y banner verdes: se instala junto a la app oficial. En el inicio del Fire TV el logo va sobre el gris de la casilla, como las demás apps. El panel del servidor la muestra como *Jellystick*.
 - El reproductor se abre antes y tiene prioridad: al darle a reproducir, lo demás que se estaba cargando espera, y los episodios siguientes de la cola se piden ya reproduciendo.
+- **Idioma de la app** en Ajustes (debajo de Subtítulos): el de la tele o cualquiera de las traducciones de Jellyfin. Las pantallas nuevas de Jellystick están en inglés y español.
 - **Actualizar desde Ajustes**: descarga e instala la última versión publicada en GitHub. La versión de la app es la de la release (v1.2.2, v1.2.3…).
 - Versión release optimizada (R8 + baseline profile), scroll suave entre filas y el foco vuelve al elemento en el que estabas.

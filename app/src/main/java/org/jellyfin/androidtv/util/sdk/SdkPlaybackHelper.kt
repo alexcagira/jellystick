@@ -272,7 +272,10 @@ class SdkPlaybackHelper(
 		}
 	}
 
-	override fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, context: Context) {
+	override fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, context: Context) =
+		retrieveAndPlay(itemId, shuffle, fromStart = false, context = context)
+
+	override fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, fromStart: Boolean, context: Context) {
 		// The player first: background requests of the app wait
 		BackgroundTraffic.playRequested()
 		getScope(context).launch {
@@ -285,9 +288,11 @@ class SdkPlaybackHelper(
 				response
 			}
 
-			val pos = item.userData?.playbackPositionTicks?.ticks?.minus(resumeSubtractDuration) ?: Duration.ZERO
+			val resumePosition = item.userData?.playbackPositionTicks?.ticks?.minus(resumeSubtractDuration) ?: Duration.ZERO
+			// Played again from the beginning (no intros: it was already started)
+			val pos = if (fromStart) Duration.ZERO else resumePosition
 
-			val allowIntros = pos == Duration.ZERO && item.type == BaseItemKind.MOVIE
+			val allowIntros = resumePosition == Duration.ZERO && item.type == BaseItemKind.MOVIE
 			// Episodes: only the next few before the player opens, the others once it plays
 			val quickStart = item.type == BaseItemKind.EPISODE && !shuffle
 			val items = getItems(item, allowIntros, shuffle, quickStart)

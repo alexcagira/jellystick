@@ -5,13 +5,18 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jellyfin.androidtv.data.model.DataRefreshService
+import org.jellyfin.androidtv.data.model.PlaybackStopped
 import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
+import org.jellyfin.androidtv.ui.home.modern.MAX_RESUME_FRACTION
+import org.jellyfin.androidtv.ui.home.modern.MIN_RESUME_FRACTION
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
 import org.jellyfin.sdk.model.api.BaseItemDto
 import timber.log.Timber
@@ -20,6 +25,7 @@ import java.util.UUID
 class ModernDetailsViewModel(
 	private val repository: ModernDetailsRepository,
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
+	private val dataRefreshService: DataRefreshService,
 ) : ViewModel() {
 	private val _state = MutableStateFlow(DetailsState())
 	val state: StateFlow<DetailsState> = _state.asStateFlow()
@@ -34,8 +40,23 @@ class ModernDetailsViewModel(
 	private var itemId: UUID? = null
 	private var loadJob: Job? = null
 	private var librariesJob: Job? = null
+	/** A refresh asked while the stop of a video was on its way to the server: done once it arrives */
+	private var refreshAfterStopReport = false
 
 	init {
+		// Back from the player: "Resume from…" / "Resume S01:E05" and ⏮ at once, before the server has it
+		viewModelScope.launch {
+			dataRefreshService.playbackStopped.drop(1).filterNotNull().collect { stopped -> showStopped(stopped) }
+		}
+		viewModelScope.launch {
+			dataRefreshService.playbackStopReported.drop(1).filterNotNull().collect {
+				if (refreshAfterStopReport) {
+					refreshAfterStopReport = false
+					reload(showLoading = false)
+				}
+			}
+		}
+
 		// Something is going to play while the page still loads ("More like this" is a slow request):
 		// it stops, the player gets the server first. The page loads again when coming back
 		viewModelScope.launch {
@@ -105,7 +126,53 @@ class ModernDetailsViewModel(
 	/**
 	 * Reload quietly, e.g. after playback to update the progress and watched state.
 	 */
-	fun refresh() = reload(showLoading = false)
+	fun refresh() {
+		// The server doesn't have where the video was left yet: the page would come back with the old position
+		if (dataRefreshService.stopReportPending) {
+			refreshAfterStopReport = true
+			return
+		}
+		reload(showLoading = false)
+	}
+
+	/**
+	 * The page as it will be once the server has the stop: the movie with its new position, or the
+	 * episode of the Play button (the next one when it was watched). Same thresholds as the server:
+	 * under 5 % the position isn't kept, from 90 % on it counts as watched.
+	 */
+	private fun showStopped(stopped: PlaybackStopped) {
+		val item = stopped.item
+		val runtime = item.runTimeTicks?.takeIf { it > 0 } ?: return
+		val fraction = stopped.positionTicks.toDouble() / runtime
+		val watched = fraction >= MAX_RESUME_FRACTION
+		val kept = fraction >= MIN_RESUME_FRACTION && !watched
+
+		_state.update { state ->
+			val shown = state.item ?: return@update state
+			when {
+				state.kind == DetailsKind.MOVIE && shown.id == item.id -> {
+					val userData = shown.userData ?: return@update state
+					state.copy(
+						item = shown.copy(userData = userData.copy(playbackPositionTicks = if (kept) stopped.positionTicks else 0L)),
+						isPlayed = if (watched) true else state.isPlayed,
+					)
+				}
+
+				(state.kind == DetailsKind.SERIES || state.kind == DetailsKind.SEASON) &&
+					item.seriesId != null && (shown.id == item.seriesId || shown.seriesId == item.seriesId) -> {
+					val next = stopped.next
+					val target = when {
+						kept -> PlayTarget(item.id, item.parentIndexNumber, item.indexNumber, resume = true)
+						watched && next != null -> PlayTarget(next.id, next.parentIndexNumber, next.indexNumber, resume = false)
+						else -> state.playTarget
+					}
+					state.copy(playTarget = target)
+				}
+
+				else -> state
+			}
+		}
+	}
 
 	private fun reload(showLoading: Boolean) {
 		val id = itemId ?: return

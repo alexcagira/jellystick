@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.playback
 
+import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
@@ -12,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.util.AppLanguage
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.data.model.DataRefreshService
 import org.jellyfin.androidtv.data.repository.ExternalAppRepository
@@ -46,6 +48,11 @@ import kotlin.time.Duration.Companion.milliseconds
  * Once returned it will notify the server of item completion.
  */
 class ExternalPlayerActivity : FragmentActivity() {
+	// The language chosen in the settings for the texts of this screen
+	override fun attachBaseContext(newBase: Context) {
+		super.attachBaseContext(AppLanguage.wrap(newBase))
+	}
+
 	companion object {
 		const val EXTRA_POSITION = "position"
 	}

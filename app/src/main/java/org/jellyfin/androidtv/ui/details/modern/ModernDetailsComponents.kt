@@ -120,6 +120,8 @@ internal fun DetailsHero(
 	restoreFocusRequester: FocusRequester?,
 	onFocused: () -> Unit,
 	onPlay: () -> Unit,
+	/** Play from the beginning: only when the title (or the episode of the Play button) was started */
+	onRestart: (() -> Unit)?,
 	onFavorite: () -> Unit,
 	onTrailer: () -> Unit,
 	onPlayed: () -> Unit,
@@ -272,6 +274,15 @@ internal fun DetailsHero(
 						.focusRequester(playFocusRequester)
 						.then(if (restoreFocusRequester != null) Modifier.focusRequester(restoreFocusRequester) else Modifier),
 				)
+
+				// ⏮: from the beginning
+				if (onRestart != null) {
+					CircleActionButton(
+						icon = R.drawable.ic_previous,
+						contentDescription = stringResource(R.string.modern_details_restart),
+						onClick = onRestart,
+					)
+				}
 
 				HeroButton(
 					text = stringResource(if (isFavorite) R.string.modern_details_favorite else R.string.modern_details_add_favorite),

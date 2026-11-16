@@ -73,6 +73,7 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 
 ### Fire TV
 - Own app, name and logo; the logo sits on the Fire TV tile like any other app.
+- **App language** in *Settings → Language*: the TV's, or any of the 60+ translations of Jellyfin for Android TV (Jellystick's own screens are in English and Spanish).
 - **Update from Settings**: *Settings → Update Jellystick* downloads and installs the latest GitHub release.
 - Optimized release build, smooth scrolling, the player gets priority over everything else, and the Fire TV doesn't sleep while music plays.
 

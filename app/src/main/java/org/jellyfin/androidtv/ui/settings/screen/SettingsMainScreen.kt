@@ -3,7 +3,9 @@ package org.jellyfin.androidtv.ui.settings.screen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import org.jellyfin.androidtv.BuildConfig
@@ -17,6 +19,7 @@ import org.jellyfin.androidtv.ui.navigation.focus.focusKey
 import org.jellyfin.androidtv.ui.settings.Routes
 import org.jellyfin.androidtv.ui.settings.composable.SettingsColumn
 import org.jellyfin.androidtv.ui.settings.update.AppUpdater
+import org.jellyfin.androidtv.util.AppLanguage
 import org.koin.compose.koinInject
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -106,6 +109,24 @@ fun SettingsMainScreen() {
 				captionContent = { Text(stringResource(R.string.subtitles_settings_caption)) },
 				onClick = { router.push(Routes.CUSTOMIZATION_SUBTITLES) },
 				modifier = Modifier.focusKey(Routes.CUSTOMIZATION_SUBTITLES),
+			)
+		}
+
+		// Language of the app's texts
+		item {
+			val context = LocalContext.current
+			val selected = remember { AppLanguage.selected(context) }
+			ListButton(
+				leadingContent = { Icon(painterResource(R.drawable.ic_language), contentDescription = null) },
+				headingContent = { Text(stringResource(R.string.app_language)) },
+				captionContent = {
+					Text(
+						if (selected.isEmpty()) stringResource(R.string.app_language_system_named, AppLanguage.displayName(AppLanguage.systemLocale.toLanguageTag()))
+						else AppLanguage.displayName(selected)
+					)
+				},
+				onClick = { router.push(Routes.LANGUAGE) },
+				modifier = Modifier.focusKey(Routes.LANGUAGE),
 			)
 		}
 

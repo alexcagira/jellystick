@@ -73,6 +73,8 @@
     <string name="modern_details_episode_code">S%1$02d:E%2$02d</string>
     <string name="modern_details_resume_episode">Resume %1$s</string>
     <string name="modern_details_play_episode">Play %1$s</string>
+    <string name="modern_details_resume_from">Resume from %1$s</string>
+    <string name="modern_details_restart">Play from the beginning</string>
     <string name="modern_details_theme_music">Theme music</string>
     <string name="modern_details_theme_music_description">Play the theme song of a series on its page and on its seasons (the series needs a theme song in the library)</string>
 
@@ -361,6 +363,12 @@
     <string name="browse_collections_by_service">By service</string>
     <string name="browse_collections_by_language">By language</string>
     <string name="playback_fallback_failed">This file can\'t be played here, not even transcoded. Check that your user can transcode and the transcoding logs of the server (Dashboard → Logs)</string>
+    <string name="app_language">Language</string>
+    <string name="app_language_description">Language of the app\'s texts. The titles, overviews and genres come from your server, in the language of its metadata.</string>
+    <string name="app_language_system">Language of the TV</string>
+    <string name="app_language_system_named">Language of the TV (%1$s)</string>
+    <string name="app_language_complete">The whole app</string>
+    <string name="app_language_partial">%1$d %% of the original app · the Jellystick screens in English</string>
     <string name="app_update_title">Update Jellystick</string>
     <string name="app_update_idle">Version %1$s · Check for a newer one on GitHub</string>
     <string name="app_update_checking">Looking for a new version…</string>

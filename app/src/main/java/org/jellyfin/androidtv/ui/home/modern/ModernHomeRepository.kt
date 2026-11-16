@@ -37,6 +37,10 @@ import java.util.UUID
 /**
  * Loads everything the modern home screen needs from the Jellyfin server (and optionally TMDB).
  */
+/** Jellyfin's defaults: under 5 % the position isn't kept, from 90 % on the title is watched */
+internal const val MIN_RESUME_FRACTION = 0.05
+internal const val MAX_RESUME_FRACTION = 0.90
+
 class ModernHomeRepository(
 	private val api: ApiClient,
 	private val tmdb: TmdbTrendingClient,
@@ -920,9 +924,6 @@ class ModernHomeRepository(
 
 	private companion object {
 		const val TICKS_PER_MINUTE = 600_000_000L
-		/** Jellyfin's defaults: under 5 % the position isn't kept, from 90 % on the title is watched */
-		const val MIN_RESUME_FRACTION = 0.05
-		const val MAX_RESUME_FRACTION = 0.90
 
 		const val HERO_SLIDES = 8
 		const val HERO_CANDIDATES = 20

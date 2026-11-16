@@ -73,6 +73,8 @@
     <string name="modern_details_episode_code">T%1$02d:E%2$02d</string>
     <string name="modern_details_resume_episode">Reanudar %1$s</string>
     <string name="modern_details_play_episode">Reproducir %1$s</string>
+    <string name="modern_details_resume_from">Reanudar desde %1$s</string>
+    <string name="modern_details_restart">Reproducir desde el principio</string>
     <string name="modern_details_theme_music">Música de la serie</string>
     <string name="modern_details_theme_music_description">Reproduce la sintonía de la serie en su ficha y en sus temporadas (la serie necesita una canción de tema en la biblioteca)</string>
 
@@ -361,6 +363,12 @@
     <string name="browse_collections_by_service">Por plataforma</string>
     <string name="browse_collections_by_language">Por idioma</string>
     <string name="playback_fallback_failed">Este archivo no se puede reproducir aquí, ni transcodificado. Revisa que tu usuario pueda transcodificar y los registros de transcodificación del servidor (Panel → Registros)</string>
+    <string name="app_language">Idioma</string>
+    <string name="app_language_description">Idioma de los textos de la app. Los títulos, sinopsis y géneros vienen de tu servidor, en el idioma de sus metadatos.</string>
+    <string name="app_language_system">Idioma de la tele</string>
+    <string name="app_language_system_named">Idioma de la tele (%1$s)</string>
+    <string name="app_language_complete">Toda la app</string>
+    <string name="app_language_partial">%1$d %% de la app original · las pantallas de Jellystick en inglés</string>
     <string name="app_update_title">Actualizar Jellystick</string>
     <string name="app_update_idle">Versión %1$s · Busca una más nueva en GitHub</string>
     <string name="app_update_checking">Buscando una versión nueva…</string>

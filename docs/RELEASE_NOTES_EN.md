@@ -23,7 +23,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 
 ### Details pages
 - New pages for movies, series, seasons and people: full-screen backdrop with logo, rating, genres and overview; Next up, seasons, episode carousel, cast and similar titles. They open at once and the slowest part (*More like this*) comes after.
-- **Play/Resume S01:E05** button, favourite, trailer, watched, file info and **Watchlist** (synced with the KefinTweaks watchlist on the web).
+- **Play / Resume S01:E05 / Resume from 1:05:32** button with **⏮** next to it to start from the beginning, favourite, trailer, watched, file info and **Watchlist** (synced with the KefinTweaks watchlist on the web).
 - Switch seasons without leaving the page, ✓ to mark episodes as watched, and **quality and flags on every episode**.
 - **Series theme song** with fade in and out.
 - Poster menu (long press on OK): play, watched/unwatched, **add to watchlist**, more info, go to the series or season, file info and **Identify**, like on the web (admin).
@@ -53,5 +53,6 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 ### Fire TV
 - Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo and banner: installs next to the official app. On the Fire TV home screen the logo sits on the grey of the tile, like other apps. The server dashboard shows it as *Jellystick*.
 - The player opens sooner and goes first: pressing play pauses whatever else was loading, and the next episodes of the queue are loaded once it plays.
+- **App language** in Settings (under Subtitles): the TV's or any of Jellyfin's translations. Jellystick's new screens are in English and Spanish.
 - **Update from Settings**: downloads and installs the latest version published on GitHub. The app version is the release's (v1.2.2, v1.2.3…).
 - Optimized release build (R8 + baseline profile), smooth scrolling between rows, and focus returns to where you were.

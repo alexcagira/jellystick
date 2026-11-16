@@ -388,7 +388,13 @@ botones (*Play*, favoritos, tráiler, visto, información del archivo, watchlist
 todas las opciones). Debajo: *Next up*, temporadas, episodios, reparto y títulos similares.
 
 En series y temporadas el botón muestra el episodio: **Resume S01:E05** si ya lo empezaste, **Play S02:E01**
-si no (en español, *Reanudar T01:E05* / *Reproducir T02:E01*). En una temporada los episodios salen en un
+si no (en español, *Reanudar T01:E05* / *Reproducir T02:E01*). En películas empezadas hace más de un minuto el
+botón dice **Reanudar desde 1:05:32**. En los dos casos, al lado sale **⏮** (antes de *Favoritos*): lo vuelve a
+reproducir desde el principio, sin intros (`retrieveAndPlay(..., fromStart = true)`). Al volver del reproductor
+el botón cambia al momento, antes de que el servidor tenga la posición; la ficha se recarga cuando la tiene.
+El servidor solo guarda la posición a partir del 5 % del título (*Panel de control → Reproducción → Reanudar →
+Porcentaje mínimo para reanudar*): para que una película de 2 horas diga *Reanudar desde* al minuto, baja ese
+valor a 1. En una temporada los episodios salen en un
 carrusel que empieza en el siguiente por ver (marcado como *Next up*). Se reproducen con OK o con ⏯;
 manteniendo OK se abre su ficha clásica. Cada episodio lleva su calidad (4K, HDR, Dolby Vision…) arriba a la
 izquierda (abajo a la izquierda en el *Next up*) y las banderas de sus pistas de audio arriba a la derecha, junto
@@ -580,6 +586,19 @@ Problemas habituales:
   activado y que no haya una VPN en el PC. Prueba `adb kill-server` y vuelve a conectar.
 - El Fire TV desaparece del selector tras reiniciarlo: repite el `adb connect`.
 - Para desinstalar la versión debug: `adb uninstall org.jellyfin.androidtv.debug`.
+
+## Idioma de la app
+
+Ajustes → **Idioma** (debajo de *Subtítulos*): *Idioma de la tele* o cualquiera de las traducciones de Jellyfin
+para Android TV (las carpetas `res/values-*`), con inglés y español primero y, en las demás, cuánto de la app
+original está traducido. Las pantallas nuevas de Jellystick (`strings_modern_home.xml`) solo están en inglés y
+español: en otros idiomas salen en inglés (las variantes de español, como es-MX, usan el español).
+
+Se guarda en un archivo de preferencias propio (`app_language`) porque hace falta antes de que arranque nada:
+cada actividad (`MainActivity`, `StartupActivity`, `ExternalPlayerActivity`) lo aplica en `attachBaseContext`
+y la aplicación en sus recursos (textos de repositorios, notificaciones, salvapantallas). Al cambiarlo, la
+pantalla se recrea en el nuevo idioma. Los títulos, sinopsis y géneros vienen del servidor, en el idioma de
+sus metadatos. Código: `util/AppLanguage.kt` y `ui/settings/screen/language/`.
 
 ## Publicar el APK (para instalarlo con Downloader)
 
