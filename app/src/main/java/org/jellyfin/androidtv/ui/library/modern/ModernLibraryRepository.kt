@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.library.modern
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -198,7 +199,8 @@ class ModernLibraryRepository(
 			val heroAsync = if (onHero != null) async { onHero(safe("hero") { hero(libraryId, kind) }.orEmpty()) } else null
 			// The other rows a few at a time: the media bar and the posters keep loading meanwhile
 			val permits = Semaphore(PARALLEL_ROWS)
-			fun <T> row(block: suspend () -> T) = async { permits.withPermit { block() } }
+			// While a video starts they wait: the player gets the connections
+			fun <T> row(block: suspend () -> T) = async { permits.withPermit { BackgroundTraffic.awaitTurn(); block() } }
 
 			val nextUpAsync = row { if (movies) emptyList() else safe("next up") { nextUp(libraryId) }.orEmpty() }
 			val genresAsync = row { safe("genres") { genres(libraryId, kind) }.orEmpty() }
@@ -271,6 +273,18 @@ class ModernLibraryRepository(
 				limit = SECTION_LIMIT,
 			)
 		).content.items
+
+	/**
+	 * Only the "Continue watching" row (with the next episodes), quick: after watching something it
+	 * changes at once instead of after every other row. Null when it is empty.
+	 */
+	suspend fun continueRow(libraryId: UUID, kind: LibraryKind): LibrarySection? = withContext(Dispatchers.IO) {
+		coroutineScope {
+			val resumeAsync = async { resumeItems(libraryId, kind) }
+			val nextUpAsync = async { if (kind == LibraryKind.MOVIES) emptyList() else safe("next up") { nextUp(libraryId) }.orEmpty() }
+			continueSection(resumeAsync.await(), nextUpAsync.await())
+		}
+	}
 
 	/** Started titles, then the next episodes of the series not already in it */
 	private fun continueSection(resume: List<BaseItemDto>, nextUp: List<BaseItemDto>): LibrarySection? {
@@ -651,6 +665,7 @@ class ModernLibraryRepository(
 		scope.launch {
 			delay(PRELOAD_DELAY)
 			try {
+				BackgroundTraffic.awaitTurn()
 				genres(null, null, refresh = true)
 			} catch (err: CancellationException) {
 				throw err

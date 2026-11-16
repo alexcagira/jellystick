@@ -308,6 +308,16 @@ class ModernHomeRepository(
 		}
 	}
 
+	/**
+	 * Only the "Continue watching" row, quick: after watching something it shows the new position
+	 * without waiting for the other rows (the slowest one takes seconds). Null when it is empty.
+	 */
+	suspend fun continueWatchingSection(): HomeSection? = withContext(Dispatchers.IO) {
+		val hidden = hiddenItemIds()
+		val items = continueWatching().withoutHidden(hidden)
+		section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, landscapeCards(items, withBadges = true).distinctBy { it.key })
+	}
+
 	private fun cachedSeriesMedia(): Map<UUID, SeriesMedia> = synchronized(seriesMediaCache) { HashMap(seriesMediaCache) }
 
 	private suspend fun hiddenItemIds(): Set<UUID> = safe("hidden libraries") { libraryVisibilityRepository.hiddenItemIds() }.orEmpty()
@@ -706,7 +716,7 @@ class ModernHomeRepository(
 		val firstEpisodes = unhinted.take(maxLookups).map { seriesId ->
 			async {
 				// A few at a time: a library page can ask for a hundred series
-				val episodes = lookupSemaphore.withPermit { safe("first episode") {
+				val episodes = lookupSemaphore.withPermit { BackgroundTraffic.awaitTurn(); safe("first episode") {
 					api.tvShowsApi.getEpisodes(
 						seriesId = seriesId,
 						fields = setOf(ItemFields.MEDIA_STREAMS),
@@ -880,7 +890,8 @@ class ModernHomeRepository(
 		const val LATEST_EPISODES_CANDIDATES = 80
 		const val SERIES_MEDIA_LOOKUPS = 40
 		const val MAX_PREFETCH_LOOKUPS = 200
-		const val PARALLEL_LOOKUPS = 8
+		// Below the connections the app has per server: playback and page requests find a free one
+		const val PARALLEL_LOOKUPS = 4
 		const val LABELS_TTL_MS = 5 * 60 * 1000L
 		const val SERIES_ACTIVITY_LIMIT = 150
 		const val WATCHLIST_PAGE_LIMIT = 300

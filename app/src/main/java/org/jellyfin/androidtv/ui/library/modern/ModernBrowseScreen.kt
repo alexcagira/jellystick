@@ -71,6 +71,8 @@ import androidx.fragment.compose.content
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,6 +90,7 @@ import org.jellyfin.androidtv.ui.home.modern.CardArtwork
 import org.jellyfin.androidtv.ui.home.modern.FocusableCardSurface
 import org.jellyfin.androidtv.ui.home.modern.QualityBadges
 import org.jellyfin.androidtv.ui.home.modern.LanguageFlags
+import org.jellyfin.androidtv.ui.home.modern.MediaBadges
 import org.jellyfin.androidtv.ui.home.modern.NewContentBadge
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeDimens
@@ -127,6 +130,12 @@ data class BrowseState(
 	val genres: List<BrowseChip> = emptyList(),
 	val tags: List<String> = emptyList(),
 	val ratings: List<String> = emptyList(),
+	/** Audio languages of the library (movie and TV show libraries), most titles first */
+	val languages: List<BrowseLanguage> = emptyList(),
+	/** The library has an audio filter */
+	val hasLanguages: Boolean = false,
+	/** The audio languages are being read the first time: how far */
+	val languagesProgress: AudioLanguageIndex.Progress? = null,
 	/** Item to scroll to and focus (letter jump), with a counter so the same index works twice */
 	val jumpIndex: Int? = null,
 	val jumpCount: Int = 0,
@@ -136,6 +145,7 @@ class ModernBrowseViewModel(
 	private val repository: LibraryBrowseRepository,
 	private val libraryRepository: ModernLibraryRepository,
 	private val homeRepository: ModernHomeRepository,
+	private val audioLanguages: AudioLanguageIndex,
 ) : ViewModel() {
 	private val _state = MutableStateFlow(BrowseState(BrowseFilter(title = "")))
 	val state: StateFlow<BrowseState> = _state.asStateFlow()
@@ -143,7 +153,12 @@ class ModernBrowseViewModel(
 	/** Loaded pages of posters (read by the grid, so they are snapshot state) */
 	val pages = mutableStateMapOf<Int, List<BrowseCard>>()
 	private val loadingPages = HashSet<Int>()
-	private var randomIds: List<UUID>? = null
+	/**
+	 * The whole list of the grid when the app makes it (random order, audio filter): the pages are
+	 * loaded from it. [listNames]: their sort names, for the letters
+	 */
+	private var listIds: List<UUID>? = null
+	private var listNames: List<String>? = null
 	private var loadJob: Job? = null
 	private var initialized = false
 
@@ -167,7 +182,8 @@ class ModernBrowseViewModel(
 	}
 
 	private fun loadOptions(filter: BrowseFilter) {
-		val base = filter.copy(genre = null, tag = null, officialRating = null, played = PlayedFilter.ALL)
+		val base = filter.copy(genre = null, tag = null, officialRating = null, audioLanguage = null, played = PlayedFilter.ALL)
+		loadLanguages(base)
 		viewModelScope.launch {
 			val genres = runCatching { libraryRepository.genres(base.libraryId, base.kind) }.getOrDefault(emptyList())
 			_state.update { it.copy(genres = genres) }
@@ -182,6 +198,42 @@ class ModernBrowseViewModel(
 		}
 	}
 
+	/** Audio filter: movie and TV show libraries (what the device knows at once, then up to date) */
+	private fun loadLanguages(filter: BrowseFilter) {
+		val libraryId = filter.libraryId ?: return
+		val kind = filter.kind ?: return
+		if (filter.collections) return
+		_state.update { it.copy(hasLanguages = true) }
+
+		fun show(byLanguage: Map<String, Set<UUID>>) {
+			val languages = byLanguage
+				.map { (key, ids) -> BrowseLanguage(key, MediaBadges.languageName(key), ids.size) }
+				.sortedWith(compareByDescending<BrowseLanguage> { it.count }.thenBy { it.name })
+			_state.update { it.copy(languages = languages) }
+		}
+
+		viewModelScope.launch {
+			audioLanguages.progress.collect { progress ->
+				_state.update { it.copy(languagesProgress = progress[libraryId]) }
+			}
+		}
+		viewModelScope.launch {
+			// What the device knows (read from its file), then the new titles
+			withContext(Dispatchers.IO) { audioLanguages.cached(libraryId, kind) }?.let(::show)
+			runCatching { audioLanguages.update(libraryId, kind) }
+				.onSuccess(::show)
+				.onFailure { if (it is CancellationException) throw it }
+		}
+	}
+
+	/** Titles of the library with an audio language (read first if needed) */
+	private suspend fun titlesWithLanguage(filter: BrowseFilter, language: String): Set<UUID> {
+		val libraryId = filter.libraryId ?: return emptySet()
+		val kind = filter.kind ?: return emptySet()
+		val byLanguage = withContext(Dispatchers.IO) { audioLanguages.cached(libraryId, kind) } ?: audioLanguages.update(libraryId, kind)
+		return byLanguage[language].orEmpty()
+	}
+
 	/** After making a collection: the grid again, with it */
 	fun refresh() {
 		_state.update { it.copy(total = null, failed = false, version = it.version + 1, jumpIndex = null) }
@@ -194,15 +246,23 @@ class ModernBrowseViewModel(
 		loadJob?.cancel()
 		pages.clear()
 		loadingPages.clear()
-		randomIds = null
+		listIds = null
+		listNames = null
 
 		val filter = _state.value.filter
 		val version = _state.value.version
 		loadJob = viewModelScope.launch {
 			try {
-				if (filter.sort == BrowseSort.RANDOM) {
-					val ids = repository.randomIds(filter)
-					randomIds = ids
+				if (filter.sort == BrowseSort.RANDOM || filter.audioLanguage != null) {
+					// The list in its order, then only the titles with the language
+					var titles = repository.titles(filter)
+					filter.audioLanguage?.let { language ->
+						val wanted = titlesWithLanguage(filter, language)
+						titles = titles.filter { it.id in wanted }
+					}
+					val ids = titles.map { it.id }
+					listIds = ids
+					listNames = titles.map { (it.sortName ?: it.name).orEmpty() }
 					pages[0] = repository.cards(ids.take(PAGE_SIZE))
 					_state.update { if (it.version == version) it.copy(total = ids.size) else it }
 				} else {
@@ -227,7 +287,7 @@ class ModernBrowseViewModel(
 		val version = _state.value.version
 		viewModelScope.launch {
 			try {
-				val cards = randomIds?.let { ids ->
+				val cards = listIds?.let { ids ->
 					repository.cards(ids.drop(page * PAGE_SIZE).take(PAGE_SIZE))
 				} ?: repository.page(filter, page * PAGE_SIZE, PAGE_SIZE).cards
 				if (_state.value.version == version) {
@@ -280,9 +340,15 @@ class ModernBrowseViewModel(
 				loadJob?.join()
 			}
 			val filter = _state.value.filter
-			val index = runCatching { repository.indexOfLetter(filter, letter) }
-				.onFailure { Timber.w(it, "Unable to jump to $letter") }
-				.getOrNull() ?: return@launch
+			// A list made by the app (audio filter): sorted by name already, counted here
+			val names = listNames
+			val index = if (names != null) {
+				if (letter == '#') 0 else names.count { it.lowercase() < letter.lowercase() }
+			} else {
+				runCatching { repository.indexOfLetter(filter, letter) }
+					.onFailure { Timber.w(it, "Unable to jump to $letter") }
+					.getOrNull() ?: return@launch
+			}
 			val total = _state.value.total ?: index
 			val target = index.coerceAtMost((total - 1).coerceAtLeast(0))
 			ensurePage(target / PAGE_SIZE)
@@ -290,7 +356,11 @@ class ModernBrowseViewModel(
 		}
 	}
 
-	suspend fun randomItem(): BaseItemDto? = runCatching { repository.randomItem(_state.value.filter) }.getOrNull()
+	suspend fun randomItem(): BaseItemDto? = runCatching {
+		val ids = listIds
+		if (_state.value.filter.audioLanguage != null && ids != null) ids.randomOrNull()?.let { repository.cards(listOf(it)).firstOrNull()?.item }
+		else repository.randomItem(_state.value.filter)
+	}.getOrNull()
 
 	suspend fun resolvePlayableId(item: BaseItemDto): UUID? = homeRepository.resolvePlayableId(item)
 }
@@ -461,6 +531,9 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 							onPlayed = { played -> viewModel.setFilter { copy(played = played) } },
 							onGenres = { showDialog(BrowseDialog.GENRES) },
 							onRatings = { showDialog(BrowseDialog.RATINGS) },
+							onLanguages = if (state.hasLanguages) {
+								{ showDialog(BrowseDialog.LANGUAGES) }
+							} else null,
 							onSort = { showDialog(BrowseDialog.SORT) },
 							onShuffle = {
 								scope.launch { viewModel.randomItem()?.let(::play) }
@@ -586,6 +659,7 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 			title = when (shown) {
 				BrowseDialog.GENRES -> stringResource(R.string.browse_genres)
 				BrowseDialog.RATINGS -> stringResource(R.string.browse_age_rating)
+				BrowseDialog.LANGUAGES -> stringResource(R.string.browse_audio_language)
 				BrowseDialog.SORT -> stringResource(R.string.browse_sort)
 				null -> ""
 			},
@@ -609,6 +683,28 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 					for (rating in state.ratings) {
 						add(ModernMenuOption(LibraryBrowseRepository.ratingLabel(rating), if (filter.officialRating == rating) R.drawable.ic_check else null) {
 							viewModel.setFilter { copy(officialRating = rating) }
+						})
+					}
+				}
+
+				BrowseDialog.LANGUAGES -> buildList {
+					add(ModernMenuOption(stringResource(R.string.browse_all_languages), if (filter.audioLanguage == null) R.drawable.ic_check else null) {
+						viewModel.setFilter { copy(audioLanguage = null) }
+					})
+					val progress = state.languagesProgress
+					// The first time the languages are read: how far (the list comes when done)
+					if (state.languages.isEmpty() || progress != null) {
+						val text = if (progress != null && progress.total > 0) {
+							stringResource(R.string.browse_languages_reading_progress, progress.done, progress.total)
+						} else {
+							stringResource(R.string.browse_languages_reading)
+						}
+						add(ModernMenuOption(text, R.drawable.ic_refresh) {})
+					}
+					for (language in state.languages) {
+						val text = stringResource(R.string.browse_language_count, language.name, language.count)
+						add(ModernMenuOption(text, if (filter.audioLanguage == language.key) R.drawable.ic_check else null) {
+							viewModel.setFilter { copy(audioLanguage = language.key) }
 						})
 					}
 				}
@@ -651,7 +747,7 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 	}
 }
 
-private enum class BrowseDialog { GENRES, RATINGS, SORT }
+private enum class BrowseDialog { GENRES, RATINGS, LANGUAGES, SORT }
 
 private enum class CollectionMaker { SERVICE, LANGUAGE }
 
@@ -687,6 +783,7 @@ private fun BrowseHeader(
 	onPlayed: (PlayedFilter) -> Unit,
 	onGenres: () -> Unit,
 	onRatings: () -> Unit,
+	onLanguages: (() -> Unit)?,
 	onSort: () -> Unit,
 	onShuffle: () -> Unit,
 	onByService: (() -> Unit)? = null,
@@ -754,6 +851,16 @@ private fun BrowseHeader(
 					onClick = onRatings,
 					outlined = true,
 				)
+				// Movie and TV show libraries
+				if (onLanguages != null) {
+					FilterPill(
+						text = filter.audioLanguage?.let { MediaBadges.languageName(it) } ?: stringResource(R.string.browse_audio_language),
+						icon = R.drawable.ic_select_audio,
+						selected = filter.audioLanguage != null,
+						onClick = onLanguages,
+						outlined = true,
+					)
+				}
 			}
 			FilterPill(
 				text = stringResource(filter.sort.label),

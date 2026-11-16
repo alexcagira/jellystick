@@ -27,10 +27,14 @@ import coil3.size.Size
 import coil3.toBitmap
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.trickplayApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.api.client.util.AuthorizationHeaderBuilder
 import org.jellyfin.sdk.model.api.BaseItemDto
+import org.jellyfin.sdk.model.api.TrickplayInfoDto
 import org.jellyfin.sdk.model.serializer.toUUIDOrNull
 import org.koin.compose.koinInject
+import kotlinx.coroutines.CancellationException
+import java.util.UUID
 import kotlin.math.roundToInt
 
 private val thumbnailShape = RoundedCornerShape(6.dp)
@@ -50,18 +54,33 @@ internal fun TrickplayThumbnail(
 	val api = koinInject<ApiClient>()
 	val imageLoader = koinInject<ImageLoader>()
 
-	val info = mediaSourceId?.let { id -> item?.trickplay?.get(id)?.values?.minByOrNull { it.width } }
+	// The item of the player can come without the trickplay information: asked once to the server
+	val trickplay by produceState(item?.trickplay?.takeIf { it.isNotEmpty() }, item?.id) {
+		if (item == null || !item.trickplay.isNullOrEmpty()) return@produceState
+		value = TrickplayInfoCache.get(item.id) ?: runCatching { api.userLibraryApi.getItem(item.id).content.trickplay }
+			.onFailure { if (it is CancellationException) throw it }
+			.getOrNull()
+			?.also { TrickplayInfoCache.put(item.id, it) }
+	}
+
+	// The images of the version being played, otherwise those of another version of the file (the
+	// server may have made them only for one, e.g. not for the 4K Dolby Vision one)
+	val sources = trickplay.orEmpty().filterValues { it.isNotEmpty() }
+	val playedSource = mediaSourceId?.toUUIDOrNull()
+	val sourceId = sources.keys.firstOrNull { it == mediaSourceId || (playedSource != null && it.toUUIDOrNull() == playedSource) }
+		?: sources.keys.firstOrNull()
+	val info = sourceId?.let { id -> sources[id]?.values?.minByOrNull { it.width } }
 
 	// Tile (image with a grid of thumbnails) and position of the thumbnail inside it
 	val tileSize = info?.let { it.tileWidth * it.tileHeight }?.takeIf { it > 0 }
 	val thumbnail = if (info != null && tileSize != null && info.interval > 0) (positionMs / info.interval).toInt() else null
 	val tileIndex = if (thumbnail != null && tileSize != null) thumbnail / tileSize else null
-	val tileUrl = if (info != null && tileIndex != null && item != null && mediaSourceId != null) {
+	val tileUrl = if (info != null && tileIndex != null && item != null && sourceId != null) {
 		api.trickplayApi.getTrickplayTileImageUrl(
 			itemId = item.id,
 			width = info.width,
 			index = tileIndex,
-			mediaSourceId = mediaSourceId.toUUIDOrNull(),
+			mediaSourceId = sourceId.toUUIDOrNull(),
 		)
 	} else null
 
@@ -117,4 +136,19 @@ internal fun TrickplayThumbnail(
 			}
 			.border(1.5.dp, Color.White.copy(alpha = 0.85f), thumbnailShape),
 	)
+}
+
+/** Trickplay information asked to the server, by item (a few items per playback session) */
+private object TrickplayInfoCache {
+	private const val MAX_ITEMS = 20
+	private val items = LinkedHashMap<UUID, Map<String, Map<String, TrickplayInfoDto>>>()
+
+	@Synchronized
+	fun get(id: UUID) = items[id]
+
+	@Synchronized
+	fun put(id: UUID, value: Map<String, Map<String, TrickplayInfoDto>>) {
+		items[id] = value
+		while (items.size > MAX_ITEMS) items.remove(items.keys.first())
+	}
 }

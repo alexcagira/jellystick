@@ -44,9 +44,12 @@
         </intent>
     </queries>
 
-    <!-- The Fire TV home screen only takes the banner of a sideloaded app from drawable-xhdpi (a
-         banner in mipmap was ignored: it drew the icon shrunk on a grey tile instead), like Moonlight
-         and other sideloaded apps with a full tile. The icon is the normal square one -->
+    <!-- The 16:9 tile of the TV home screens. Android TV / Google TV use android:banner; the Fire TV
+         home screen, for apps that don't come from the Amazon Appstore, needs android:banner and
+         android:logo on the app and on the launcher activity (with an icon of its own on the
+         activity it draws that icon, square and centred on grey). The banner is a PNG (drawable-
+         xhdpi/xxhdpi/xxxhdpi), not mipmap or adaptive. The Fire TV keeps the tile of the installed
+         app: it only changes after uninstalling and installing again -->
     <application
         android:name=".JellyfinApplication"
         android:allowBackup="true"
@@ -57,6 +60,8 @@
         android:icon="@mipmap/app_icon"
         android:label="@string/app_name"
         android:largeHeap="true"
+        android:logo="@drawable/app_banner_tv"
+        android:roundIcon="@mipmap/app_icon"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.Jellyfin"
@@ -117,8 +122,11 @@
         <!-- Authentication -->
         <activity
             android:name=".ui.startup.StartupActivity"
+            android:banner="@drawable/app_banner_tv"
             android:exported="true"
+            android:label="@string/app_name"
             android:launchMode="singleTask"
+            android:logo="@drawable/app_banner_tv"
             android:noHistory="true"
             android:windowSoftInputMode="adjustNothing">
             <intent-filter>

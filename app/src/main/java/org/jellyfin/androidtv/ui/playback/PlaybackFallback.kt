@@ -11,6 +11,8 @@ import org.jellyfin.sdk.model.api.CodecProfile
 import org.jellyfin.sdk.model.api.CodecType
 import org.jellyfin.sdk.model.api.DeviceProfile
 import org.jellyfin.sdk.model.api.DlnaProfileType
+import org.jellyfin.sdk.model.api.MediaSourceInfo
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.ProfileCondition
 import org.jellyfin.sdk.model.api.ProfileConditionType
 import org.jellyfin.sdk.model.api.ProfileConditionValue
@@ -41,6 +43,29 @@ class PlaybackFallback(context: Context) {
 			TRANSCODE_AUDIO -> R.string.playback_fallback_audio
 			else -> R.string.playback_fallback_all
 		}
+
+		/**
+		 * Next level after a failure. The remux alone rarely fixes anything, and converting the
+		 * audio (what Plex does with E-AC3 Atmos on a Fire TV) is cheap for the server: it comes
+		 * before converting the video too.
+		 */
+		@JvmStatic
+		fun nextLevel(level: Int): Int = if (level < TRANSCODE_AUDIO) TRANSCODE_AUDIO else TRANSCODE_ALL
+
+		/**
+		 * Decode Dolby Vision video as HEVC HDR10 in the current stream: profile 8 files carry an
+		 * HDR10 base layer, and some DV (+ HDR10+) files stay black on a Fire TV. Read by the player
+		 * each time it picks its decoders, so it applies to the next stream.
+		 */
+		@Volatile
+		@JvmStatic
+		var decodeDolbyVisionAsHdr10: Boolean = false
+
+		/** The video of [source] is Dolby Vision (any profile, with or without HDR10/HDR10+) */
+		@JvmStatic
+		fun isDolbyVision(source: MediaSourceInfo?): Boolean = source?.mediaStreams.orEmpty().any { stream ->
+			stream.type == MediaStreamType.VIDEO && stream.videoRangeType?.serialName?.startsWith("DOVI", ignoreCase = true) == true
+		}
 	}
 
 	private val preferences = context.getSharedPreferences("playback_fallback", Context.MODE_PRIVATE)
@@ -56,6 +81,17 @@ class PlaybackFallback(context: Context) {
 		if (item == null) return
 		preferences.edit {
 			if (level <= DIRECT) remove(key(item)) else putInt(key(item), level.coerceAtMost(TRANSCODE_ALL))
+		}
+	}
+
+	/** Dolby Vision as HDR10 worked for the series of [item] */
+	fun rememberedDolbyVision(item: BaseItemDto?): Boolean =
+		item != null && preferences.getBoolean(DOLBY_VISION_PREFIX + key(item), false)
+
+	fun rememberDolbyVision(item: BaseItemDto?, enabled: Boolean) {
+		if (item == null) return
+		preferences.edit {
+			if (enabled) putBoolean(DOLBY_VISION_PREFIX + key(item), true) else remove(DOLBY_VISION_PREFIX + key(item))
 		}
 	}
 
@@ -111,6 +147,7 @@ class PlaybackFallback(context: Context) {
 	}
 }
 
+private const val DOLBY_VISION_PREFIX = "dv:"
 private const val MAX_WIDTH = 1920
 private const val MAX_HEIGHT = 1080
 private const val MAX_BITRATE = 20_000_000
@@ -118,7 +155,7 @@ private const val MAX_BITRATE = 20_000_000
 /**
  * Watches the first seconds of a stream. Some files fail without any error from the player: a black
  * screen (the video decoder never gives a frame) or a still picture with the time not moving (the
- * audio output blocks the clock). [onFailure] gets the level to try next, [onStarted] is called once
+ * audio output blocks the clock). [onFailure] says which one, [onStarted] is called once
  * the video plays.
  */
 class PlaybackStartWatchdog(
@@ -127,7 +164,8 @@ class PlaybackStartWatchdog(
 	private val hasVideo: Boolean,
 	private val isPausedByUser: () -> Boolean,
 	private val onStarted: () -> Unit,
-	private val onFailure: (level: Int) -> Unit,
+	/** true: no picture at all, false: a picture but the time doesn't move */
+	private val onFailure: (noPicture: Boolean) -> Unit,
 ) {
 	private var running = false
 	private var activeMs = 0L
@@ -187,13 +225,13 @@ class PlaybackStartWatchdog(
 			// No picture at all: the video can't be decoded here
 			!hasFrame && activeMs >= (if (waiting) NO_FRAME_BUFFERING_TIMEOUT_MS else NO_FRAME_TIMEOUT_MS) -> {
 				stop()
-				onFailure(PlaybackFallback.TRANSCODE_ALL)
+				onFailure(true)
 			}
 
 			// A picture but the time doesn't move while the player is ready: the audio blocks it
 			hasFrame && stalledMs >= STALL_TIMEOUT_MS && videoManager.isReadyToPlay -> {
 				stop()
-				onFailure(PlaybackFallback.TRANSCODE_AUDIO)
+				onFailure(false)
 			}
 		}
 	}

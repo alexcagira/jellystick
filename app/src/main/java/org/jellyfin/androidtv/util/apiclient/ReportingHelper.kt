@@ -103,6 +103,8 @@ class ReportingHelper(
 			runCatching {
 				api.playStateApi.reportPlaybackStopped(info)
 			}.onFailure { error -> Timber.e(error, "Failed to report stopped playback!") }
+			// Continue watching (home, library pages) is asked again now that the server has it
+			dataRefreshService.onPlaybackStopReported(item.id)
 		}
 
 		// Update dataRefreshService

@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.collections
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -189,6 +190,7 @@ class CollectionCatalog(
 	}
 
 	private suspend fun classify(id: UUID, count: Int): Pair<UUID, Entry>? = try {
+		BackgroundTraffic.awaitTurn()
 		val series = countOf(id, BaseItemKind.SERIES)
 		// Most collections are film sagas: the films are only counted when there are series
 		val movies = if (series > 0) countOf(id, BaseItemKind.MOVIE) else 1
@@ -213,7 +215,7 @@ class CollectionCatalog(
 
 	private companion object {
 		const val PAGE_SIZE = 500
-		const val PARALLEL_REQUESTS = 4
+		const val PARALLEL_REQUESTS = 3
 		val RECHECK_INTERVAL = 5.minutes
 		val MAX_AGE = 7.days
 		val PRELOAD_DELAY = 40.seconds

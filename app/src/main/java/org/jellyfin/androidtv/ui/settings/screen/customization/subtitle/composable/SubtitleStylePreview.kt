@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -24,6 +26,7 @@ import androidx.media3.ui.SubtitleView
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.base.JellyfinTheme
+import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SubtitleStyles
 import org.jellyfin.design.Tokens
 
 @OptIn(UnstableApi::class)
@@ -35,6 +38,8 @@ fun SubtitleStylePreview(
 	subtitlesTextColor: Long = userPreferences[UserPreferences.subtitlesTextColor],
 	subtitleTextStrokeColor: Long = userPreferences[UserPreferences.subtitleTextStrokeColor],
 	subtitlesTextSize: Float = userPreferences[UserPreferences.subtitlesTextSize],
+	subtitlesEdgeType: Int = userPreferences[UserPreferences.subtitlesEdgeType],
+	subtitlesFont: Int = userPreferences[UserPreferences.subtitlesFont],
 ) {
 	val context = LocalContext.current
 	SubtitleStylePreview(
@@ -42,13 +47,22 @@ fun SubtitleStylePreview(
 		textColor = subtitlesTextColor.toInt(),
 		textSize = subtitlesTextSize,
 		backgroundColor = subtitlesBackgroundColor.toInt(),
-		edgeType = if (subtitleTextStrokeColor.toInt().alpha > 0) CaptionStyleCompat.EDGE_TYPE_OUTLINE else CaptionStyleCompat.EDGE_TYPE_NONE,
+		edgeType = SubtitleStyles.edgeType(subtitlesEdgeType, subtitleTextStrokeColor.toInt()),
 		edgeColor = subtitleTextStrokeColor.toInt(),
-		typeface = TypefaceCompat.create(context, Typeface.DEFAULT, subtitlesTextWeight, false),
+		typeface = SubtitleStyles.typeface(context, subtitlesFont, subtitlesTextWeight),
 		modifier = Modifier
-			.background(Tokens.Color.colorBluegrey800, JellyfinTheme.shapes.large)
+			// A film-like picture behind: bright and dark parts show how readable the style is
+			.background(
+				Brush.verticalGradient(
+					0f to Color(0xFF7FA6C9),
+					0.45f to Color(0xFFD9C7A3),
+					0.75f to Color(0xFF6B5B4B),
+					1f to Color(0xFF1E1A17),
+				),
+				JellyfinTheme.shapes.large,
+			)
 			.fillMaxWidth()
-			.height(subtitlesTextSize * 3.dp)
+			.height(maxOf(subtitlesTextSize * 4.dp, 120.dp))
 			.clip(JellyfinTheme.shapes.large)
 	)
 	Spacer(Modifier.height(Tokens.Space.spaceSm))

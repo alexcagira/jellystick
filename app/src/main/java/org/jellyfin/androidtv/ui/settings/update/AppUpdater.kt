@@ -35,7 +35,8 @@ class AppUpdater(private val context: Context) {
 	sealed interface State {
 		data object Idle : State
 		data object Checking : State
-		data class UpToDate(val version: String) : State
+		/** [latest]: the newest version on GitHub */
+		data class UpToDate(val version: String, val latest: String) : State
 		data class Available(val release: Release) : State
 		data class Downloading(val release: Release, val progress: Float?) : State
 		data class Ready(val release: Release, val file: File) : State
@@ -97,7 +98,7 @@ class AppUpdater(private val context: Context) {
 				when {
 					release == null -> State.Failed(Reason.NO_APK)
 					isNewer(release.version, currentVersion) -> State.Available(release)
-					else -> State.UpToDate(currentVersion)
+					else -> State.UpToDate(currentVersion, release.version)
 				}
 			} catch (err: CancellationException) {
 				throw err
@@ -108,8 +109,12 @@ class AppUpdater(private val context: Context) {
 		}
 	}
 
+	/**
+	 * The newest release with an APK. The list and not "releases/latest": that one leaves out the
+	 * pre-releases and only follows the date, not the version.
+	 */
 	private suspend fun latestRelease(): Release? = withContext(Dispatchers.IO) {
-		val connection = open("https://api.github.com/repos/${BuildConfig.UPDATE_REPOSITORY}/releases/latest").apply {
+		val connection = open("https://api.github.com/repos/${BuildConfig.UPDATE_REPOSITORY}/releases?per_page=$RELEASES_PER_PAGE").apply {
 			setRequestProperty("Accept", "application/vnd.github+json")
 		}
 		val body = try {
@@ -119,18 +124,21 @@ class AppUpdater(private val context: Context) {
 			connection.disconnect()
 		}
 
-		val release = json.decodeFromString<GithubRelease>(body)
-		// The APK of the release ("jellystick.apk", "jellystick-v14.6.apk"...)
-		val apk = release.assets
-			.filter { it.name.endsWith(".apk", ignoreCase = true) }
-			.sortedByDescending { it.name.contains("jellystick", ignoreCase = true) }
-			.firstOrNull { !it.name.contains("debug", ignoreCase = true) }
-			?: return@withContext null
-		Release(
-			version = release.tagName.trim().removePrefix("v").removePrefix("V"),
-			apkUrl = apk.downloadUrl,
-			size = apk.size,
-		)
+		json.decodeFromString<List<GithubRelease>>(body)
+			.asSequence()
+			.filter { !it.draft }
+			.mapNotNull { release ->
+				// "v1.2.2" (the tag) or "Jellystick v1.2.2" (the name)
+				val version = versionIn(release.tagName) ?: release.name?.let(::versionIn) ?: return@mapNotNull null
+				// The APK of the release ("jellystick-v1.2.2-release.apk", "jellystick.apk"...)
+				val apk = release.assets
+					.filter { it.name.endsWith(".apk", ignoreCase = true) }
+					.sortedByDescending { it.name.contains("jellystick", ignoreCase = true) }
+					.firstOrNull { !it.name.contains("debug", ignoreCase = true) }
+					?: return@mapNotNull null
+				Release(version = version, apkUrl = apk.downloadUrl, size = apk.size)
+			}
+			.reduceOrNull { best, release -> if (isNewer(release.version, best.version)) release else best }
 	}
 
 	private fun download(release: Release) {
@@ -237,8 +245,12 @@ class AppUpdater(private val context: Context) {
 		private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
 		private const val BUFFER_SIZE = 64 * 1024
 		private const val TIMEOUT_MS = 20_000
+		private const val RELEASES_PER_PAGE = 30
 
-		/** "14.6" is newer than "13.2.0"; "14.6.1" than "14.6" */
+		/** "1.2.2" from "v1.2.2", "Jellystick v1.2.2" or "1.2.2-beta.1" */
+		fun versionIn(text: String): String? = Regex("\\d+(\\.\\d+)+(-[0-9A-Za-z.]+)?").find(text)?.value
+
+		/** "1.3" is newer than "1.2.2"; "1.2.3" than "1.2" */
 		fun isNewer(candidate: String, current: String): Boolean {
 			fun parts(version: String) = Regex("\\d+").findAll(version.substringBefore('-').substringBefore('+'))
 				.map { it.value.toIntOrNull() ?: 0 }

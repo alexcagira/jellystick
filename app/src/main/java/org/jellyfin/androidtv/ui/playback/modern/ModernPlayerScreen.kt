@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -53,6 +54,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
@@ -80,7 +83,8 @@ import java.time.format.FormatStyle
 import java.util.Locale
 
 private const val CONTROLS_TIMEOUT_MS = 5_000L
-private const val SCRUB_COMMIT_DELAY_MS = 900L
+/** Seeking without OK for this long: the position is forgotten and the playback stays where it was */
+private const val SCRUB_CANCEL_MS = 8_000L
 private const val TICKS_PER_MS = 10_000L
 
 /** Element focused when the controls appear */
@@ -110,7 +114,11 @@ fun ModernPlayerScreen(
 	// Changes on every key press, restarts the auto hide timer
 	var lastInteraction by remember { mutableLongStateOf(0L) }
 	var menu by remember { mutableStateOf<PlayerMenu?>(null) }
+	// Position being sought: only applied with OK
 	var scrubMs by remember { mutableStateOf<Long?>(null) }
+	val scrubbing = scrubMs != null
+	// Top of the seek bar on the screen: the subtitles go above it while the controls show
+	var seekBarTop by remember { mutableStateOf<Float?>(null) }
 
 	val skipTarget = state.skipTargetMs
 	val skipVisible = skipTarget != null &&
@@ -135,20 +143,21 @@ fun ModernPlayerScreen(
 		scrubMs = (start + if (forward) stepMs else -stepMs).coerceIn(0, state.durationMs.coerceAtLeast(0))
 	}
 
-	// Auto hide, paused while a menu is open or while seeking
-	LaunchedEffect(controlsVisible, lastInteraction, menu, scrubMs) {
-		if (!controlsVisible || menu != null || scrubMs != null) return@LaunchedEffect
-		delay(CONTROLS_TIMEOUT_MS)
+	// Auto hide, paused while a menu is open. Seeking without pressing OK: the position is forgotten
+	// (the playback never left where it was) and the controls hide
+	LaunchedEffect(controlsVisible, lastInteraction, menu, scrubbing) {
+		if (!controlsVisible || menu != null) return@LaunchedEffect
+		delay(if (scrubbing) SCRUB_CANCEL_MS else CONTROLS_TIMEOUT_MS)
+		scrubMs = null
 		controlsVisible = false
 	}
 
-	// Apply the seek position once the remote is left alone for a moment
-	LaunchedEffect(scrubMs) {
-		val target = scrubMs ?: return@LaunchedEffect
-		delay(SCRUB_COMMIT_DELAY_MS)
-		overlay.seekTo(target)
-		scrubMs = null
-		lastInteraction = System.currentTimeMillis()
+	// Subtitles above the controls while they show, back down when they hide
+	LaunchedEffect(controlsVisible, seekBarTop) {
+		overlay.setControlsTop(if (controlsVisible) seekBarTop else null)
+	}
+	DisposableEffect(Unit) {
+		onDispose { overlay.setControlsTop(null) }
 	}
 
 	// Focus: the controls when they appear, the screen itself (key handling) when they hide
@@ -186,11 +195,12 @@ fun ModernPlayerScreen(
 
 				if (controlsVisible) {
 					if (isDown) lastInteraction = System.currentTimeMillis()
-					// Back hides the controls instead of closing the player
+					// Back forgets the position being sought, otherwise hides the controls (it doesn't
+					// close the player)
 					if (isBack) {
 						if (isDown) {
-							scrubMs = null
-							controlsVisible = false
+							if (scrubMs != null) scrubMs = null
+							else controlsVisible = false
 						}
 						return@onPreviewKeyEvent true
 					}
@@ -267,7 +277,10 @@ fun ModernPlayerScreen(
 				onCommitScrub = {
 					scrubMs?.let { overlay.seekTo(it) }
 					scrubMs = null
+					lastInteraction = System.currentTimeMillis()
 				},
+				onCancelScrub = { scrubMs = null },
+				onSeekBarPositioned = { seekBarTop = it },
 				onPlayPause = overlay::playPause,
 				onMenu = { menu = it },
 				skipVisible = skipVisible,
@@ -306,6 +319,8 @@ private fun PlayerControls(
 	seekBarFocusRequester: FocusRequester,
 	onScrub: (KeyEvent, Boolean) -> Unit,
 	onCommitScrub: () -> Unit,
+	onCancelScrub: () -> Unit,
+	onSeekBarPositioned: (Float) -> Unit,
 	onPlayPause: () -> Unit,
 	onMenu: (PlayerMenu) -> Unit,
 	skipVisible: Boolean,
@@ -395,6 +410,8 @@ private fun PlayerControls(
 				focusRequester = seekBarFocusRequester,
 				onScrub = onScrub,
 				onCommit = onCommitScrub,
+				onCancel = onCancelScrub,
+				onPositioned = onSeekBarPositioned,
 				onPlayPause = onPlayPause,
 			)
 
@@ -507,10 +524,13 @@ private fun SeekBarRow(
 	focusRequester: FocusRequester,
 	onScrub: (KeyEvent, Boolean) -> Unit,
 	onCommit: () -> Unit,
+	onCancel: () -> Unit,
+	onPositioned: (Float) -> Unit,
 	onPlayPause: () -> Unit,
 ) {
 	val shownPosition = scrubMs ?: state.positionMs
 	val duration = state.durationMs.coerceAtLeast(1)
+	val playedFraction = (state.positionMs.toFloat() / duration).coerceIn(0f, 1f)
 	val chapters = remember(state.item) {
 		state.item?.chapters.orEmpty()
 			.map { it.startPositionTicks / TICKS_PER_MS }
@@ -540,7 +560,10 @@ private fun SeekBarRow(
 				)
 			}
 
-			Row(verticalAlignment = Alignment.CenterVertically) {
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				modifier = Modifier.onGloballyPositioned { onPositioned(it.boundsInWindow().top) },
+			) {
 				Text(
 					text = formatTime(shownPosition),
 					color = ModernHomeColors.TextPrimary,
@@ -552,12 +575,14 @@ private fun SeekBarRow(
 				Spacer(Modifier.width(12.dp))
 				SeekBar(
 					fraction = fraction,
+					playedFraction = playedFraction,
 					chapterFractions = chapters.map { it.toFloat() / duration },
 					seeking = scrubMs != null,
 					enabled = state.canSeek,
 					focusRequester = focusRequester,
 					onScrub = onScrub,
 					onCommit = onCommit,
+					onCancel = onCancel,
 					onPlayPause = onPlayPause,
 					modifier = Modifier.width(barWidth),
 				)
@@ -577,18 +602,23 @@ private fun SeekBarRow(
 
 @Composable
 private fun SeekBar(
+	/** Position shown (the one being sought while seeking) */
 	fraction: Float,
+	/** Position of the playback */
+	playedFraction: Float,
 	chapterFractions: List<Float>,
 	seeking: Boolean,
 	enabled: Boolean,
 	focusRequester: FocusRequester,
 	onScrub: (KeyEvent, Boolean) -> Unit,
 	onCommit: () -> Unit,
+	onCancel: () -> Unit,
 	onPlayPause: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val interactionSource = remember { MutableInteractionSource() }
 	val focused by interactionSource.collectIsFocusedAsState()
+	var hadFocus by remember { mutableStateOf(false) }
 	val trackHeight by animateFloatAsState(if (focused) 6f else 4f, label = "SeekBarHeight")
 	val accent = ModernHomeColors.Accent
 
@@ -596,6 +626,15 @@ private fun SeekBar(
 		modifier = modifier
 			.height(24.dp)
 			.focusRequester(focusRequester)
+			// Leaving the seek bar (the buttons) forgets the position being sought. Not the first
+			// event, when it appears unfocused
+			.onFocusChanged {
+				if (it.isFocused) hadFocus = true
+				else if (hadFocus) {
+					hadFocus = false
+					if (seeking) onCancel()
+				}
+			}
 			.onPreviewKeyEvent { event ->
 				if (!enabled) return@onPreviewKeyEvent false
 				when (event.key) {
@@ -622,7 +661,18 @@ private fun SeekBar(
 				val radius = CornerRadius(height / 2)
 
 				drawRoundRect(color = Color.White.copy(alpha = 0.28f), topLeft = Offset(0f, top), size = Size(size.width, height), cornerRadius = radius)
-				drawRoundRect(color = accent, topLeft = Offset(0f, top), size = Size(size.width * fraction, height), cornerRadius = radius)
+				drawRoundRect(color = accent, topLeft = Offset(0f, top), size = Size(size.width * playedFraction, height), cornerRadius = radius)
+				// Seeking: from the playback to the position sought, which only applies with OK
+				if (seeking) {
+					val from = minOf(playedFraction, fraction)
+					val to = maxOf(playedFraction, fraction)
+					drawRoundRect(
+						color = Color.White.copy(alpha = 0.6f),
+						topLeft = Offset(size.width * from, top),
+						size = Size(size.width * (to - from), height),
+						cornerRadius = radius,
+					)
+				}
 
 				// Chapters
 				val tickWidth = 2.dp.toPx()
@@ -669,6 +719,14 @@ private fun SeekPreview(
 			color = ModernHomeColors.TextPrimary,
 			fontSize = 13.sp,
 			fontWeight = FontWeight.Bold,
+			maxLines = 1,
+		)
+		// The playback only jumps with OK
+		Text(
+			text = stringResource(R.string.modern_player_seek_hint),
+			color = ModernHomeColors.TextSecondary,
+			fontSize = 10.sp,
+			fontWeight = FontWeight.Medium,
 			maxLines = 1,
 		)
 	}

@@ -57,18 +57,24 @@ class LibraryBrowseRepository(
 	 * Random order: the server shuffles again on every request, so the whole list of ids is taken
 	 * once (small, without images) and the pages are loaded from it.
 	 */
-	suspend fun randomIds(filter: BrowseFilter): List<UUID> = withContext(Dispatchers.IO) {
+	suspend fun randomIds(filter: BrowseFilter): List<UUID> = titles(filter.copy(sort = BrowseSort.RANDOM)).map { it.id }
+
+	/**
+	 * Every title of the grid in its order, only the id and the sort name (small, without images):
+	 * for the random order and the audio language filter, which the app applies itself.
+	 */
+	suspend fun titles(filter: BrowseFilter): List<BaseItemDto> = withContext(Dispatchers.IO) {
 		val restriction = restriction(filter)
 		if (restriction?.empty == true) return@withContext emptyList()
+		val request = filter.request(start = 0, limit = MAX_RANDOM, withTotal = false).copy(
+			fields = setOf(ItemFields.SORT_NAME),
+			enableImages = false,
+			enableUserData = false,
+		)
 		api.itemsApi.getItems(
-			filter.request(start = 0, limit = MAX_RANDOM, withTotal = false).copy(
-				sortBy = setOf(ItemSortBy.RANDOM),
-				sortOrder = null,
-				fields = emptySet(),
-				enableImages = false,
-				enableUserData = false,
-			).restrictedTo(restriction)
-		).content.items.map { it.id }
+			(if (filter.sort == BrowseSort.RANDOM) request.copy(sortBy = setOf(ItemSortBy.RANDOM), sortOrder = null) else request)
+				.restrictedTo(restriction)
+		).content.items
 	}
 
 	suspend fun cards(ids: List<UUID>): List<BrowseCard> = withContext(Dispatchers.IO) {

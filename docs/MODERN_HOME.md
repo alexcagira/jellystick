@@ -9,7 +9,7 @@ calidad (Dolby Vision, Atmos, HDR, 4K…) y fecha de estreno.
 | Fila | Origen de los datos |
 |---|---|
 | Carrusel principal | Películas y series aleatorias con fondo (prioriza las que tienen logo) |
-| Continue Watching | Episodios/películas a medias y siguientes episodios mezclados, ordenados por lo último que viste (para el siguiente episodio cuenta la última vez que viste la serie) |
+| Continue Watching | Episodios/películas a medias y siguientes episodios mezclados, ordenados por lo último que viste (para el siguiente episodio cuenta la última vez que viste la serie). Al salir de un vídeo se pide de nuevo **en cuanto el servidor tiene la posición** (antes devolvía la anterior), solo esa fila y sin esperar a las demás; lo mismo en las páginas de películas y series |
 | Watchlist | Películas y series marcadas con el botón de watchlist (ver más abajo) |
 | Trending this week | Lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador). Los huecos se rellenan con las tendencias de TMDB (si hay clave) y con lo mejor valorado reciente |
 | Latest Episodes | Episodios por fecha de emisión (una tarjeta por serie, con la fecha) |
@@ -98,6 +98,12 @@ Todos los títulos en una cuadrícula con título y año, cargados por páginas 
 - Arriba: **Todo / Sin ver / Vistas / Favoritos**, **Géneros**, **Edad** (solo las clasificaciones de España:
   TP/A, 7, 12, 16, 18...), **Ordenar por** (nombre, aleatorio, fecha de adición, estreno, valoración) y **Al azar**
   (reproduce uno). Las listas de géneros y edades hacen scroll con el cursor.
+- **Audio** (bibliotecas de películas y series): los idiomas de audio de la biblioteca con su número de títulos;
+  elige uno y solo quedan los títulos con esa pista (se combina con los demás filtros y el orden). Jellyfin no
+  filtra por idioma de audio, así que la app lo lee: las pistas de cada película y de los primeros episodios de
+  cada serie. Se guarda en el dispositivo (`audio_languages_<biblioteca>.json`) y luego solo lee los títulos
+  nuevos (y cada mes otra vez los antiguos, por si cambió el archivo). La primera vez el menú muestra cuántos
+  lleva; al abrir la página de la biblioteca se empieza a leer sin prisa. Código: `AudioLanguageIndex.kt`.
 - Debajo, las **etiquetas** más usadas: Abajo desde los filtros llega a ellas; OK filtra, otra vez OK la quita.
 - Al volver arriba (a las etiquetas o los filtros) la página sube del todo.
 - A la izquierda, **# y A-Z**: OK salta al primer título con esa letra (ordena por nombre si hacía falta).
@@ -166,6 +172,10 @@ páginas de álbumes, listas, artistas y géneros (que también tienen la barra 
   las flechas, pero sin `focusRestorer()` de Compose: ese guarda el elemento con la página y desviaba al
   anterior cualquier intento de devolver el foco al volver (en Música siempre acababa en *Géneros*). Está en
   `FocusMemory.kt`.
+- **El reproductor primero**: al darle a reproducir, lo que la app pide por detrás (etiquetas de cada serie, qué
+  tiene cada colección, actualizar colecciones…) espera unos segundos y mientras se ve el vídeo, y nunca usa más de
+  cuatro conexiones. Antes las peticiones del reproductor esperaban detrás de decenas de esas y tardaba en abrir
+  (`BackgroundTraffic.kt`).
 - La página de Música se abre al instante con lo que mostró la última vez (se guarda en el dispositivo) y
   se actualiza por detrás: primero las filas rápidas, luego la media bar, radios y recomendaciones.
 - **Usa la versión release** para el día a día: la debug (la que instala *Run ▶*) se puede depurar y por eso
@@ -377,12 +387,31 @@ al ✓ de visto.
 Se puede desactivar en Ajustes → Personalización → Inicio → **Fichas modernas**. Los demás tipos
 (episodios, álbumes, colecciones…) siguen usando la ficha clásica.
 
+## Subtítulos
+
+Ajustes → **Subtítulos** (también en Reproducción): una vista previa sobre una imagen con zonas claras y oscuras y:
+
+- **Estilos** de un toque: *Streaming* (blancos con sombra suave y sin caja, como en Netflix), *Clásico* (contorno
+  negro), *Negrita* (con sombra), *Caja* (sobre fondo oscuro) y *Amarillo* (como en el cine). El tamaño y la
+  posición se mantienen.
+- **Personalizar**: contorno y sombra (ninguno, contorno, sombra, relieve, grabado), fuente (predeterminada,
+  condensada, con serifa, monoespaciada), tamaño, grosor (negrita), color del texto, del fondo y del contorno o la
+  sombra, y la posición desde abajo.
+
+Los subtítulos ASS/SSA con estilos propios se dibujan como vienen en el archivo.
+
 ## Reproductor
 
 Controles nuevos para películas y episodios (la TV en directo mantiene los originales, con la guía):
 
-- **Reproduciendo**: sin nada en pantalla. **OK** pausa, **izquierda/derecha** avanzan o retroceden (mantener
-  pulsado acelera) con miniatura de la escena, **arriba/abajo** muestran los controles.
+- **Reproduciendo**: sin nada en pantalla. **OK** pausa, **izquierda/derecha** buscan hacia delante o atrás
+  (mantener pulsado acelera) con miniatura de la escena, **arriba/abajo** muestran los controles.
+- **Buscar en la barra**: el vídeo sigue donde estaba mientras buscas; la barra marca en blanco hasta dónde vas.
+  **OK** salta ahí; **Atrás**, salir de la barra o 8 segundos sin tocar nada lo olvidan y todo sigue igual.
+- **Subtítulos encima de los controles**: al mostrarse la barra los subtítulos suben lo justo para verse por encima
+  y bajan a su sitio cuando se oculta (`VideoManager.raiseSubtitlesAbove`).
+- **Miniaturas**: si la versión que se reproduce no tiene imágenes de trickplay se usan las de otra versión del
+  mismo archivo, y si el reproductor no trae esa información se pide al servidor.
 - **Controles**: título y logo arriba; barra de progreso (OK reproduce/pausa) con los
   capítulos marcados con líneas, tiempo transcurrido y restante; episodio anterior / siguiente y "Termina a las…"
   abajo a la izquierda; abajo a la derecha **audio**, **subtítulos**, **escenas**, **calidad**, **modo de
@@ -400,10 +429,12 @@ Se desactiva en Ajustes → Personalización → Inicio → **Controles modernos
 el archivo (un códec que dice soportar y no decodifica, un audio que la tele o la barra de sonido rechazan...).
 La app lo detecta y lo vuelve a pedir con más trabajo del servidor, paso a paso:
 
-1. **Remux**: el servidor reempaqueta el archivo sin tocar vídeo ni audio (tras un error del reproductor).
-2. **Convertir el audio**: el vídeo tal cual y el audio convertido, como hace el navegador con DTS o TrueHD
-   (cuando hay imagen pero el tiempo no avanza durante 10 s).
-3. **Transcodificar**: vídeo y audio convertidos (cuando no sale ninguna imagen en unos 14 s), a lo que reproduce
+1. **Dolby Vision como HDR10** (solo archivos Dolby Vision, cuando no sale imagen o el reproductor da error): el
+   Fire TV decodifica la capa HDR10 que llevan los Dolby Vision perfil 8 (los WEB-DL "DV HDR10+"). No necesita al
+   servidor.
+2. **Convertir el audio**: el vídeo tal cual y el audio convertido, lo mismo que hace Plex con el E-AC3 Atmos de
+   *Los anillos de poder* en el Fire TV (cuando hay imagen pero el tiempo no avanza durante 10 s, o tras el paso 1).
+3. **Transcodificar**: vídeo y audio convertidos (si lo anterior no basta), a lo que reproduce
    cualquier aparato: H.264 de 8 bits hasta 1080p con audio AAC y como mucho 20 Mbps. Sin ese límite el servidor
    mantenía 4K y el códec que el aparato dice soportar, y el resultado tampoco se veía (ni le daba tiempo a hacerlo).
    Si el servidor rechaza la transcodificación (p. ej. el usuario no tiene permiso) sale un aviso y se cierra el
@@ -416,7 +447,8 @@ Fire TV 4K Max se reproducen en directo.
 Sale un aviso en cada intento y sigue en el mismo punto. El paso que funcionó se recuerda para **toda la serie**
 (o la película), así los siguientes episodios empiezan ya así. En los controles, el botón **Modo de reproducción**
 (⇄) muestra cómo se está reproduciendo ahora (directo, emisión del servidor o transcodificando) y permite elegirlo
-a mano; *Automático* vuelve a intentar la reproducción directa y olvida lo recordado. Transcodificar necesita que
+a mano (también *Reempaquetar*, el remux solo, y en archivos Dolby Vision el interruptor *Dolby Vision como HDR10*);
+*Automático* vuelve a intentar la reproducción directa y olvida lo recordado. Transcodificar necesita que
 tu usuario tenga permiso para ello en el servidor y que el servidor pueda hacerlo (CPU o aceleración por hardware).
 El código está en `ui/playback/PlaybackFallback.kt`.
 
@@ -429,6 +461,13 @@ defecto (Ajustes → Personalización → Inicio → **Audio offload**).
 **Pantalla negra con Dolby Vision**: si un archivo Dolby Vision (por ejemplo WEB-DL "DV HDR10+") se queda en negro,
 activa Ajustes → Personalización → Inicio → **Reproducir Dolby Vision como HDR10**. Los archivos Dolby Vision
 perfil 8 llevan una capa HDR10, que se reproduce con el decodificador HEVC normal.
+
+**Cuadros de fotogramas anteriores con Dolby Vision como HDR10**: cada fotograma Dolby Vision lleva al final sus
+metadatos (la RPU, NAL de tipo 62, y en el perfil 7 la capa de mejora, tipo 63). El decodificador HEVC debería
+ignorarlos, pero en el Fire TV algunos fotogramas salían con bloques de otros anteriores. Mientras Dolby Vision se
+reproduce como HDR10 (el ajuste, el interruptor del reproductor o el paso automático), el renderizador de vídeo
+(`DolbyVisionAsHdr10VideoRenderer` en `ui/playback/modern/SubtitleOffset.kt`) los quita antes de dárselos al
+decodificador: solo mira el final de cada fotograma y no copia nada.
 
 ## Activar / desactivar
 
@@ -443,11 +482,19 @@ La app se llama **Jellystick** (también la versión debug: `app_name_release` y
 nombre Jellystick, igual que el logo de dentro de la app (`drawable/app_logo.xml`, `drawable-v24/app_logo.xml`,
 colores en `values/logo.xml` y `src/debug/res/values/logo.xml`): arranque, barra y salvapantallas.
 
-En la pantalla de inicio del Fire TV las apps instaladas a mano solo usan el banner si está en
-`drawable-xhdpi` (320 × 180 px), como hace Moonlight: con el banner en `mipmap` el Fire TV lo ignoraba y dibujaba
-el icono encogido sobre una casilla gris. Por eso `android:banner` es `@drawable/app_banner_tv`
-(`drawable-xhdpi/app_banner_tv.png`, el mismo dibujo) y `android:icon` vuelve a ser el icono cuadrado
-(`@mipmap/app_icon`).
+La casilla 16:9 de la pantalla de inicio es `drawable-*/app_banner_tv.png`: el logo con fondo azul marino
+(`#000B25`) en `drawable-xhdpi` (320 × 180), `drawable-xxhdpi` (480 × 270) y `drawable-xxxhdpi` (640 × 360),
+PNG y no en `mipmap` ni como icono adaptable. Android TV y Google TV usan `android:banner`; el Fire TV, con las
+apps que no vienen de la Appstore de Amazon, necesita **`android:banner` y `android:logo`** tanto en
+`<application>` como en `StartupActivity` (la actividad del launcher), y que esa actividad **no tenga icono
+propio**: si lo tiene, dibuja ese icono cuadrado centrado sobre gris. La app tiene el icono cuadrado
+(`@mipmap/app_icon`, también como `roundIcon`), el que sale en Ajustes.
+
+Si aun así sale el icono cuadrado sobre gris, la casilla completa solo es posible publicando la app en la
+Appstore de Amazon (allí se sube la imagen de 1280 × 720).
+
+**El Fire TV guarda la imagen de cada app**: al actualizar encima sigue mostrando la antigua. Para ver la nueva hay
+que desinstalar Jellystick e instalarla otra vez (reiniciar o borrar datos no basta).
 
 Si el Fire TV sigue enseñando el banner o el nombre antiguos, desinstala la app y vuelve a instalarla (el
 launcher guarda la imagen de las apps ya instaladas); si aun así no cambia, reinicia el Fire TV. El icono
@@ -502,12 +549,20 @@ Problemas habituales:
 nueva que la instalada la descarga y abre el instalador de Android, que la instala encima sin perder la sesión.
 Para que funcione:
 
-- La etiqueta de la release es la versión (`v13.3.0` o `13.3.0`) y tiene que ser mayor que la instalada: sube
-  `jellystick.version` antes de compilar cada APK (Android tampoco instala encima una versión menor).
+- La etiqueta de la release es la versión de la app: `v1.2.3` para `jellystick.version=1.2.3`. Sube
+  `jellystick.version` antes de compilar cada APK y crea la release con esa etiqueta; tiene que ser mayor que la
+  instalada (Android tampoco instala encima una versión menor). El nombre de la release puede ser
+  "Jellystick v1.2.3".
+- El botón mira las últimas 30 releases y elige la de versión más alta que tenga APK.
 - La release lleva el APK como archivo adjunto (cualquier `.apk` sin "debug" en el nombre), firmado con tu clave.
 - La primera vez Android pide permiso para que Jellystick instale apps: en el Fire TV, Configuración → Mi Fire TV →
   Opciones para desarrolladores → Instalar apps desconocidas → Jellystick. Luego se vuelve a pulsar el botón.
-- La release tiene que ser pública (no borrador ni *pre-release*) y el repositorio también.
+- La release no puede ser un borrador, y el repositorio tiene que ser público.
+- Las primeras versiones se numeraban 13.x (la del Jellyfin original). Desde la 1.2.2 la versión es la de GitHub;
+  el código de versión de Android lleva sumado 100 000 000 (`JELLYSTICK_VERSION_CODE_OFFSET` en
+  `app/build.gradle.kts`) para que la 1.2.2 se instale encima de una 13.x sin desinstalar. Desde una 13.x el botón
+  no ve la 1.2.2 como más nueva: esa se instala a mano una vez.
+- El panel del servidor muestra la app como **Jellystick 1.2.2**.
 
 La versión release se llama `com.jellystick.tv`, así que se instala al lado de la app oficial de Jellyfin
 y de la versión debug (cada una con su propia sesión).
@@ -527,14 +582,15 @@ signing.key.password=CONTRASEÑA_DE_LA_CLAVE
 ```
 
 **3. Versión.** En `gradle.properties`, sube `jellystick.version` antes de cada publicación
-(`13.2.0` → `13.2.1`...). Android solo instala una actualización si su versión es mayor.
+(`1.2.2` → `1.2.3` → `1.3.0`...), la misma que la etiqueta de la release (`v1.2.3`). Android solo instala una
+actualización si su versión es mayor.
 
 **4. Compilar.** *Build Variants* → `release`, y *Build* → *Generate App Bundles or APKs* → *Generate APKs*
 (o `.\gradlew assembleRelease` en la Terminal). El APK queda en
-`app/build/outputs/apk/release/jellystick-v13.2.0-release.apk`.
+`app/build/outputs/apk/release/jellystick-v1.2.2-release.apk`.
 
 **5. Subirlo a GitHub.** Crea un repositorio **público** (p. ej. `jellystick`; puede tener solo un README) →
-*Releases* → *Draft a new release* → etiqueta `v13.2.0` → arrastra el APK **renombrado a `jellystick.apk`**
+*Releases* → *Draft a new release* → etiqueta `v1.2.2` → arrastra el APK **renombrado a `jellystick.apk`**
 → *Publish release*. Este enlace apunta siempre al APK de la última release:
 
 ```

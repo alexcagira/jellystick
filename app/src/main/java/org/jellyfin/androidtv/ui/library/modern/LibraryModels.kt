@@ -69,6 +69,8 @@ data class BrowseFilter(
 	val genreNames: List<String> = emptyList(),
 	val tag: String? = null,
 	val officialRating: String? = null,
+	/** Audio language ("spa", "eng"...), see [AudioLanguageIndex]: the app filters, not the server */
+	val audioLanguage: String? = null,
 	val played: PlayedFilter = PlayedFilter.ALL,
 	val sort: BrowseSort = BrowseSort.NAME,
 ) {
@@ -115,6 +117,9 @@ data class ModernLibraryState(
 	/** Libraries of the same kind (Films, Películas...), the pills under the media bar */
 	val siblings: List<BaseItemDto> = emptyList(),
 )
+
+/** An audio language of a library, with its number of titles */
+data class BrowseLanguage(val key: String, val name: String, val count: Int)
 
 /** A genre: the name shown and every name and id it has on the server */
 data class BrowseChip(

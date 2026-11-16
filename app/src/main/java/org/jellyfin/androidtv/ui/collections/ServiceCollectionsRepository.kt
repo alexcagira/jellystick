@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.collections
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -330,6 +331,7 @@ class ServiceCollectionsRepository(
 
 			for ((libraryId, rules) in due.groupBy { it.libraryId }) {
 				try {
+					BackgroundTraffic.awaitTurn()
 					val library = api.userLibraryApi.getItem(libraryId).content
 					val scan = scan(library)
 					for (rule in rules) update(rule, scan)

@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.playback
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.navigation.ActivityDestinations
@@ -50,6 +51,8 @@ class PlaybackLauncher(
 			mediaManager.playNow(context, items, itemsPosition, shuffle)
 			navigationRepository.navigate(Destinations.nowPlaying)
 		} else {
+			// The player first: background requests of the app wait
+			BackgroundTraffic.quiet()
 			val items = if (shuffle) items.shuffled() else items
 
 			videoQueueManager.setCurrentVideoQueue(items.toList())

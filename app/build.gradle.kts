@@ -23,6 +23,9 @@ val tmdbApiKey: String = (localProperty("tmdb.api.key") ?: "").trim().replace("\
 val jellystickApplicationId = "com.jellystick.tv"
 val debugApplicationId = "org.jellyfin.androidtv.debug"
 
+// Added to the version code of every Jellystick version (1.2.2 → 101020299)
+val JELLYSTICK_VERSION_CODE_OFFSET = 100_000_000
+
 // Version shown in Settings → About. Raise it before every APK you publish: Android only installs an
 // update over the old one when its version code (made from this) is higher
 val jellystickVersion: String = getProperty("jellystick.version") ?: project.getVersionName()
@@ -41,7 +44,9 @@ android {
 		// Release version
 		applicationId = jellystickApplicationId
 		versionName = jellystickVersion
-		versionCode = getVersionCode(versionName!!)
+		// The first builds were 13.x (version code 13020099). The numbering restarted at 1.x to match the
+		// GitHub releases: the offset keeps the codes higher, so each one installs over the one before
+		versionCode = JELLYSTICK_VERSION_CODE_OFFSET + getVersionCode(versionName!!)
 
 		buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
 		// GitHub repository whose latest release Settings → Update installs

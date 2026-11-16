@@ -99,6 +99,7 @@
 
     <!-- Modern player -->
     <string name="modern_player_enabled">Modern player controls</string>
+    <string name="modern_player_seek_hint">OK to jump here · Back to cancel</string>
     <string name="modern_player_enabled_description">Streaming style controls with scenes, subtitle offset and Skip intro / Skip credits (live TV keeps the original controls)</string>
     <string name="modern_player_back">Back</string>
     <string name="modern_player_pause">Pause</string>
@@ -319,6 +320,11 @@
     <string name="browse_all_genres">All genres</string>
     <string name="browse_age_rating">Age Rating</string>
     <string name="browse_all_ratings">All ages</string>
+    <string name="browse_audio_language">Audio</string>
+    <string name="browse_all_languages">All languages</string>
+    <string name="browse_language_count">%1$s · %2$d</string>
+    <string name="browse_languages_reading">Reading the audio languages of the titles…</string>
+    <string name="browse_languages_reading_progress">Reading the audio languages… %1$d of %2$d titles</string>
     <string name="browse_sort">Sort by</string>
     <string name="browse_sort_name">Name</string>
     <string name="browse_sort_random">Random</string>
@@ -357,7 +363,7 @@
     <string name="app_update_title">Update Jellystick</string>
     <string name="app_update_idle">Version %1$s · Check for a newer one on GitHub</string>
     <string name="app_update_checking">Looking for a new version…</string>
-    <string name="app_update_up_to_date">You have the latest version (%1$s)</string>
+    <string name="app_update_up_to_date">You have the latest version (%1$s · on GitHub: v%2$s)</string>
     <string name="app_update_available">Version %1$s is out (%2$s MB) · Press to download and install it</string>
     <string name="app_update_downloading">Downloading %1$s…</string>
     <string name="app_update_downloading_progress">Downloading %1$s… %2$d%%</string>
@@ -368,4 +374,31 @@
     <string name="app_update_failed_download">The download failed. Press to try again</string>
     <string name="app_update_failed_install">Unable to open the installer. Press to try again</string>
     <string name="app_update_debug_note">(Debug build: the release installs as a separate app)</string>
+    <string name="playback_fallback_dolby_vision">This Dolby Vision file doesn\'t play here: trying again as HDR10…</string>
+    <string name="modern_player_mode_dolby_vision">Dolby Vision as HDR10</string>
+    <string name="subtitles_settings_caption">Color, outline or shadow, font and size, with a preview</string>
+    <string name="subtitles_presets">Styles</string>
+    <string name="subtitles_custom">Customize</string>
+    <string name="subtitles_preset_streaming">Streaming</string>
+    <string name="subtitles_preset_streaming_description">White with a soft shadow and no box, like on Netflix</string>
+    <string name="subtitles_preset_classic">Classic</string>
+    <string name="subtitles_preset_classic_description">White with a black outline</string>
+    <string name="subtitles_preset_bold">Bold</string>
+    <string name="subtitles_preset_bold_description">White bold text with a shadow, easy to read from far away</string>
+    <string name="subtitles_preset_box">Box</string>
+    <string name="subtitles_preset_box_description">White on a dark box, readable on any picture</string>
+    <string name="subtitles_preset_yellow">Yellow</string>
+    <string name="subtitles_preset_yellow_description">Yellow with a black outline, like in cinemas</string>
+    <string name="subtitles_edge">Outline and shadow</string>
+    <string name="subtitles_edge_auto">Automatic (outline when its color isn\'t transparent)</string>
+    <string name="subtitles_edge_none">None</string>
+    <string name="subtitles_edge_outline">Outline</string>
+    <string name="subtitles_edge_shadow">Shadow</string>
+    <string name="subtitles_edge_raised">Raised</string>
+    <string name="subtitles_edge_depressed">Engraved</string>
+    <string name="subtitles_font">Font</string>
+    <string name="subtitles_font_default">Default</string>
+    <string name="subtitles_font_condensed">Condensed</string>
+    <string name="subtitles_font_serif">Serif</string>
+    <string name="subtitles_font_monospace">Monospace</string>
 </resources>

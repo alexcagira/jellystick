@@ -15,10 +15,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.preference.UserPreferences
+import org.jellyfin.androidtv.ui.base.Icon
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.androidtv.ui.base.form.ColorSwatch
 import org.jellyfin.androidtv.ui.base.form.RangeControl
@@ -46,6 +48,8 @@ fun SettingsSubtitlesScreen() {
 	var subtitleTextStrokeColor by rememberPreference(userPreferences, UserPreferences.subtitleTextStrokeColor)
 	var subtitlesTextSize by rememberPreference(userPreferences, UserPreferences.subtitlesTextSize)
 	var subtitlesOffsetPosition by rememberPreference(userPreferences, UserPreferences.subtitlesOffsetPosition)
+	var subtitlesEdgeType by rememberPreference(userPreferences, UserPreferences.subtitlesEdgeType)
+	var subtitlesFont by rememberPreference(userPreferences, UserPreferences.subtitlesFont)
 
 	SettingsColumn {
 		item {
@@ -63,6 +67,72 @@ fun SettingsSubtitlesScreen() {
 				subtitlesTextColor = subtitlesTextColor,
 				subtitleTextStrokeColor = subtitleTextStrokeColor,
 				subtitlesTextSize = subtitlesTextSize,
+				subtitlesEdgeType = subtitlesEdgeType,
+				subtitlesFont = subtitlesFont,
+			)
+		}
+
+		// Complete looks in one press (the size and the position stay)
+		item {
+			ListSection(headingContent = { Text(stringResource(R.string.subtitles_presets)) })
+		}
+
+		items(SubtitlePresets.size) { index ->
+			val preset = SubtitlePresets[index]
+			val applied = subtitlesTextColor == preset.textColor &&
+				subtitlesBackgroundColor == preset.backgroundColor &&
+				subtitleTextStrokeColor == preset.strokeColor &&
+				subtitlesEdgeType == preset.edge.value &&
+				subtitlesTextWeight == preset.weight &&
+				subtitlesFont == preset.font.ordinal
+
+			ListButton(
+				headingContent = { Text(stringResource(preset.label)) },
+				captionContent = { Text(stringResource(preset.description)) },
+				trailingContent = {
+					if (applied) Icon(painterResource(R.drawable.ic_check), contentDescription = null)
+				},
+				onClick = {
+					subtitlesTextColor = preset.textColor
+					subtitlesBackgroundColor = preset.backgroundColor
+					subtitleTextStrokeColor = preset.strokeColor
+					subtitlesEdgeType = preset.edge.value
+					subtitlesTextWeight = preset.weight
+					subtitlesFont = preset.font.ordinal
+				},
+				modifier = Modifier.focusKey("subtitles_preset_$index"),
+			)
+		}
+
+		item {
+			ListSection(headingContent = { Text(stringResource(R.string.subtitles_custom)) })
+		}
+
+		// Outline, shadow, raised... one press: the next one
+		item {
+			val edge = SubtitleEdge.of(subtitlesEdgeType)
+			ListButton(
+				headingContent = { Text(stringResource(R.string.subtitles_edge)) },
+				captionContent = { Text(stringResource(edge.label)) },
+				onClick = {
+					val next = SubtitleEdge.entries[(edge.ordinal + 1) % SubtitleEdge.entries.size]
+					subtitlesEdgeType = next.value
+					// A shadow or an outline needs a visible color
+					if (next != SubtitleEdge.NONE && next != SubtitleEdge.AUTO && Color(subtitleTextStrokeColor.toInt()).alpha == 0f) {
+						subtitleTextStrokeColor = 0xFF000000
+					}
+				},
+				modifier = Modifier.focusKey("subtitles_edge"),
+			)
+		}
+
+		item {
+			val font = SubtitleFont.of(subtitlesFont)
+			ListButton(
+				headingContent = { Text(stringResource(R.string.subtitles_font)) },
+				captionContent = { Text(stringResource(font.label)) },
+				onClick = { subtitlesFont = SubtitleFont.entries[(font.ordinal + 1) % SubtitleFont.entries.size].ordinal },
+				modifier = Modifier.focusKey("subtitles_font"),
 			)
 		}
 

@@ -303,6 +303,16 @@ class UserPreferences(context: Context) : SharedPreferenceStore(
 		var subtitlesOffsetPosition = floatPreference("subtitles_offset_position", 0.08f)
 
 		/**
+		 * Subtitles edge: outline, drop shadow... (-1: an outline when the stroke color isn't transparent)
+		 */
+		var subtitlesEdgeType = intPreference("subtitles_edge_type", -1)
+
+		/**
+		 * Subtitles font, see SubtitleFont
+		 */
+		var subtitlesFont = intPreference("subtitles_font", 0)
+
+		/**
 		 * Show screensaver in app
 		 */
 		var screensaverInAppEnabled = booleanPreference("screensaver_inapp_enabled", true)

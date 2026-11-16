@@ -9,8 +9,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jellyfin.androidtv.data.model.DataRefreshService
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -24,6 +27,7 @@ class ModernHomeViewModel(
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
 	private val userPreferences: UserPreferences,
 	private val homeCache: HomeCache,
+	private val dataRefreshService: DataRefreshService,
 ) : ViewModel() {
 	private val _state = MutableStateFlow(ModernHomeState())
 	val state: StateFlow<ModernHomeState> = _state.asStateFlow()
@@ -34,6 +38,7 @@ class ModernHomeViewModel(
 	private var heroJob: Job? = null
 	private var sectionsJob: Job? = null
 	private var librariesJob: Job? = null
+	private var continueJob: Job? = null
 
 	/** The hero shown comes from the cache: the new random slides are kept for the next start */
 	private var heroFromCache = false
@@ -44,6 +49,38 @@ class ModernHomeViewModel(
 		showCachedHome()
 		loadHero()
 		loadSections(debounce = Duration.ZERO)
+		observePlayback()
+	}
+
+	/**
+	 * After a video: "Continue watching" at once (alone, it's quick), then the other rows. Only once
+	 * the server has the position: asked before, it still had the old one.
+	 */
+	private fun observePlayback() {
+		viewModelScope.launch {
+			dataRefreshService.playbackStopReported.drop(1).filterNotNull().collect {
+				refreshContinueWatching()
+				loadSections(debounce = Duration.ZERO)
+			}
+		}
+	}
+
+	private fun refreshContinueWatching() {
+		continueJob?.cancel()
+		continueJob = viewModelScope.launch {
+			val section = try {
+				repository.continueWatchingSection()
+			} catch (err: CancellationException) {
+				throw err
+			} catch (err: Exception) {
+				Timber.w(err, "Unable to load continue watching")
+				return@launch
+			}
+			_state.update { state ->
+				val others = state.sections.filterNot { it.type == HomeSectionType.CONTINUE_WATCHING }
+				state.copy(sections = orderSections(listOfNotNull(section) + others), loading = false)
+			}
+		}
 	}
 
 	/**
@@ -171,12 +208,17 @@ class ModernHomeViewModel(
 		sectionsJob = viewModelScope.launch {
 			if (debounce > Duration.ZERO) delay(debounce)
 
-			// First load without cache: show the quick rows right away. Otherwise the rows on screen
-			// stay until the complete ones are loaded
-			val showPartial = _state.value.sections.isEmpty()
+			// The quick rows (continue watching, latest...) as soon as they are ready; the slow ones
+			// (trending) on screen stay until the complete rows are loaded
 			val sections = try {
 				repository.loadSections(
-					onPartial = if (showPartial) { partial -> applySections(partial) } else null,
+					onPartial = { partial ->
+						_state.update { state ->
+							val types = partial.mapTo(HashSet()) { it.type }
+							val kept = state.sections.filter { it.type == HomeSectionType.TRENDING && it.type !in types }
+							state.copy(loading = false, sections = orderSections(partial + kept))
+						}
+					},
 				)
 			} catch (err: CancellationException) {
 				throw err

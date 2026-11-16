@@ -68,10 +68,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import org.jellyfin.androidtv.data.model.DataRefreshService
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.constant.Extras
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
@@ -107,6 +110,10 @@ import timber.log.Timber
 import java.util.UUID
 
 private const val HERO_HEIGHT_FRACTION = 0.7f
+/** Key of the "Continue watching" row (see ModernLibraryRepository.continueSection) */
+private const val CONTINUE_SECTION = "continue"
+/** The audio languages of the library are read once the page has loaded */
+private const val AUDIO_LANGUAGES_DELAY_MS = 15_000L
 private val TOP_BAR_SPACE = 80.dp
 private const val PILLS_SECTION = "pills"
 
@@ -117,6 +124,8 @@ class ModernLibraryViewModel(
 	private val repository: ModernLibraryRepository,
 	private val homeRepository: ModernHomeRepository,
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
+	private val audioLanguages: AudioLanguageIndex,
+	private val dataRefreshService: DataRefreshService,
 ) : ViewModel() {
 	private val _state = MutableStateFlow(ModernLibraryState())
 	val state: StateFlow<ModernLibraryState> = _state.asStateFlow()
@@ -127,11 +136,26 @@ class ModernLibraryViewModel(
 	private var heroOutdated = false
 	private var sectionsJob: Job? = null
 	private var librariesJob: Job? = null
+	private var continueJob: Job? = null
+
+	init {
+		// After a video, once the server has where it was left: "Continue watching" at once
+		viewModelScope.launch {
+			dataRefreshService.playbackStopReported.drop(1).filterNotNull().collect { refreshContinueWatching() }
+		}
+	}
 
 	fun load(library: BaseItemDto) {
 		if (this.library?.id == library.id) return
 		this.library = library
 		observeLibraries(library)
+		// The audio languages for the filter of Browse, read without hurry after the page
+		library.libraryKind?.let { kind ->
+			viewModelScope.launch {
+				delay(AUDIO_LANGUAGES_DELAY_MS)
+				audioLanguages.updateInBackground(library.id, kind)
+			}
+		}
 
 		// Opened before in this session: shown at once while it refreshes
 		val cached = repository.cached(library.id)
@@ -150,14 +174,45 @@ class ModernLibraryViewModel(
 			if (state.sections.isNotEmpty()) return@launch
 			if (state.hero.isEmpty() && hero.isNotEmpty()) heroOutdated = true
 			_state.value = state.copy(loading = false, heroLoaded = true, hero = state.hero.ifEmpty { hero }, sections = sections)
+			// The saved "Continue watching" can be old: the fresh one first
+			refreshContinueWatching()
 		}
 		refresh()
+	}
+
+	/** Only the "Continue watching" row: replaced on screen as soon as it comes */
+	fun refreshContinueWatching() {
+		val library = library ?: return
+		val kind = library.libraryKind ?: return
+		continueJob?.cancel()
+		continueJob = viewModelScope.launch {
+			val row = try {
+				repository.continueRow(library.id, kind)
+			} catch (err: CancellationException) {
+				throw err
+			} catch (err: Exception) {
+				Timber.w(err, "Unable to load continue watching of ${library.name}")
+				return@launch
+			}
+			_state.update { state ->
+				if (state.sections.isEmpty()) return@update state
+				val index = state.sections.indexOfFirst { it.key == CONTINUE_SECTION }
+				val sections = when {
+					row == null -> state.sections.filterNot { it.key == CONTINUE_SECTION }
+					index >= 0 -> state.sections.toMutableList().also { it[index] = row }
+					else -> listOf(row) + state.sections
+				}
+				state.copy(sections = sections)
+			}
+		}
 	}
 
 	fun refresh() {
 		val library = library ?: return
 		val kind = library.libraryKind ?: return
 		val wantHero = _state.value.hero.isEmpty() || heroOutdated
+		// The rows on screen: "Continue watching" first, the others take longer
+		if (_state.value.sections.isNotEmpty()) refreshContinueWatching()
 		// On the main thread, like the saved page it can replace
 		val onHero = { hero: List<HeroSlide> ->
 			viewModelScope.launch { showHero(hero) }
@@ -199,7 +254,8 @@ class ModernLibraryViewModel(
 	 * lost while browsing it.
 	 */
 	private fun keepFocusedRow(fresh: List<LibrarySection>, shown: List<LibrarySection>): List<LibrarySection> {
-		val focus = lastFocus?.takeIf { it.section != PILLS_SECTION } ?: return fresh
+		// Not "Continue watching": it has to show what was just watched
+		val focus = lastFocus?.takeIf { it.section != PILLS_SECTION && it.section != CONTINUE_SECTION } ?: return fresh
 		val focusedRow = shown.firstOrNull { it.key == focus.section } ?: return fresh
 		return fresh.map { section ->
 			if (section.key == focus.section && section.cards.none { it.key == focus.card }) focusedRow else section

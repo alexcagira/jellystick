@@ -192,6 +192,11 @@ class ModernPlayerOverlay(
 
 	fun close() = onClose()
 
+	/** The subtitles go up above the controls (top of the seek bar in pixels), back down with null */
+	fun setControlsTop(topPx: Float?) {
+		controller?.raiseSubtitlesAbove(topPx ?: -1f)
+	}
+
 	// Menus
 
 	fun audioOptions(): List<PlayerOption> {
@@ -252,7 +257,17 @@ class ModernPlayerOverlay(
 				selected = level == current,
 				onSelect = { if (level != controller.getPlaybackFallbackLevel()) controller.setPlaybackFallbackLevel(level) },
 			)
-		}
+		} + listOfNotNull(
+			// Dolby Vision files: their HDR10 layer instead (on/off, also kept for the series)
+			if (controller.isDolbyVisionVideo()) {
+				val enabled = controller.isDolbyVisionAsHdr10()
+				PlayerOption(
+					label = context.getString(R.string.modern_player_mode_dolby_vision),
+					selected = enabled,
+					onSelect = { controller.setDolbyVisionAsHdr10(!enabled) },
+				)
+			} else null
+		)
 	}
 
 	/** How the current stream plays */

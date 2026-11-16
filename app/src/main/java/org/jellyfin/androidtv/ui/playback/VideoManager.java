@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
@@ -45,8 +46,10 @@ import androidx.media3.extractor.ts.TsExtractor;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
+import androidx.media3.ui.SubtitleView;
 
 import org.jellyfin.androidtv.ui.playback.modern.SubtitleOffsetRenderersFactory;
+import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SubtitleStyles;
 import org.jellyfin.androidtv.R;
 import org.jellyfin.androidtv.data.compat.StreamInfo;
 import org.jellyfin.androidtv.preference.UserPreferences;
@@ -122,16 +125,8 @@ public class VideoManager {
 
         mExoPlayerView = view.findViewById(R.id.exoPlayerView);
         mExoPlayerView.setPlayer(mExoPlayer);
-        int strokeColor = userPreferences.get(UserPreferences.Companion.getSubtitleTextStrokeColor()).intValue();
-        int textWeight = userPreferences.get(UserPreferences.Companion.getSubtitlesTextWeight());
-        CaptionStyleCompat subtitleStyle = new CaptionStyleCompat(
-                userPreferences.get(UserPreferences.Companion.getSubtitlesTextColor()).intValue(),
-                userPreferences.get(UserPreferences.Companion.getSubtitlesBackgroundColor()).intValue(),
-                Color.TRANSPARENT,
-                Color.alpha(strokeColor) == 0 ? CaptionStyleCompat.EDGE_TYPE_NONE : CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                strokeColor,
-                TypefaceCompat.create(activity, Typeface.DEFAULT, textWeight, false)
-        );
+        // Colors, edge (outline, shadow...), font and weight from Settings → Subtitles
+        CaptionStyleCompat subtitleStyle = SubtitleStyles.captionStyle(activity, userPreferences);
         mExoPlayerView.getSubtitleView().setFixedTextSize(TypedValue.COMPLEX_UNIT_DIP, userPreferences.get(UserPreferences.Companion.getSubtitlesTextSize()));
         mExoPlayerView.getSubtitleView().setBottomPaddingFraction(userPreferences.get(UserPreferences.Companion.getSubtitlesOffsetPosition()));
         mExoPlayerView.getSubtitleView().setStyle(subtitleStyle);
@@ -313,6 +308,40 @@ public class VideoManager {
     public void setMetaDuration(long duration) {
         mMetaDuration = duration;
     }
+
+    /**
+     * Moves the subtitles up so they stay above the player controls while those show, and back
+     * down when they hide.
+     *
+     * @param controlsTop top of the seek bar on the screen in pixels, negative when the controls are hidden
+     */
+    public void raiseSubtitlesAbove(float controlsTop) {
+        if (mExoPlayerView == null) return;
+        SubtitleView view = mExoPlayerView.getSubtitleView();
+        if (view == null) return;
+
+        float target = 0f;
+        if (controlsTop >= 0 && view.getHeight() > 0) {
+            int[] location = new int[2];
+            view.getLocationInWindow(location);
+            // Where the bottom line of the subtitles is when they are not moved
+            float restingTop = location[1] - view.getTranslationY();
+            float bottomPadding = view.getHeight() * userPreferences.get(UserPreferences.Companion.getSubtitlesOffsetPosition());
+            float textBottom = restingTop + view.getHeight() - bottomPadding;
+            float margin = SUBTITLE_CONTROLS_MARGIN_DP * view.getResources().getDisplayMetrics().density;
+            target = Math.min(0f, controlsTop - margin - textBottom);
+        }
+        if (view.getTranslationY() == target) return;
+        view.animate().cancel();
+        view.animate()
+                .translationY(target)
+                .setDuration(SUBTITLE_MOVE_DURATION_MS)
+                .setInterpolator(new DecelerateInterpolator())
+                .start();
+    }
+
+    private static final float SUBTITLE_CONTROLS_MARGIN_DP = 14f;
+    private static final long SUBTITLE_MOVE_DURATION_MS = 250L;
 
     public long getDuration() {
         return isInitialized() && mExoPlayer.getDuration() > 0 ? mExoPlayer.getDuration() : mMetaDuration;

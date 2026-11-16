@@ -98,6 +98,17 @@ fun SettingsMainScreen() {
 			)
 		}
 
+		// Also in Playback: here too so it's easy to find (styles with a preview)
+		item {
+			ListButton(
+				leadingContent = { Icon(painterResource(R.drawable.ic_subtitles), contentDescription = null) },
+				headingContent = { Text(stringResource(R.string.pref_customization_subtitles)) },
+				captionContent = { Text(stringResource(R.string.subtitles_settings_caption)) },
+				onClick = { router.push(Routes.CUSTOMIZATION_SUBTITLES) },
+				modifier = Modifier.focusKey(Routes.CUSTOMIZATION_SUBTITLES),
+			)
+		}
+
 		item {
 			ListButton(
 				leadingContent = { Icon(painterResource(R.drawable.ic_error), contentDescription = null) },
@@ -133,7 +144,7 @@ private fun AppUpdateButton() {
 	val caption = when (val current = state) {
 		AppUpdater.State.Idle -> stringResource(R.string.app_update_idle, version)
 		AppUpdater.State.Checking -> stringResource(R.string.app_update_checking)
-		is AppUpdater.State.UpToDate -> stringResource(R.string.app_update_up_to_date, current.version)
+		is AppUpdater.State.UpToDate -> stringResource(R.string.app_update_up_to_date, current.version, current.latest)
 		is AppUpdater.State.Available -> stringResource(R.string.app_update_available, current.release.version, megabytes(current.release.size))
 		is AppUpdater.State.Downloading -> current.progress
 			?.let { stringResource(R.string.app_update_downloading_progress, current.release.version, (it * 100).roundToInt()) }

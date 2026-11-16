@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.collections
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -101,6 +102,7 @@ class ImdbTop250(
 			if (System.currentTimeMillis() - lastSync < UPDATE_INTERVAL.inWholeMilliseconds) return@launch
 
 			try {
+				BackgroundTraffic.awaitTurn()
 				mutex.withLock { sync() }
 			} catch (err: CancellationException) {
 				throw err

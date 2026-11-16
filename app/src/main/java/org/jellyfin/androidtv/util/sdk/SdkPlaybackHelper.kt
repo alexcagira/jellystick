@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.util.sdk
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import android.widget.Toast
 import androidx.lifecycle.LifecycleOwner
@@ -259,6 +260,8 @@ class SdkPlaybackHelper(
 	}
 
 	override fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, context: Context) {
+		// The player first: background requests of the app wait
+		BackgroundTraffic.quiet()
 		getScope(context).launch {
 			val resumeSubtractDuration =
 				userPreferences[UserPreferences.resumeSubtractDuration].toIntOrNull()?.seconds
@@ -286,6 +289,7 @@ class SdkPlaybackHelper(
 	}
 
 	override fun retrieveAndPlay(itemIds: List<UUID>, shuffle: Boolean, position: Long?, index: Int?, context: Context) {
+		BackgroundTraffic.quiet()
 		getScope(context).launch {
 			val resumeSubtractDuration =
 				userPreferences[UserPreferences.resumeSubtractDuration].toIntOrNull()?.seconds

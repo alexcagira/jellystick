@@ -1,5 +1,6 @@
 package org.jellyfin.androidtv.ui.collections
 
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import android.content.Context
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -219,6 +220,7 @@ class LanguageCollectionsRepository(
 		series.map { show ->
 			async {
 				val languages = semaphore.withPermit {
+					BackgroundTraffic.awaitTurn()
 					try {
 						api.tvShowsApi.getEpisodes(
 							seriesId = show.id,
@@ -418,6 +420,7 @@ class LanguageCollectionsRepository(
 
 			for ((libraryId, rules) in due.groupBy { it.libraryId }) {
 				try {
+					BackgroundTraffic.awaitTurn()
 					val library = api.userLibraryApi.getItem(libraryId).content
 					val scan = scan(library, maxAgeMs = SCAN_MAX_AGE.inWholeMilliseconds)
 					for (rule in rules) update(rule, scan)
@@ -434,7 +437,7 @@ class LanguageCollectionsRepository(
 		const val PAGE_SIZE = 300
 		const val IDS_PER_REQUEST = 60
 		const val EPISODES_PER_SERIES = 3
-		const val SERIES_PARALLEL_REQUESTS = 6
+		const val SERIES_PARALLEL_REQUESTS = 3
 		val SCAN_MAX_AGE = 10.minutes
 		val UPDATE_INTERVAL = 20.hours
 		val BACKGROUND_DELAY = 30.seconds

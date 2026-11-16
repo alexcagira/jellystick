@@ -46,6 +46,7 @@ import org.jellyfin.androidtv.ui.music.modern.ModernMusicBrowseViewModel
 import org.jellyfin.androidtv.ui.collections.ImdbTop250
 import org.jellyfin.androidtv.ui.library.modern.LibraryBrowseRepository
 import org.jellyfin.androidtv.ui.library.modern.ModernBrowseViewModel
+import org.jellyfin.androidtv.ui.library.modern.AudioLanguageIndex
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryRepository
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryViewModel
 import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
@@ -115,7 +116,8 @@ val appModule = module {
 
 			// Add client info
 			val clientName = buildString {
-				append("Jellyfin for Android TV")
+				// The server dashboard shows "Jellystick 1.2.2"
+				append("Jellystick")
 				if (BuildConfig.DEBUG) append(" (debug)")
 			}
 			clientInfo = ClientInfo(clientName, BuildConfig.VERSION_NAME)
@@ -194,6 +196,7 @@ val appModule = module {
 	single { ImdbTop250(androidContext(), get()) }
 	single { ModernLibraryRepository(androidContext(), get(), get(), get(), get()) }
 	single { LibraryBrowseRepository(get(), get()) }
+	single { AudioLanguageIndex(androidContext(), get()) }
 	single { ModernMusicRepository(get(), get()) }
 	single { MusicItemRepository(get(), get()) }
 	single { FavouriteTracks(get()) }
@@ -215,13 +218,13 @@ val appModule = module {
 	viewModel { StillWatchingViewModel(get(), get(), get(), get()) }
 	viewModel { PhotoPlayerViewModel(get(), get()) }
 	viewModel { SearchViewModel(get()) }
-	viewModel { ModernHomeViewModel(get(), get(), get(), get()) }
+	viewModel { ModernHomeViewModel(get(), get(), get(), get(), get()) }
 	viewModel { ModernDetailsViewModel(get(), get()) }
 	viewModel { ModernWatchlistViewModel(get(), get()) }
 	viewModel { ModernMusicViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicItemViewModel(get(), get(), get(), get()) }
-	viewModel { ModernLibraryViewModel(get(), get(), get()) }
-	viewModel { ModernBrowseViewModel(get(), get(), get()) }
+	viewModel { ModernLibraryViewModel(get(), get(), get(), get(), get()) }
+	viewModel { ModernBrowseViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicBrowseViewModel(get()) }
 	viewModel { ModernSearchViewModel(get(), get(), get(), get()) }
 	viewModel { DreamViewModel(get(), get(), get(), get(), get()) }

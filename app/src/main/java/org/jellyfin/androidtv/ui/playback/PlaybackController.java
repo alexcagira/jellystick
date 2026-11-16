@@ -14,6 +14,7 @@ import androidx.annotation.Nullable;
 
 import org.jellyfin.androidtv.R;
 import org.jellyfin.androidtv.data.compat.PlaybackException;
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic;
 import org.jellyfin.androidtv.data.compat.StreamInfo;
 import org.jellyfin.androidtv.data.compat.VideoOptions;
 import org.jellyfin.androidtv.data.model.DataRefreshService;
@@ -71,6 +72,11 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
     List<BaseItemDto> mItems;
     VideoManager mVideoManager;
+
+    /** Subtitles above the player controls while they show (see VideoManager.raiseSubtitlesAbove) */
+    public void raiseSubtitlesAbove(float controlsTop) {
+        if (mVideoManager != null) mVideoManager.raiseSubtitlesAbove(controlsTop);
+    }
     int mCurrentIndex;
     protected long mCurrentPosition = 0;
     private PlaybackState mPlaybackState = PlaybackState.IDLE;
@@ -133,6 +139,8 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     // start (not by an error later on, e.g. the network): only that one is kept for the series
     private boolean streamStarted = false;
     private boolean fallbackFromStartFailure = false;
+    // Dolby Vision decoded as HDR10 for the current item (tried first: no work for the server)
+    private boolean dolbyVisionFallback = false;
     private static final int MAX_PLAYBACK_RETRIES = 4;
 
     private Display.Mode[] mDisplayModes;
@@ -267,8 +275,51 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     }
 
     public void playerErrorEncountered() {
-        // Each error: one more step of the work done by the server (remux, audio, everything)
-        retryPlayback(Math.min(PlaybackFallback.TRANSCODE_ALL, currentFallbackLevel() + 1));
+        if (isLiveTv) {
+            // Live TV keeps the original retries (direct stream, then transcode)
+            retryPlayback(PlaybackFallback.DIRECT, 0);
+            return;
+        }
+        retryAfterFailure(true);
+    }
+
+    /**
+     * After an error or a stream that doesn't start: Dolby Vision files first as HDR10 on the device
+     * (when there was no picture), then the audio converted by the server, then everything.
+     */
+    private void retryAfterFailure(boolean noPicture) {
+        int level = currentFallbackLevel();
+        if (noPicture && !dolbyVisionFallback && level < PlaybackFallback.TRANSCODE_ALL
+                && !userPreferences.getValue().get(UserPreferences.Companion.getDolbyVisionAsHdr10())
+                && !playbackFallback.getValue().rememberedDolbyVision(getCurrentlyPlayingItem())
+                && PlaybackFallback.isDolbyVision(getCurrentMediaSource())) {
+            dolbyVisionFallback = true;
+            retryPlayback(level, R.string.playback_fallback_dolby_vision);
+            return;
+        }
+        retryPlayback(PlaybackFallback.nextLevel(level), 0);
+    }
+
+    private boolean dolbyVisionAsHdr10For(BaseItemDto item) {
+        return dolbyVisionFallback || playbackFallback.getValue().rememberedDolbyVision(item);
+    }
+
+    /** For the player menu: the video is Dolby Vision */
+    public boolean isDolbyVisionVideo() {
+        return PlaybackFallback.isDolbyVision(getCurrentMediaSource());
+    }
+
+    /** For the player menu: Dolby Vision is decoded as HDR10 now */
+    public boolean isDolbyVisionAsHdr10() {
+        return userPreferences.getValue().get(UserPreferences.Companion.getDolbyVisionAsHdr10()) || dolbyVisionAsHdr10For(getCurrentlyPlayingItem());
+    }
+
+    /** From the player menu: Dolby Vision as HDR10 for this series, and play it again */
+    public void setDolbyVisionAsHdr10(boolean enabled) {
+        dolbyVisionFallback = enabled;
+        playbackFallback.getValue().rememberDolbyVision(getCurrentlyPlayingItem(), enabled);
+        playbackRetries = 0;
+        refreshStream();
     }
 
     /** Level of the current item: the one reached after errors, or the one kept for its series */
@@ -286,11 +337,16 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         playbackFallback.getValue().remember(getCurrentlyPlayingItem(), level);
         fallbackLevel = level;
         fallbackFromStartFailure = false;
+        // Automatic: everything as it is again, Dolby Vision too
+        if (level == PlaybackFallback.DIRECT) {
+            dolbyVisionFallback = false;
+            playbackFallback.getValue().rememberDolbyVision(getCurrentlyPlayingItem(), false);
+        }
         playbackRetries = 0;
         refreshStream();
     }
 
-    private void retryPlayback(int level) {
+    private void retryPlayback(int level, int message) {
         if (startWatchdog != null) startWatchdog.stop();
 
         // reset the retry count if it's been more than 30s since previous error
@@ -309,7 +365,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
         if (playbackRetries < (isLiveTv ? 3 : MAX_PLAYBACK_RETRIES)) {
             if (mFragment != null) {
-                int message = isLiveTv ? R.string.player_error : PlaybackFallback.messageOf(fallbackLevel);
+                if (message == 0) message = isLiveTv ? R.string.player_error : PlaybackFallback.messageOf(fallbackLevel);
                 Utils.showToast(mFragment.getContext(), mFragment.getString(message));
             }
             Timber.i("Player error encountered - retrying at fallback level %d", fallbackLevel);
@@ -320,8 +376,8 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             mPlaybackState = PlaybackState.ERROR;
             if (mFragment != null) {
                 // Not even transcoded: the server couldn't make the stream
-                int message = !isLiveTv && fallbackLevel >= PlaybackFallback.TRANSCODE_ALL ? R.string.playback_fallback_failed : R.string.too_many_errors;
-                Utils.showToast(mFragment.getContext(), mFragment.getString(message));
+                int failureMessage = !isLiveTv && fallbackLevel >= PlaybackFallback.TRANSCODE_ALL ? R.string.playback_fallback_failed : R.string.too_many_errors;
+                Utils.showToast(mFragment.getContext(), mFragment.getString(failureMessage));
                 mFragment.closePlayer();
             }
         }
@@ -605,6 +661,10 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             int level = Math.max(fallbackLevel, playbackFallback.getValue().rememberedLevel(item));
             playbackFallback.getValue().apply(internalOptions, level);
             if (level > PlaybackFallback.DIRECT) Timber.i("Playback fallback level %d for %s", level, item.getName());
+            // Read by the player when it picks the decoders of this stream
+            PlaybackFallback.setDecodeDolbyVisionAsHdr10(dolbyVisionAsHdr10For(item));
+        } else {
+            PlaybackFallback.setDecodeDolbyVisionAsHdr10(false);
         }
         return internalOptions;
     }
@@ -752,6 +812,8 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             mVideoManager.setMediaStreamInfo(api.getValue(), response);
             startWatchdog(item, response);
         }
+        // Background requests of the app wait while the video plays
+        BackgroundTraffic.setPlaying(true);
 
         PlaybackControllerHelperKt.applyMediaSegments(this, item, () -> {
             // Set video start delay
@@ -801,11 +863,15 @@ public class PlaybackController implements PlaybackControllerNotifiable {
                         Timber.i("Playback works at fallback level %d: kept for %s", level, item.getName());
                         playbackFallback.getValue().remember(item, level);
                     }
+                    if (fallbackFromStartFailure && dolbyVisionFallback) {
+                        Timber.i("Playback works with Dolby Vision as HDR10: kept for %s", item.getName());
+                        playbackFallback.getValue().rememberDolbyVision(item, true);
+                    }
                     return Unit.INSTANCE;
                 },
-                (nextLevel) -> {
-                    Timber.w("Stream of %s doesn't start at fallback level %d", item.getName(), level);
-                    retryPlayback(Math.max(nextLevel, Math.min(PlaybackFallback.TRANSCODE_ALL, level + 1)));
+                (noPicture) -> {
+                    Timber.w("Stream of %s doesn't start at fallback level %d (picture: %s)", item.getName(), level, !noPicture);
+                    retryAfterFailure(noPicture);
                     return Unit.INSTANCE;
                 }
         );
@@ -1007,6 +1073,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         mFragment = null;
         mVideoManager = null;
         resetPlayerErrors();
+        BackgroundTraffic.setPlaying(false);
     }
 
     public void endPlayback() {
@@ -1018,6 +1085,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         // The next item starts at the level kept for its series
         fallbackLevel = PlaybackFallback.DIRECT;
         fallbackFromStartFailure = false;
+        dolbyVisionFallback = false;
     }
 
     private void clearPlaybackSessionOptions() {
