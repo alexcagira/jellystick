@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.data.model.PlaybackStopped
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
 import org.jellyfin.androidtv.util.apiclient.getUrl
 import org.jellyfin.sdk.api.client.ApiClient
@@ -316,6 +317,47 @@ class ModernHomeRepository(
 		val hidden = hiddenItemIds()
 		val items = continueWatching().withoutHidden(hidden)
 		section(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, landscapeCards(items, withBadges = true).distinctBy { it.key })
+	}
+
+	/**
+	 * "Continue watching" right after a video stopped, before the server has it (it can take
+	 * seconds): the title goes first with its new position, or leaves the row once watched, with the
+	 * next episode of the player queue in its place. One card per series. Null when nothing changes.
+	 *
+	 * @param addNew also titles that were not in the row (the home screen; a library page only
+	 *   changes its own titles, it doesn't know the library of the others)
+	 */
+	fun continueAfterStop(cards: List<HomeCard>, stopped: PlaybackStopped, addNew: Boolean): List<HomeCard>? {
+		val item = stopped.item
+		if (item.type != BaseItemKind.MOVIE && item.type != BaseItemKind.EPISODE) return null
+		val runtime = item.runTimeTicks?.takeIf { it > 0 } ?: return null
+		val fraction = stopped.positionTicks.toDouble() / runtime
+		// Under 5 % (Jellyfin's minimum) the server doesn't keep the position: its answer decides
+		if (fraction < MIN_RESUME_FRACTION) return null
+
+		val seriesId = item.seriesId
+		fun sameTitle(card: HomeCard) = card.item.id == item.id || (seriesId != null && card.item.seriesId == seriesId)
+		val existing = cards.firstOrNull { it.item.id == item.id }
+		if (!addNew && cards.none(::sameTitle)) return null
+
+		val front = if (fraction >= MAX_RESUME_FRACTION) {
+			// Watched (past 90 %, like the server): the next episode, without progress
+			stopped.next?.let { next -> landscapeCards(listOf(next), withBadges = true).first().copy(progress = null, remainingMinutes = null) }
+		} else {
+			val card = existing ?: landscapeCards(listOf(item), withBadges = true).first()
+			card.copy(
+				progress = fraction.toFloat().coerceIn(0f, 1f),
+				remainingMinutes = ((runtime - stopped.positionTicks) / TICKS_PER_MINUTE).toInt().coerceAtLeast(1),
+			)
+		}
+		return listOfNotNull(front) + cards.filterNot(::sameTitle)
+	}
+
+	/** A title of a hidden library (the home screen leaves them out) */
+	suspend fun isHidden(item: BaseItemDto): Boolean {
+		val hidden = hiddenItemIds()
+		val seriesId = item.seriesId
+		return item.id in hidden || (seriesId != null && seriesId in hidden)
 	}
 
 	private fun cachedSeriesMedia(): Map<UUID, SeriesMedia> = synchronized(seriesMediaCache) { HashMap(seriesMediaCache) }
@@ -878,6 +920,9 @@ class ModernHomeRepository(
 
 	private companion object {
 		const val TICKS_PER_MINUTE = 600_000_000L
+		/** Jellyfin's defaults: under 5 % the position isn't kept, from 90 % on the title is watched */
+		const val MIN_RESUME_FRACTION = 0.05
+		const val MAX_RESUME_FRACTION = 0.90
 
 		const val HERO_SLIDES = 8
 		const val HERO_CANDIDATES = 20

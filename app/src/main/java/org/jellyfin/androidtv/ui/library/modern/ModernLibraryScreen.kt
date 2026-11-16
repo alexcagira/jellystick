@@ -75,6 +75,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.jellyfin.androidtv.data.model.DataRefreshService
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.constant.Extras
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
@@ -139,9 +140,30 @@ class ModernLibraryViewModel(
 	private var continueJob: Job? = null
 
 	init {
-		// After a video, once the server has where it was left: "Continue watching" at once
+		// The player stopped: "Continue watching" changes at once (its titles), before the server has it
+		viewModelScope.launch {
+			dataRefreshService.playbackStopped.drop(1).filterNotNull().collect { stopped ->
+				_state.update { state ->
+					val index = state.sections.indexOfFirst { it.key == CONTINUE_SECTION }
+					if (index < 0) return@update state
+					val section = state.sections[index]
+					val cards = homeRepository.continueAfterStop(section.cards, stopped, addNew = false) ?: return@update state
+					val sections = if (cards.isEmpty()) state.sections.filterIndexed { i, _ -> i != index }
+					else state.sections.toMutableList().also { it[index] = section.copy(cards = cards) }
+					state.copy(sections = sections)
+				}
+			}
+		}
+		// Once the server has where it was left: "Continue watching" from the server
 		viewModelScope.launch {
 			dataRefreshService.playbackStopReported.drop(1).filterNotNull().collect { refreshContinueWatching() }
+		}
+		// Something is going to play: the rows being loaded stop, the player gets the server first
+		viewModelScope.launch {
+			BackgroundTraffic.playRequests.drop(1).collect {
+				sectionsJob?.cancel()
+				continueJob?.cancel()
+			}
 		}
 	}
 
@@ -210,6 +232,9 @@ class ModernLibraryViewModel(
 	fun refresh() {
 		val library = library ?: return
 		val kind = library.libraryKind ?: return
+		// A video just stopped: the server doesn't have its position yet ("Continue watching" comes
+		// when it does)
+		if (dataRefreshService.stopReportPending) return
 		val wantHero = _state.value.hero.isEmpty() || heroOutdated
 		// The rows on screen: "Continue watching" first, the others take longer
 		if (_state.value.sections.isNotEmpty()) refreshContinueWatching()

@@ -274,7 +274,7 @@ class SdkPlaybackHelper(
 
 	override fun retrieveAndPlay(itemId: UUID, shuffle: Boolean, context: Context) {
 		// The player first: background requests of the app wait
-		BackgroundTraffic.quiet()
+		BackgroundTraffic.playRequested()
 		getScope(context).launch {
 			val resumeSubtractDuration =
 				userPreferences[UserPreferences.resumeSubtractDuration].toIntOrNull()?.seconds
@@ -327,7 +327,7 @@ class SdkPlaybackHelper(
 	}
 
 	override fun retrieveAndPlay(itemIds: List<UUID>, shuffle: Boolean, position: Long?, index: Int?, context: Context) {
-		BackgroundTraffic.quiet()
+		BackgroundTraffic.playRequested()
 		getScope(context).launch {
 			val resumeSubtractDuration =
 				userPreferences[UserPreferences.resumeSubtractDuration].toIntOrNull()?.seconds

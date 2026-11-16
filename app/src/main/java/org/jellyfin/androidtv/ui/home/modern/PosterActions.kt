@@ -2,7 +2,9 @@ package org.jellyfin.androidtv.ui.home.modern
 
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +51,9 @@ internal class PosterActionsState {
 	var mediaInfoItem by mutableStateOf<BaseItemDto?>(null)
 	var identifyItem by mutableStateOf<BaseItemDto?>(null)
 
+	/** Watchlist state of the titles, once known (the rows can show older data until they reload) */
+	val watchlist = mutableStateMapOf<UUID, Boolean>()
+
 	// Last values, so the dialogs keep their content while they fade out
 	var lastMenu: PosterMenuTarget? = null
 		private set
@@ -78,9 +83,10 @@ internal fun rememberPosterActionsState() = remember { PosterActionsState() }
 
 /**
  * Menu shown when holding OK on a poster, by type:
- * - Movies: Play now, Mark as watched, Mark as unwatched, Identify, File info
- * - Series: Play now, Mark as watched, Mark as unwatched, Go to show, Identify
- * - Episodes: Play now, Mark as watched, Mark as unwatched, Go to season, Go to show, Identify (the series), File info
+ * - Movies: Play now, Mark as watched, Mark as unwatched, Add to / Remove from watchlist, More info, Identify, File info
+ * - Series: Play now, Mark as watched, Mark as unwatched, Add to / Remove from watchlist, Go to show, Identify
+ * - Episodes: Play now, Mark as watched, Mark as unwatched, Add to / Remove from watchlist (the series), Go to
+ *   season, Go to show, Identify (the series), File info
  *
  * "Identify" only shows for administrators.
  */
@@ -115,12 +121,50 @@ internal fun PosterActionsDialogs(
 
 	val target = state.lastMenu
 	val item = target?.item
+
+	// Watchlist: the movie or the series (also from one of its episodes). What the card knows first,
+	// then asked to the server when the menu opens (some rows come without the user data)
+	val watchlistId = when (item?.type) {
+		BaseItemKind.MOVIE, BaseItemKind.SERIES -> item.id
+		BaseItemKind.EPISODE -> item.seriesId
+		else -> null
+	}
+	val knownInWatchlist = watchlistId?.let { id ->
+		state.watchlist[id] ?: item?.takeIf { it.id == id }?.userData?.likes
+	} == true
+	LaunchedEffect(state.menu, watchlistId) {
+		if (state.menu == null || watchlistId == null) return@LaunchedEffect
+		runCatching { actions.isInWatchlist(watchlistId) }
+			.onSuccess { inWatchlist -> if (inWatchlist != null) state.watchlist[watchlistId] = inWatchlist }
+			.onFailure { if (it is CancellationException) throw it }
+	}
+
+	fun toggleWatchlist(id: UUID, inWatchlist: Boolean) = runAction("watchlist") {
+		val result = actions.setInWatchlist(id, inWatchlist)
+		state.watchlist[id] = result
+		Toast.makeText(
+			context,
+			if (result) R.string.modern_details_watchlist_added else R.string.modern_details_watchlist_removed,
+			Toast.LENGTH_SHORT,
+		).show()
+		// The Watchlist row changes
+		onChanged()
+	}
+
 	val options = buildList {
 		if (target == null || item == null) return@buildList
 
 		add(ModernMenuOption(stringResource(R.string.modern_menu_play_now), R.drawable.ic_play) { onPlay(item) })
 		add(ModernMenuOption(stringResource(R.string.modern_home_mark_watched), R.drawable.ic_watch) { setPlayed(item, true) })
 		add(ModernMenuOption(stringResource(R.string.modern_menu_mark_unwatched), R.drawable.ic_unwatch) { setPlayed(item, false) })
+		if (watchlistId != null) {
+			add(
+				ModernMenuOption(
+					stringResource(if (knownInWatchlist) R.string.modern_details_watchlist_remove else R.string.modern_details_watchlist_add),
+					if (knownInWatchlist) R.drawable.ic_watchlist_added else R.drawable.ic_watchlist,
+				) { toggleWatchlist(watchlistId, !knownInWatchlist) }
+			)
+		}
 
 		val seasonId = item.seasonId
 		val seriesId = item.seriesId
@@ -130,8 +174,9 @@ internal fun PosterActionsDialogs(
 		when {
 			item.type == BaseItemKind.SERIES -> add(ModernMenuOption(stringResource(R.string.modern_home_go_to_show), R.drawable.ic_tv) { onOpen(item.id) })
 			seriesId != null -> add(ModernMenuOption(stringResource(R.string.modern_home_go_to_show), R.drawable.ic_tv) { onOpen(seriesId) })
-			// Cards that play when clicked: the details page is only reachable from here
-			target.playsOnClick -> add(ModernMenuOption(stringResource(R.string.modern_home_more_info), R.drawable.ic_info) { onOpen(item.id) })
+			// Movies (their details page from any row) and cards that play when clicked
+			item.type == BaseItemKind.MOVIE || target.playsOnClick ->
+				add(ModernMenuOption(stringResource(R.string.modern_home_more_info), R.drawable.ic_info) { onOpen(item.id) })
 		}
 
 		val identifyId = item.identifyTargetId

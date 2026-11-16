@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import org.jellyfin.androidtv.data.compat.StreamInfo
 import org.jellyfin.androidtv.data.model.DataRefreshService
 import org.jellyfin.androidtv.ui.playback.PlaybackController
+import org.jellyfin.androidtv.ui.playback.VideoQueueManager
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -23,6 +24,7 @@ import java.time.Instant
 class ReportingHelper(
 	private val dataRefreshService: DataRefreshService,
 	private val api: ApiClient,
+	private val videoQueueManager: VideoQueueManager,
 ) {
 	fun reportStart(
 		lifecycleOwner: LifecycleOwner,
@@ -97,6 +99,12 @@ class ReportingHelper(
 			playSessionId = streamInfo.playSessionId,
 			failed = false,
 		)
+
+		// Continue watching changes on screen right away (the next episode from the player queue)
+		val queue = videoQueueManager.getCurrentVideoQueue()
+		val next = queue.getOrNull(queue.indexOfFirst { it.id == item.id } + 1)
+			?.takeIf { queue.any { queued -> queued.id == item.id } && it.seriesId != null && it.seriesId == item.seriesId }
+		dataRefreshService.onPlaybackStopped(item, position ?: 0L, next)
 
 		lifecycleOwner.lifecycleScope.launch(Dispatchers.IO + NonCancellable) {
 			Timber.i("Reporting ${item.name} playback stopped at $position")

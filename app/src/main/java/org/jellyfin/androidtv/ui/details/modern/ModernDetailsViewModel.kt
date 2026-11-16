@@ -4,12 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.jellyfin.androidtv.ui.home.modern.BackgroundTraffic
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
 import org.jellyfin.sdk.model.api.BaseItemDto
 import timber.log.Timber
@@ -32,6 +34,16 @@ class ModernDetailsViewModel(
 	private var itemId: UUID? = null
 	private var loadJob: Job? = null
 	private var librariesJob: Job? = null
+
+	init {
+		// Something is going to play while the page still loads ("More like this" is a slow request):
+		// it stops, the player gets the server first. The page loads again when coming back
+		viewModelScope.launch {
+			BackgroundTraffic.playRequests.drop(1).collect {
+				if (_state.value.partial) loadJob?.cancel()
+			}
+		}
+	}
 
 	fun load(id: UUID) {
 		if (requestedId == id) return

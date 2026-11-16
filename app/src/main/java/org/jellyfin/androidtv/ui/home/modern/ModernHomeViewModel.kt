@@ -57,10 +57,32 @@ class ModernHomeViewModel(
 	 * the server has the position: asked before, it still had the old one.
 	 */
 	private fun observePlayback() {
+		// The player stopped: "Continue watching" changes at once, before the server has it
+		viewModelScope.launch {
+			dataRefreshService.playbackStopped.drop(1).filterNotNull().collect { stopped ->
+				val hidden = runCatching { repository.isHidden(stopped.item) }.getOrDefault(false)
+				_state.update { state ->
+					val section = state.sections.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }
+					val cards = repository.continueAfterStop(section?.cards.orEmpty(), stopped, addNew = !hidden) ?: return@update state
+					val updated = if (cards.isEmpty()) null
+					else section?.copy(cards = cards) ?: HomeSection(HomeSectionType.CONTINUE_WATCHING, CardStyle.LANDSCAPE, cards)
+					val others = state.sections.filterNot { it.type == HomeSectionType.CONTINUE_WATCHING }
+					state.copy(sections = orderSections(listOfNotNull(updated) + others))
+				}
+			}
+		}
+		// The server has it: the rows from the server
 		viewModelScope.launch {
 			dataRefreshService.playbackStopReported.drop(1).filterNotNull().collect {
 				refreshContinueWatching()
 				loadSections(debounce = Duration.ZERO)
+			}
+		}
+		// Something is going to play: the rows being loaded stop, the player gets the server first
+		viewModelScope.launch {
+			BackgroundTraffic.playRequests.drop(1).collect {
+				sectionsJob?.cancel()
+				continueJob?.cancel()
 			}
 		}
 	}
@@ -115,7 +137,11 @@ class ModernHomeViewModel(
 	 * Reload the rows (continue watching, new episodes...). Calls are debounced because the server
 	 * tends to send multiple change events in a row.
 	 */
-	fun refresh() = loadSections(debounce = REFRESH_DEBOUNCE)
+	fun refresh() {
+		// A video just stopped: the server doesn't have its position yet, the rows come once it does
+		if (dataRefreshService.stopReportPending) return
+		loadSections(debounce = REFRESH_DEBOUNCE)
+	}
 
 	/** Reload the rows right away, e.g. after marking something as watched */
 	fun refreshNow() = loadSections(debounce = Duration.ZERO)

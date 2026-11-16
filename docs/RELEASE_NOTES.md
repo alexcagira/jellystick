@@ -5,7 +5,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 
 ### Inicio
 - Pantalla de inicio estilo plataforma de streaming: barra de navegación flotante con efecto cristal, media bar con logos y fondo difuminado de la diapositiva actual.
-- Filas: **Continue Watching** (a medias y siguientes episodios, por actividad reciente; se actualiza al momento al salir de un vídeo, también en las páginas de películas y series), **Watchlist**, **Trending this week** con números (lo más visto en tu servidor, TMDB opcional), **Latest Episodes**, **Latest Films**, **Recently added** y **Favourites**.
+- Filas: **Continue Watching** (a medias y siguientes episodios, por actividad reciente; cambia al instante al salir de un vídeo, sin esperar al servidor, también en las páginas de películas y series), **Watchlist**, **Trending this week** con números (lo más visto en tu servidor, TMDB opcional), **Latest Episodes**, **Latest Films**, **Recently added** y **Favourites**.
 - Etiquetas en los pósters: resolución (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** y **banderas de los idiomas de audio** (español latino con bandera de México, portugués de Brasil…).
 - Etiquetas rojas *New episode / New season / New series* (últimos 14 días).
 - Sin duplicados cuando un título está en varias bibliotecas (p. ej. una por idioma).
@@ -26,7 +26,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - Botón **Reproducir/Reanudar T01:E05**, favoritos, tráiler, visto, información del archivo y **Watchlist** (sincronizada con la de KefinTweaks en la web).
 - Cambio de temporada sin salir de la página, ✓ para marcar episodios como vistos y **calidad y banderas en cada episodio**.
 - **Sintonía de la serie** (theme song) con fundidos.
-- Menú de los pósters (mantener OK): reproducir, visto/no visto, ir a la serie o la temporada, información del archivo e **Identificar** como en la web (admin).
+- Menú de los pósters (mantener OK): reproducir, visto/no visto, **añadir a la watchlist**, más información, ir a la serie o la temporada, información del archivo e **Identificar** como en la web (admin).
 
 ### Reproductor
 - Controles nuevos: pantalla limpia al reproducir, búsqueda con miniaturas (el vídeo solo salta al pulsar **OK**; si no, sigue donde estaba), capítulos en la barra, "Termina a las…" y pantalla de pausa *Estás viendo*.
@@ -52,6 +52,6 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 
 ### Fire TV
 - App propia **Jellystick** (`com.jellystick.tv`) con nombre, logo y banner verdes: se instala junto a la app oficial. En el inicio del Fire TV el logo va sobre el gris de la casilla, como las demás apps. El panel del servidor la muestra como *Jellystick*.
-- El reproductor se abre antes: los episodios siguientes de la cola se piden ya reproduciendo.
+- El reproductor se abre antes y tiene prioridad: al darle a reproducir, lo demás que se estaba cargando espera, y los episodios siguientes de la cola se piden ya reproduciendo.
 - **Actualizar desde Ajustes**: descarga e instala la última versión publicada en GitHub. La versión de la app es la de la release (v1.2.2, v1.2.3…).
 - Versión release optimizada (R8 + baseline profile), scroll suave entre filas y el foco vuelve al elemento en el que estabas.

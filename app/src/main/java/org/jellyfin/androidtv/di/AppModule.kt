@@ -102,14 +102,30 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import okhttp3.Dispatcher
+import okhttp3.OkHttpClient
 import org.jellyfin.sdk.Jellyfin as JellyfinSdk
 
 val defaultDeviceInfo = named("defaultDeviceInfo")
 
+private const val MAX_REQUESTS = 64
+private const val MAX_REQUESTS_PER_SERVER = 24
+
 val appModule = module {
 	// SDK
 	single(defaultDeviceInfo) { androidDevice(get()) }
-	single { OkHttpFactory() }
+	// OkHttp sends at most 5 requests to the same server at a time and queues the rest. The API, the
+	// video stream and the theme songs share them: the player waited behind rows of the home screen
+	single {
+		OkHttpFactory(
+			OkHttpClient.Builder()
+				.dispatcher(Dispatcher().apply {
+					maxRequests = MAX_REQUESTS
+					maxRequestsPerHost = MAX_REQUESTS_PER_SERVER
+				})
+				.build()
+		)
+	}
 	single { HttpClientOptions() }
 	single {
 		createJellyfin {
@@ -238,7 +254,7 @@ val appModule = module {
 	single { MarkdownRenderer(get()) }
 	single { ItemLauncher() }
 	single { KeyProcessor() }
-	single { ReportingHelper(get(), get()) }
+	single { ReportingHelper(get(), get(), get()) }
 	single<PlaybackHelper> { SdkPlaybackHelper(get(), get(), get(), get(), get()) }
 
 	factory { (context: Context) -> SearchFragmentDelegate(context, get(), get()) }

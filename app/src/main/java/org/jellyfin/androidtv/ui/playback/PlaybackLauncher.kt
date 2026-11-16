@@ -52,7 +52,7 @@ class PlaybackLauncher(
 			navigationRepository.navigate(Destinations.nowPlaying)
 		} else {
 			// The player first: background requests of the app wait
-			BackgroundTraffic.quiet()
+			BackgroundTraffic.playRequested()
 			val items = if (shuffle) items.shuffled() else items
 
 			videoQueueManager.setCurrentVideoQueue(items.toList())

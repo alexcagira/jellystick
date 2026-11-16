@@ -1,6 +1,9 @@
 package org.jellyfin.androidtv.ui.home.modern
 
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Requests the app makes by itself in the background (badges of every series, what each collection
@@ -25,7 +28,20 @@ object BackgroundTraffic {
 	@JvmStatic
 	fun setPlaying(value: Boolean) {
 		playing = value
-		if (!value) quietUntil = 0L
+		// Leaving the player: its stop report and "Continue watching" go first
+		if (!value) quietUntil = System.currentTimeMillis() + AFTER_PLAYBACK_QUIET_MS
+	}
+
+	private val _playRequests = MutableStateFlow(0)
+
+	/** Grows each time something is played: screens stop loading rows so the player goes first */
+	val playRequests: StateFlow<Int> = _playRequests.asStateFlow()
+
+	/** Something is going to play: quiet, and the screens stop what they load */
+	@JvmStatic
+	fun playRequested() {
+		quiet()
+		_playRequests.value += 1
 	}
 
 	val isQuiet: Boolean
@@ -37,5 +53,6 @@ object BackgroundTraffic {
 	}
 
 	private const val QUIET_MS = 20_000L
+	private const val AFTER_PLAYBACK_QUIET_MS = 10_000L
 	private const val POLL_MS = 500L
 }

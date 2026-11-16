@@ -321,10 +321,14 @@ de la temporada), Marcar como vista y Marcar como no vista.
 
 Mantén OK sobre cualquier póster del inicio o de la Watchlist:
 
-- **Películas**: Reproducir ahora, Marcar como visto, Marcar como no visto, Identificar, Información del archivo.
-- **Series**: Reproducir ahora, Marcar como visto, Marcar como no visto, Ir a la serie, Identificar.
+- **Películas**: Reproducir ahora, Marcar como visto, Marcar como no visto, **Añadir a / Quitar de la
+  watchlist**, **Más información** (su ficha, desde cualquier fila), Identificar, Información del archivo.
+- **Series**: Reproducir ahora, Marcar como visto, Marcar como no visto, Añadir a / Quitar de la watchlist, Ir a
+  la serie, Identificar.
 - **Episodios** (Continue Watching, Latest Episodes): además Ir a la temporada e Información del archivo;
-  Identificar actúa sobre la serie.
+  la watchlist e Identificar actúan sobre la serie.
+- El botón de la watchlist pregunta al servidor al abrir el menú si ya está en ella (algunas filas llegan sin
+  esa información) y cambia su texto; es la misma watchlist que la de la ficha y la de KefinTweaks en la web.
 
 **Identificar** funciona como en la web: busca en los proveedores de metadatos del servidor (TMDb, TVDb...)
 con el nombre y el año, o con el ID de IMDb (`tt0120737`) o de TMDb. Al elegir el resultado se aplican
@@ -457,6 +461,19 @@ a mano (también *Reempaquetar*, el remux solo, y en archivos Dolby Vision el in
 *Automático* vuelve a intentar la reproducción directa y olvida lo recordado. Transcodificar necesita que
 tu usuario tenga permiso para ello en el servidor y que el servidor pueda hacerlo (CPU o aceleración por hardware).
 El código está en `ui/playback/PlaybackFallback.kt`.
+
+**El reproductor primero**: OkHttp manda como mucho 5 peticiones a la vez al mismo servidor y pone las demás
+en cola, y el vídeo, la API y las sintonías comparten esas 5: el reproductor esperaba detrás de las filas del
+inicio. Ahora son 24 (`MAX_REQUESTS_PER_SERVER` en `di/AppModule.kt`). Al darle a reproducir
+(`BackgroundTraffic.playRequested`) el inicio, las páginas de biblioteca y la ficha (si aún cargaba *Más como
+esto*) dejan de cargar lo que estaban pidiendo; se vuelve a pedir al volver. Al salir del reproductor, las
+peticiones de fondo esperan 10 s para que el aviso de parada y *Continue watching* vayan primero.
+
+**Continue watching al instante**: al parar un vídeo la fila cambia ya, sin esperar al servidor
+(`ModernHomeRepository.continueAfterStop`): a medias, el título pasa el primero con su nueva barra; terminado
+(desde el 90 %, como el servidor), sale de la fila y, si es un episodio, entra el siguiente de la cola. En las
+páginas de Películas y Series solo cambian sus propios títulos. Cuando el servidor confirma la parada se pide la
+fila de verdad; hasta entonces no se recargan las filas (habrían salido con la posición antigua).
 
 **Abrir el reproductor más rápido**: al reproducir un episodio solo se piden antes ese y los dos siguientes (con
 toda su información); los demás de la cola (hasta 150) se añaden 15 s después, ya reproduciendo. Antes se pedían

@@ -5,7 +5,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 
 ### Home
 - Streaming-style home screen: floating glass navigation bar, media bar with title logos and a blurred background of the current slide.
-- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity; updated right after you leave a video, also on the movie and TV show pages), **Watchlist**, **Trending this week** with rank numbers (most watched on your server, TMDB optional), **Latest Episodes**, **Latest Films**, **Recently added** and **Favourites**.
+- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity; it changes instantly when you leave a video, without waiting for the server, also on the movie and TV show pages), **Watchlist**, **Trending this week** with rank numbers (most watched on your server, TMDB optional), **Latest Episodes**, **Latest Films**, **Recently added** and **Favourites**.
 - Poster badges: resolution (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** and **flags for the audio languages** (Latin American Spanish with the Mexican flag, Brazilian Portuguese…).
 - Red *New episode / New season / New series* labels (last 14 days).
 - No duplicates when a title is in several libraries (e.g. one per language).
@@ -26,7 +26,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - **Play/Resume S01:E05** button, favourite, trailer, watched, file info and **Watchlist** (synced with the KefinTweaks watchlist on the web).
 - Switch seasons without leaving the page, ✓ to mark episodes as watched, and **quality and flags on every episode**.
 - **Series theme song** with fade in and out.
-- Poster menu (long press on OK): play, watched/unwatched, go to the series or season, file info and **Identify**, like on the web (admin).
+- Poster menu (long press on OK): play, watched/unwatched, **add to watchlist**, more info, go to the series or season, file info and **Identify**, like on the web (admin).
 
 ### Player
 - New controls: a clean screen while playing, seeking with thumbnails (the video only jumps when you press **OK**; otherwise it keeps playing where it was), chapters on the bar, "Ends at…" and a *You're watching* pause screen.
@@ -52,6 +52,6 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 
 ### Fire TV
 - Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo and banner: installs next to the official app. On the Fire TV home screen the logo sits on the grey of the tile, like other apps. The server dashboard shows it as *Jellystick*.
-- The player opens sooner: the next episodes of the queue are loaded once it plays.
+- The player opens sooner and goes first: pressing play pauses whatever else was loading, and the next episodes of the queue are loaded once it plays.
 - **Update from Settings**: downloads and installs the latest version published on GitHub. The app version is the release's (v1.2.2, v1.2.3…).
 - Optimized release build (R8 + baseline profile), smooth scrolling between rows, and focus returns to where you were.

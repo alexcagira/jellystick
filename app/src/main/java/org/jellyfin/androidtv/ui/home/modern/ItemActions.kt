@@ -6,6 +6,7 @@ import org.jellyfin.androidtv.auth.repository.UserRepository
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.itemLookupApi
 import org.jellyfin.sdk.api.client.extensions.itemRefreshApi
+import org.jellyfin.sdk.api.client.extensions.itemsApi
 import org.jellyfin.sdk.api.client.extensions.playStateApi
 import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDto
@@ -16,6 +17,7 @@ import org.jellyfin.sdk.model.api.MovieInfoRemoteSearchQuery
 import org.jellyfin.sdk.model.api.RemoteSearchResult
 import org.jellyfin.sdk.model.api.SeriesInfo
 import org.jellyfin.sdk.model.api.SeriesInfoRemoteSearchQuery
+import org.jellyfin.sdk.model.api.request.GetItemsRequest
 import java.util.UUID
 
 /**
@@ -52,6 +54,24 @@ class ItemActions(
 		if (played) api.playStateApi.markPlayedItem(itemId)
 		else api.playStateApi.markUnplayedItem(itemId)
 		Unit
+	}
+
+	/** On the watchlist (the "likes" of the user, the same list as KefinTweaks on the web) */
+	suspend fun isInWatchlist(itemId: UUID): Boolean? = withContext(Dispatchers.IO) {
+		api.itemsApi.getItems(
+			GetItemsRequest(
+				ids = setOf(itemId),
+				enableImages = false,
+				enableTotalRecordCount = false,
+			)
+		).content.items.firstOrNull()?.userData?.likes
+	}
+
+	/** Add to or remove from the watchlist; returns whether it is on it now */
+	suspend fun setInWatchlist(itemId: UUID, inWatchlist: Boolean): Boolean = withContext(Dispatchers.IO) {
+		val userData = if (inWatchlist) api.userLibraryApi.updateUserItemRating(itemId = itemId, likes = true).content
+		else api.userLibraryApi.deleteUserItemRating(itemId = itemId).content
+		userData.likes == true
 	}
 
 	/** Item with its media sources, for "File info" */
