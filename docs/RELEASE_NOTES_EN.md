@@ -1,0 +1,53 @@
+## Jellystick: what's new compared to Jellyfin for Android TV
+
+A fork of [jellyfin-androidtv](https://github.com/jellyfin/jellyfin-androidtv) built for the Fire TV Stick 4K Max.
+Every new feature can be turned off in *Settings → Customization → Home* to get the classic interface back.
+
+### Home
+- Streaming-style home screen: floating glass navigation bar, media bar with title logos and a blurred background of the current slide.
+- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity), **Watchlist**, **Trending this week** with rank numbers (most watched on your server, TMDB optional), **Latest Episodes**, **Latest Films**, **Recently added** and **Favourites**.
+- Poster badges: resolution (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** and **flags for the audio languages** (Latin American Spanish with the Mexican flag, Brazilian Portuguese…).
+- Red *New episode / New season / New series* labels (last 14 days).
+- No duplicates when a title is in several libraries (e.g. one per language).
+- Configurable section order. Libraries in the bar: move, hide, browse and scan (admin) with a long press on OK.
+- Instant start: shows what it showed last time and refreshes in the background.
+
+### Movie and TV show libraries
+- Each library gets its own page, like the home screen: media bar, pills with the other libraries of the same kind, **Collections** and **Browse**.
+- Rows: the library's Continue Watching, Latest Films / Latest Episodes (16:9 with quality and flags), Recently added, *Because you watched… / liked… / have … in your Watchlist*, IMDb Top 250, collections, studios and networks, genres with their own titles, tags and **seasonal rows** (Halloween, Christmas, Valentine's Day, summer). Long rows end with **See all**.
+- Loads in steps and is cached on the device, so it shows up right away.
+- **Browse**: paged grid with an **A–Z** jump bar, filters (unwatched, watched, favourites), genres merged across languages (Action/Acción), Spanish age ratings, sorting, shuffle and tags.
+- An **IMDb Top 250** collection with your movies, synced every week.
+- **Audio language collections** (with a flag poster) that update themselves every day.
+- **Series collections by streaming service** (Netflix, HBO Max, Prime Video, Disney+, Apple TV+…) or TV network, also kept up to date. The *Collections* pill of TV show libraries only lists series collections, and the one of film libraries leaves them out.
+
+### Details pages
+- New pages for movies, series, seasons and people: full-screen backdrop with logo, rating, genres and overview; Next up, seasons, episode carousel, cast and similar titles.
+- **Play/Resume S01:E05** button, favourite, trailer, watched, file info and **Watchlist** (synced with the KefinTweaks watchlist on the web).
+- Switch seasons without leaving the page, ✓ to mark episodes as watched, and **quality and flags on every episode**.
+- **Series theme song** with fade in and out.
+- Poster menu (long press on OK): play, watched/unwatched, go to the series or season, file info and **Identify**, like on the web (admin).
+
+### Player
+- New controls: a clean screen while playing, seeking with thumbnails, chapters on the bar, "Ends at…" and a *You're watching* pause screen.
+- Menus for audio, subtitles, chapters, quality, speed, **subtitle offset** and **playback mode**.
+- **Skip intro / credits / recap** with Jellyfin media segments or Intro Skipper.
+- When a file fails in direct play, the app automatically retries with **remux, converted audio or transcoding** from the same position, and remembers it for the whole series.
+- Fire TV options: **play Dolby Vision as HDR10**, and *audio offload* can be turned off (avoids frozen video with Atmos).
+
+### Music
+- New music page: media bar with recommendations (*Because you listen to…*), **stations** by artist and genre, configurable rows and quick links.
+- Album, playlist, artist and genre pages with a **heart on every song** and an automatic **Favourite Tracks** playlist.
+- Redesigned **Now Playing**: optional lyrics, ⏪/⏩ on the remote change songs, the next cover is already loaded, and a **screensaver** with lyrics.
+- A *now playing* bubble in the navigation bar.
+- **Shared queue**: a QR code lets anyone on your Wi-Fi add songs from their phone, even by pasting Spotify, Apple Music or YouTube Music links (they're matched against your library; missing ones are saved as requests).
+- Fixes: the queue no longer stops after 5 or 6 songs, and the Fire TV doesn't go to sleep while music is playing.
+
+### Search
+- New search with **voice**, results in sections (Films, Series, Collections, Episodes, People and Music) and posters with every badge.
+- Without text: genres as colour tiles and popular tags; music-only search with music genres.
+
+### Fire TV
+- Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo and banner (a full tile on the Fire TV home screen): installs next to the official app.
+- **Update from Settings**: downloads and installs the latest version published on GitHub.
+- Optimized release build (R8 + baseline profile), smooth scrolling between rows, and focus returns to where you were.

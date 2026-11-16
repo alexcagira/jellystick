@@ -77,6 +77,7 @@ internal fun PlayerMenus(
 			PlayerMenu.SUBTITLES -> overlay.subtitleOptions(noneLabel)
 			PlayerMenu.QUALITY -> overlay.qualityOptions()
 			PlayerMenu.SPEED -> overlay.speedOptions()
+			PlayerMenu.PLAYBACK_MODE -> overlay.playbackModeOptions()
 			else -> emptyList()
 		}
 	}
@@ -88,11 +89,14 @@ internal fun PlayerMenus(
 		PlayerMenu.SPEED -> stringResource(R.string.modern_player_speed)
 		PlayerMenu.CHAPTERS -> stringResource(R.string.modern_player_chapters)
 		PlayerMenu.SUBTITLE_OFFSET -> stringResource(R.string.modern_player_subtitle_offset)
+		// With how it plays now
+		PlayerMenu.PLAYBACK_MODE -> stringResource(R.string.modern_player_playback_mode) + " · " +
+			stringResource(R.string.modern_player_playback_mode_now, overlay.playMethodLabel())
 		null -> ""
 	}
 
 	OptionsDialog(
-		visible = menu in setOf(PlayerMenu.AUDIO, PlayerMenu.SUBTITLES, PlayerMenu.QUALITY, PlayerMenu.SPEED),
+		visible = menu in setOf(PlayerMenu.AUDIO, PlayerMenu.SUBTITLES, PlayerMenu.QUALITY, PlayerMenu.SPEED, PlayerMenu.PLAYBACK_MODE),
 		title = title,
 		options = options,
 		onDismissRequest = onDismissRequest,

@@ -160,12 +160,12 @@ fun LanguageCollectionsDialog(
 		maxWidth = 860.dp,
 	) {
 		when (val current = step) {
-			is Step.Scanning -> Progress(
+			is Step.Scanning -> CollectionProgress(
 				if (current.total == 0) stringResource(R.string.language_collections_reading)
 				else stringResource(R.string.language_collections_scanning, current.done, current.total)
 			)
 
-			is Step.Working -> Progress(
+			is Step.Working -> CollectionProgress(
 				stringResource(if (current.update) R.string.language_collections_updating else R.string.language_collections_creating)
 			)
 
@@ -192,7 +192,7 @@ fun LanguageCollectionsDialog(
 }
 
 @Composable
-private fun Progress(text: String) {
+internal fun CollectionProgress(text: String) {
 	Row(
 		verticalAlignment = Alignment.CenterVertically,
 		modifier = Modifier.padding(vertical = 24.dp),
@@ -416,7 +416,7 @@ private fun ConfigureCollection(
 }
 
 @Composable
-private fun PosterChoice(
+internal fun PosterChoice(
 	label: String,
 	selected: Boolean,
 	onClick: () -> Unit,

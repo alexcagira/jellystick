@@ -64,7 +64,9 @@ el inicio:
 
 - **Media bar** con títulos de esa biblioteca (el fondo difuminado es siempre la diapositiva actual).
 - Debajo, **pills** con las demás bibliotecas del mismo tipo (para saltar de Films a Películas), **Colecciones**
-  (en películas: todas las colecciones) y *Explorar*. Al volver de una de esas páginas, el cursor vuelve a su pill.
+  y *Explorar*. Al volver de una de esas páginas, el cursor vuelve a su pill. Las **Colecciones** de una
+  biblioteca de series solo muestran colecciones con series, y las de películas dejan fuera las que solo tienen
+  series (ver *Colecciones de series* más abajo).
 - **Seguir viendo** solo de esa biblioteca: películas a medias, o episodios a medias y siguientes episodios.
 - **Últimas películas** (estrenos más recientes de la biblioteca) o **Últimos episodios** en series, como tarjetas
   16:9 con la calidad (4K, HDR, Dolby Vision...) arriba a la izquierda y las banderas de idioma arriba a la derecha.
@@ -316,8 +318,9 @@ teclado vuelve a buscar, y Atrás deja de escribir sin cerrar el diálogo.
 
 ## Colecciones por idioma de audio
 
-En las bibliotecas de **Películas** y **Series**, el botón **Filtro** (icono de embudo, junto a ordenar)
-lee los idiomas de audio de todos los títulos y muestra cuántos hay de cada uno (con su bandera).
+En las bibliotecas de **Películas** y **Series**, el botón **Filtro** (icono de embudo, junto a ordenar) de la
+cuadrícula clásica, o **＋ Por idioma** en la página **Colecciones** de la biblioteca, lee los idiomas de audio de
+todos los títulos y muestra cuántos hay de cada uno (con su bandera).
 Al elegir un idioma:
 
 1. Nombre de la colección (por defecto "Películas en Inglés", "Series en Español"...).
@@ -334,6 +337,29 @@ También se puede actualizar a mano: vuelve a Filtro y elige el idioma (sale "Co
 Permisos: crear colecciones necesita que el usuario pueda gestionar colecciones; cambiar el póster
 necesita un administrador (si no, la colección se crea con el póster automático de Jellyfin).
 
+## Colecciones de series
+
+En una biblioteca de series (TV Shows) → pill **Colecciones** se ven solo las colecciones que tienen series; en
+la de películas, las que solo tienen series no salen (ni en la pill ni en las filas *Colecciones* de la página).
+Jellyfin no dice qué tiene cada colección, así que la app mira cada una una vez (una petición pequeña, por detrás
+al abrir el inicio) y lo guarda en el dispositivo hasta que cambia su número de títulos.
+
+Arriba, junto a ordenar:
+
+- **＋ Por plataforma**: agrupa las series por dónde se estrenan, con la cadena de sus metadatos (Jellyfin la
+  guarda como *estudio* de la serie al descargar los metadatos de TMDb o TVDb). Primero las **plataformas de
+  streaming** (Netflix, Prime Video, Disney+, HBO Max, Apple TV+, Movistar Plus+, SkyShowtime, Atresplayer,
+  Filmin, Crunchyroll…; "HBO", "HBO Max" y "Max" cuentan como una, igual "Amazon" y "Prime Video") y después
+  las **cadenas de TV** con al menos dos series (AMC, BBC One, FX, Antena 3…). Al elegir una: nombre ("Series
+  de Netflix"), póster (**Generado**: una pantalla con el nombre de la plataforma, sin logotipos, o el póster de
+  una de sus series) y *Crear colección*.
+- **＋ Por idioma**: las colecciones por idioma de audio de arriba, con las series de la biblioteca.
+
+Se actualizan solas una vez al día (añaden las series nuevas y quitan las que ya no son de esa plataforma) y
+también a mano, eligiendo otra vez la plataforma (*Actualizar colección*). Si una serie no sale en ninguna
+plataforma, le falta la cadena en los metadatos: *Actualizar metadatos* en el servidor la añade. El código
+está en `ui/collections/` (`ServiceCollectionsRepository.kt`, `StreamingServices.kt`, `CollectionCatalog.kt`).
+
 ## Fichas de películas, series, temporadas y personas
 
 "More info" (y cualquier ficha de la app) abre la nueva página para películas, series, temporadas y
@@ -344,7 +370,9 @@ todas las opciones). Debajo: *Next up*, temporadas, episodios, reparto y título
 En series y temporadas el botón muestra el episodio: **Resume S01:E05** si ya lo empezaste, **Play S02:E01**
 si no (en español, *Reanudar T01:E05* / *Reproducir T02:E01*). En una temporada los episodios salen en un
 carrusel que empieza en el siguiente por ver (marcado como *Next up*). Se reproducen con OK o con ⏯;
-manteniendo OK se abre su ficha clásica.
+manteniendo OK se abre su ficha clásica. Cada episodio lleva su calidad (4K, HDR, Dolby Vision…) arriba a la
+izquierda (abajo a la izquierda en el *Next up*) y las banderas de sus pistas de audio arriba a la derecha, junto
+al ✓ de visto.
 
 Se puede desactivar en Ajustes → Personalización → Inicio → **Fichas modernas**. Los demás tipos
 (episodios, álbumes, colecciones…) siguen usando la ficha clásica.
@@ -357,8 +385,8 @@ Controles nuevos para películas y episodios (la TV en directo mantiene los orig
   pulsado acelera) con miniatura de la escena, **arriba/abajo** muestran los controles.
 - **Controles**: título y logo arriba; barra de progreso (OK reproduce/pausa) con los
   capítulos marcados con líneas, tiempo transcurrido y restante; episodio anterior / siguiente y "Termina a las…"
-  abajo a la izquierda; abajo a la derecha **audio**, **subtítulos**, **escenas**, **calidad**, **velocidad** y
-  **desfase de subtítulos**. En pausa se ven dos barras discretas en el centro. Se ocultan solos a los 5 segundos; **Atrás** también los oculta.
+  abajo a la izquierda; abajo a la derecha **audio**, **subtítulos**, **escenas**, **calidad**, **modo de
+  reproducción**, **velocidad** y **desfase de subtítulos**. En pausa se ven dos barras discretas en el centro. Se ocultan solos a los 5 segundos; **Atrás** también los oculta.
 - **En pausa** (sin controles): "Estás viendo" con el logo, temporada y episodio, año, duración, valoración y
   sinopsis.
 - **Saltar intro / Saltar créditos / Saltar resumen**: usa los segmentos del servidor (plugin *Intro Skipper* o
@@ -367,6 +395,30 @@ Controles nuevos para películas y episodios (la TV en directo mantiene los orig
   ASS/SSA con estilos (los dibuja otra librería).
 
 Se desactiva en Ajustes → Personalización → Inicio → **Controles modernos del reproductor**.
+
+**Archivos que no se reproducen en directo**: a veces el servidor dice *Direct playing* pero el Fire TV no puede con
+el archivo (un códec que dice soportar y no decodifica, un audio que la tele o la barra de sonido rechazan...).
+La app lo detecta y lo vuelve a pedir con más trabajo del servidor, paso a paso:
+
+1. **Remux**: el servidor reempaqueta el archivo sin tocar vídeo ni audio (tras un error del reproductor).
+2. **Convertir el audio**: el vídeo tal cual y el audio convertido, como hace el navegador con DTS o TrueHD
+   (cuando hay imagen pero el tiempo no avanza durante 10 s).
+3. **Transcodificar**: vídeo y audio convertidos (cuando no sale ninguna imagen en unos 14 s), a lo que reproduce
+   cualquier aparato: H.264 de 8 bits hasta 1080p con audio AAC y como mucho 20 Mbps. Sin ese límite el servidor
+   mantenía 4K y el códec que el aparato dice soportar, y el resultado tampoco se veía (ni le daba tiempo a hacerlo).
+   Si el servidor rechaza la transcodificación (p. ej. el usuario no tiene permiso) sale un aviso y se cierra el
+   reproductor, en vez de quedarse en negro.
+
+El **emulador de Android Studio** ("AOSP TV on x86" en el panel de Jellyfin) no tiene decodificador por hardware:
+no puede con HEVC 10 bits en 4K ni con Dolby Vision, así que esos archivos siempre irán transcodificados ahí. En el
+Fire TV 4K Max se reproducen en directo.
+
+Sale un aviso en cada intento y sigue en el mismo punto. El paso que funcionó se recuerda para **toda la serie**
+(o la película), así los siguientes episodios empiezan ya así. En los controles, el botón **Modo de reproducción**
+(⇄) muestra cómo se está reproduciendo ahora (directo, emisión del servidor o transcodificando) y permite elegirlo
+a mano; *Automático* vuelve a intentar la reproducción directa y olvida lo recordado. Transcodificar necesita que
+tu usuario tenga permiso para ello en el servidor y que el servidor pueda hacerlo (CPU o aceleración por hardware).
+El código está en `ui/playback/PlaybackFallback.kt`.
 
 **Arranque rápido**: el inicio guarda lo que mostró la última vez y lo enseña al momento al abrir la app; las
 filas nuevas se cargan por detrás y el carrusel nuevo aparece en el siguiente arranque.
@@ -391,9 +443,11 @@ La app se llama **Jellystick** (también la versión debug: `app_name_release` y
 nombre Jellystick, igual que el logo de dentro de la app (`drawable/app_logo.xml`, `drawable-v24/app_logo.xml`,
 colores en `values/logo.xml` y `src/debug/res/values/logo.xml`): arranque, barra y salvapantallas.
 
-En la pantalla de inicio del Fire TV las apps instaladas a mano se dibujan con su **icono** (no con el banner) en
-una casilla rectangular, así que `android:icon` apunta también al banner (`@mipmap/app_banner`); el icono cuadrado
-(`@mipmap/app_icon`) se sigue usando dentro de la app.
+En la pantalla de inicio del Fire TV las apps instaladas a mano solo usan el banner si está en
+`drawable-xhdpi` (320 × 180 px), como hace Moonlight: con el banner en `mipmap` el Fire TV lo ignoraba y dibujaba
+el icono encogido sobre una casilla gris. Por eso `android:banner` es `@drawable/app_banner_tv`
+(`drawable-xhdpi/app_banner_tv.png`, el mismo dibujo) y `android:icon` vuelve a ser el icono cuadrado
+(`@mipmap/app_icon`).
 
 Si el Fire TV sigue enseñando el banner o el nombre antiguos, desinstala la app y vuelve a instalarla (el
 launcher guarda la imagen de las apps ya instaladas); si aun así no cambia, reinicia el Fire TV. El icono
@@ -442,6 +496,18 @@ Problemas habituales:
 - Para desinstalar la versión debug: `adb uninstall org.jellyfin.androidtv.debug`.
 
 ## Publicar el APK (para instalarlo con Downloader)
+
+**Actualizar desde la app**: Ajustes → **Actualizar Jellystick** busca la última *release* de GitHub
+(`jellystick.updateRepo` en `gradle.properties`, por defecto `alexcagira/jellystick`), y si su versión es más
+nueva que la instalada la descarga y abre el instalador de Android, que la instala encima sin perder la sesión.
+Para que funcione:
+
+- La etiqueta de la release es la versión (`v13.3.0` o `13.3.0`) y tiene que ser mayor que la instalada: sube
+  `jellystick.version` antes de compilar cada APK (Android tampoco instala encima una versión menor).
+- La release lleva el APK como archivo adjunto (cualquier `.apk` sin "debug" en el nombre), firmado con tu clave.
+- La primera vez Android pide permiso para que Jellystick instale apps: en el Fire TV, Configuración → Mi Fire TV →
+  Opciones para desarrolladores → Instalar apps desconocidas → Jellystick. Luego se vuelve a pulsar el botón.
+- La release tiene que ser pública (no borrador ni *pre-release*) y el repositorio también.
 
 La versión release se llama `com.jellystick.tv`, así que se instala al lado de la app oficial de Jellyfin
 y de la versión debug (cada una con su propia sesión).

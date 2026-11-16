@@ -62,6 +62,10 @@ data class EpisodeEntry(
 	val played: Boolean,
 	/** Next episode to watch, highlighted like on the web */
 	val isNext: Boolean,
+	/** Resolution, HDR, Dolby Vision... of its file */
+	val quality: MediaQuality? = null,
+	/** Audio languages of its file, as flags */
+	val languages: List<LanguageBadge> = emptyList(),
 )
 
 /** Season in the season switcher of a season page */

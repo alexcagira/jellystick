@@ -52,6 +52,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import kotlin.Lazy;
+import kotlin.Unit;
 import timber.log.Timber;
 
 public class PlaybackController implements PlaybackControllerNotifiable {
@@ -121,6 +122,18 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     private boolean directStreamLiveTv;
     private int playbackRetries = 0;
     private long lastPlaybackError = 0;
+
+    // Playback fallback (see PlaybackFallback): how much of the work the server does for the
+    // current item, raised when a stream fails, and the watchdog of the start of each stream
+    private final Lazy<PlaybackFallback> playbackFallback = inject(PlaybackFallback.class);
+    private int fallbackLevel = PlaybackFallback.DIRECT;
+    @Nullable
+    private PlaybackStartWatchdog startWatchdog = null;
+    // The current stream played its first seconds / the level was raised because a stream didn't
+    // start (not by an error later on, e.g. the network): only that one is kept for the series
+    private boolean streamStarted = false;
+    private boolean fallbackFromStartFailure = false;
+    private static final int MAX_PLAYBACK_RETRIES = 4;
 
     private Display.Mode[] mDisplayModes;
     private RefreshRateSwitchingBehavior refreshRateSwitchingBehavior = RefreshRateSwitchingBehavior.DISABLED;
@@ -254,6 +267,32 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     }
 
     public void playerErrorEncountered() {
+        // Each error: one more step of the work done by the server (remux, audio, everything)
+        retryPlayback(Math.min(PlaybackFallback.TRANSCODE_ALL, currentFallbackLevel() + 1));
+    }
+
+    /** Level of the current item: the one reached after errors, or the one kept for its series */
+    private int currentFallbackLevel() {
+        return Math.max(fallbackLevel, playbackFallback.getValue().rememberedLevel(getCurrentlyPlayingItem()));
+    }
+
+    /** For the player menu: the level used now */
+    public int getPlaybackFallbackLevel() {
+        return currentFallbackLevel();
+    }
+
+    /** From the player menu: play the item again at [level], and keep it for its series */
+    public void setPlaybackFallbackLevel(int level) {
+        playbackFallback.getValue().remember(getCurrentlyPlayingItem(), level);
+        fallbackLevel = level;
+        fallbackFromStartFailure = false;
+        playbackRetries = 0;
+        refreshStream();
+    }
+
+    private void retryPlayback(int level) {
+        if (startWatchdog != null) startWatchdog.stop();
+
         // reset the retry count if it's been more than 30s since previous error
         if (playbackRetries > 0 && Instant.now().toEpochMilli() - lastPlaybackError > 30000) {
             Timber.i("playback stabilized - retry count reset to 0 from %s", playbackRetries);
@@ -262,17 +301,27 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
         playbackRetries++;
         lastPlaybackError = Instant.now().toEpochMilli();
+        // Live TV keeps the original retries (direct stream, then transcode)
+        if (!isLiveTv) {
+            fallbackLevel = Math.max(fallbackLevel, level);
+            if (!streamStarted) fallbackFromStartFailure = true;
+        }
 
-        if (playbackRetries < 3) {
-            if (mFragment != null)
-                Utils.showToast(mFragment.getContext(), mFragment.getString(R.string.player_error));
-            Timber.i("Player error encountered - retrying");
+        if (playbackRetries < (isLiveTv ? 3 : MAX_PLAYBACK_RETRIES)) {
+            if (mFragment != null) {
+                int message = isLiveTv ? R.string.player_error : PlaybackFallback.messageOf(fallbackLevel);
+                Utils.showToast(mFragment.getContext(), mFragment.getString(message));
+            }
+            Timber.i("Player error encountered - retrying at fallback level %d", fallbackLevel);
+            // stop() keeps the position (the requested one when the stream never started)
             stop();
             play(mCurrentPosition);
         } else {
             mPlaybackState = PlaybackState.ERROR;
             if (mFragment != null) {
-                Utils.showToast(mFragment.getContext(), mFragment.getString(R.string.too_many_errors));
+                // Not even transcoded: the server couldn't make the stream
+                int message = !isLiveTv && fallbackLevel >= PlaybackFallback.TRANSCODE_ALL ? R.string.playback_fallback_failed : R.string.too_many_errors;
+                Utils.showToast(mFragment.getContext(), mFragment.getString(message));
                 mFragment.closePlayer();
             }
         }
@@ -520,8 +569,10 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         internalOptions.setItemId(item.getId());
         internalOptions.setMediaSources(item.getMediaSources());
         internalOptions.setAlwaysBurnInSubtitleWhenTranscoding(userPreferences.getValue().get(UserPreferences.Companion.getSubtitlesBurnDuringTranscode()));
-        if (playbackRetries > 0 || (isLiveTv && !directStreamLiveTv)) internalOptions.setEnableDirectPlay(false);
-        if (playbackRetries > 1) internalOptions.setEnableDirectStream(false);
+        if (isLiveTv) {
+            if (playbackRetries > 0 || !directStreamLiveTv) internalOptions.setEnableDirectPlay(false);
+            if (playbackRetries > 1) internalOptions.setEnableDirectStream(false);
+        }
         if (mCurrentOptions != null) {
             internalOptions.setSubtitleStreamIndex(mCurrentOptions.getSubtitleStreamIndex());
             internalOptions.setAudioStreamIndex(mCurrentOptions.getAudioStreamIndex());
@@ -548,6 +599,13 @@ public class PlaybackController implements PlaybackControllerNotifiable {
                 get(ServerVersion.class)
         );
         internalOptions.setProfile(internalProfile);
+        if (!isLiveTv) {
+            // Files that failed here (or their series): remux or transcode right away. After the
+            // profile: the last level replaces it with one every device plays
+            int level = Math.max(fallbackLevel, playbackFallback.getValue().rememberedLevel(item));
+            playbackFallback.getValue().apply(internalOptions, level);
+            if (level > PlaybackFallback.DIRECT) Timber.i("Playback fallback level %d for %s", level, item.getName());
+        }
         return internalOptions;
     }
 
@@ -592,6 +650,10 @@ public class PlaybackController implements PlaybackControllerNotifiable {
                     Timber.e(exception, "Unable to get stream info for internal player");
                     if (mVideoManager == null)
                         return;
+                    // The server refused this way of playing (e.g. no permission to transcode):
+                    // say it and close instead of a black screen that never starts
+                    Throwable cause = exception.getCause();
+                    handlePlaybackInfoError(cause instanceof PlaybackException ? (PlaybackException) cause : exception);
                 }
             });
         }
@@ -688,6 +750,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
         if (mVideoManager != null) {
             mVideoManager.setMediaStreamInfo(api.getValue(), response);
+            startWatchdog(item, response);
         }
 
         PlaybackControllerHelperKt.applyMediaSegments(this, item, () -> {
@@ -711,6 +774,42 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
             return null;
         });
+    }
+
+    /**
+     * Some streams fail without an error from the player (black screen, time not moving): played
+     * again with more of the work done by the server. Once one plays, the level that was needed is
+     * kept for the series.
+     */
+    private void startWatchdog(BaseItemDto item, StreamInfo response) {
+        if (startWatchdog != null) startWatchdog.stop();
+        startWatchdog = null;
+        streamStarted = false;
+        if (isLiveTv || mVideoManager == null) return;
+
+        final int level = currentFallbackLevel();
+        final int rememberedLevel = playbackFallback.getValue().rememberedLevel(item);
+        boolean hasVideo = JavaCompat.getVideoStream(response.getMediaSource()) != null;
+        startWatchdog = new PlaybackStartWatchdog(
+                mHandler,
+                mVideoManager,
+                hasVideo,
+                () -> mPlaybackState == PlaybackState.PAUSED,
+                () -> {
+                    streamStarted = true;
+                    if (fallbackFromStartFailure && level > rememberedLevel) {
+                        Timber.i("Playback works at fallback level %d: kept for %s", level, item.getName());
+                        playbackFallback.getValue().remember(item, level);
+                    }
+                    return Unit.INSTANCE;
+                },
+                (nextLevel) -> {
+                    Timber.w("Stream of %s doesn't start at fallback level %d", item.getName(), level);
+                    retryPlayback(Math.max(nextLevel, Math.min(PlaybackFallback.TRANSCODE_ALL, level + 1)));
+                    return Unit.INSTANCE;
+                }
+        );
+        startWatchdog.start();
     }
 
     public void startSpinner() {
@@ -874,6 +973,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     }
 
     public void stop() {
+        if (startWatchdog != null) startWatchdog.stop();
         refreshCurrentPosition();
         Timber.i("stop called at %s", mCurrentPosition);
         stopReportLoop();
@@ -915,6 +1015,9 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
     private void resetPlayerErrors() {
         playbackRetries = 0;
+        // The next item starts at the level kept for its series
+        fallbackLevel = PlaybackFallback.DIRECT;
+        fallbackFromStartFailure = false;
     }
 
     private void clearPlaybackSessionOptions() {

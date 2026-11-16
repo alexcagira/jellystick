@@ -27,6 +27,9 @@ val debugApplicationId = "org.jellyfin.androidtv.debug"
 // update over the old one when its version code (made from this) is higher
 val jellystickVersion: String = getProperty("jellystick.version") ?: project.getVersionName()
 
+// Settings → Update Jellystick: the latest release of this GitHub repository (owner/name)
+val updateRepository: String = (localProperty("jellystick.updateRepo") ?: "alexcagira/jellystick").trim().replace("\"", "")
+
 android {
 	namespace = "org.jellyfin.androidtv"
 	compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -41,6 +44,8 @@ android {
 		versionCode = getVersionCode(versionName!!)
 
 		buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
+		// GitHub repository whose latest release Settings → Update installs
+		buildConfigField("String", "UPDATE_REPOSITORY", "\"$updateRepository\"")
 	}
 
 	buildFeatures {

@@ -2,18 +2,21 @@ package org.jellyfin.androidtv.ui.library.modern
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.ui.collections.CollectionCatalog
 import org.jellyfin.androidtv.ui.home.modern.MediaBadges
 import org.jellyfin.androidtv.ui.home.modern.posterImage
 import org.jellyfin.androidtv.util.apiclient.getUrl
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.extensions.filterApi
 import org.jellyfin.sdk.api.client.extensions.itemsApi
+import org.jellyfin.sdk.api.client.extensions.userLibraryApi
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.request.GetItemsRequest
+import timber.log.Timber
 import java.util.UUID
 
 /**
@@ -21,11 +24,32 @@ import java.util.UUID
  */
 class LibraryBrowseRepository(
 	private val api: ApiClient,
+	private val catalog: CollectionCatalog,
 ) {
 	data class Page(val cards: List<BrowseCard>, val total: Int)
 
+	/** Collections of one kind of library: the ones to show or to leave out (see [BrowseFilter.collectionsOf]) */
+	private data class Restriction(val ids: Set<UUID>? = null, val excluded: Set<UUID>? = null) {
+		/** Nothing can match */
+		val empty get() = ids != null && ids.isEmpty()
+	}
+
+	private suspend fun restriction(filter: BrowseFilter): Restriction? {
+		if (!filter.collections) return null
+		return when (filter.collectionsOf) {
+			LibraryKind.SHOWS -> Restriction(ids = catalog.kinds().withSeries.take(MAX_IDS).toSet())
+			LibraryKind.MOVIES -> Restriction(excluded = catalog.kinds().seriesOnly.take(MAX_IDS).toSet().ifEmpty { null })
+			null -> null
+		}
+	}
+
+	private fun GetItemsRequest.restrictedTo(restriction: Restriction?): GetItemsRequest =
+		if (restriction == null) this else copy(ids = restriction.ids, excludeItemIds = restriction.excluded)
+
 	suspend fun page(filter: BrowseFilter, start: Int, count: Int): Page = withContext(Dispatchers.IO) {
-		val result = api.itemsApi.getItems(filter.request(start = start, limit = count, withTotal = true)).content
+		val restriction = restriction(filter)
+		if (restriction?.empty == true) return@withContext Page(emptyList(), 0)
+		val result = api.itemsApi.getItems(filter.request(start = start, limit = count, withTotal = true).restrictedTo(restriction)).content
 		Page(result.items.map { card(it) }, result.totalRecordCount)
 	}
 
@@ -34,6 +58,8 @@ class LibraryBrowseRepository(
 	 * once (small, without images) and the pages are loaded from it.
 	 */
 	suspend fun randomIds(filter: BrowseFilter): List<UUID> = withContext(Dispatchers.IO) {
+		val restriction = restriction(filter)
+		if (restriction?.empty == true) return@withContext emptyList()
 		api.itemsApi.getItems(
 			filter.request(start = 0, limit = MAX_RANDOM, withTotal = false).copy(
 				sortBy = setOf(ItemSortBy.RANDOM),
@@ -41,7 +67,7 @@ class LibraryBrowseRepository(
 				fields = emptySet(),
 				enableImages = false,
 				enableUserData = false,
-			)
+			).restrictedTo(restriction)
 		).content.items.map { it.id }
 	}
 
@@ -62,6 +88,8 @@ class LibraryBrowseRepository(
 	/** Position of the first title starting with [letter] in the list sorted by name ('#': 0) */
 	suspend fun indexOfLetter(filter: BrowseFilter, letter: Char): Int = withContext(Dispatchers.IO) {
 		if (letter == '#') return@withContext 0
+		val restriction = restriction(filter)
+		if (restriction?.empty == true) return@withContext 0
 		api.itemsApi.getItems(
 			filter.copy(sort = BrowseSort.NAME).request(start = 0, limit = 0, withTotal = true).copy(
 				// Sort names are lowercase on the server
@@ -69,14 +97,23 @@ class LibraryBrowseRepository(
 				enableImages = false,
 				enableUserData = false,
 				fields = emptySet(),
-			)
+			).restrictedTo(restriction)
 		).content.totalRecordCount
+	}
+
+	/** A library (for making collections from it) */
+	suspend fun item(id: UUID): BaseItemDto? = withContext(Dispatchers.IO) {
+		runCatching { api.userLibraryApi.getItem(id).content }
+			.onFailure { Timber.w(it, "Unable to load item $id") }
+			.getOrNull()
 	}
 
 	/** A random title of the grid, for "Shuffle" */
 	suspend fun randomItem(filter: BrowseFilter): BaseItemDto? = withContext(Dispatchers.IO) {
+		val restriction = restriction(filter)
+		if (restriction?.empty == true) return@withContext null
 		api.itemsApi.getItems(
-			filter.request(start = 0, limit = 1, withTotal = false).copy(sortBy = setOf(ItemSortBy.RANDOM), sortOrder = null)
+			filter.request(start = 0, limit = 1, withTotal = false).copy(sortBy = setOf(ItemSortBy.RANDOM), sortOrder = null).restrictedTo(restriction)
 		).content.items.firstOrNull()
 	}
 
@@ -103,7 +140,8 @@ class LibraryBrowseRepository(
 		}
 
 		return GetItemsRequest(
-			parentId = libraryId,
+			// Collections aren't inside the libraries: the library only picks which ones
+			parentId = libraryId.takeUnless { collections },
 			includeItemTypes = itemTypes,
 			recursive = true,
 			genres = genreNames.ifEmpty { listOfNotNull(genre) }.toSet().ifEmpty { null },
@@ -155,6 +193,8 @@ class LibraryBrowseRepository(
 			?: if (ratingLabel(rating).uppercase().startsWith("X")) 99 else 0
 
 		private const val MAX_RANDOM = 5_000
+		/** Ids in one request (they go in the address, which has a size limit) */
+		private const val MAX_IDS = 150
 		private const val POSTER_WIDTH = 300
 		private val CARD_FIELDS = setOf(ItemFields.SORT_NAME, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO, ItemFields.MEDIA_STREAMS)
 	}

@@ -21,6 +21,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.ui.collections.CollectionCatalog
 import org.jellyfin.androidtv.ui.collections.ImdbTop250
 import org.jellyfin.androidtv.ui.home.modern.CardStyle
 import org.jellyfin.androidtv.ui.home.modern.HeroSlide
@@ -61,6 +62,7 @@ class ModernLibraryRepository(
 	private val api: ApiClient,
 	private val homeRepository: ModernHomeRepository,
 	private val imdbTop250: ImdbTop250,
+	private val catalog: CollectionCatalog,
 ) {
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private val json = Json { ignoreUnknownKeys = true }
@@ -202,7 +204,8 @@ class ModernLibraryRepository(
 			val genresAsync = row { safe("genres") { genres(libraryId, kind) }.orEmpty() }
 			val watchedAsync = row { safe("because watched") { becauseWatched(libraryId, kind) } }
 			val imdbAsync = row { if (movies) safe("imdb") { imdb() } else null }
-			val collectionsAsync = row { if (movies) safe("collections") { collections() } else null }
+			// Films: their collections; shows: the collections of series (by service, by language...)
+			val collectionsAsync = row { safe("collections") { collections(libraryId, kind) } }
 			val studioAsync = row { safe("studio") { studio(libraryId, kind) } }
 			val likedAsync = row { safe("because liked") { becauseLiked(libraryId, kind) } }
 			val spotlightAsync = row { if (movies) safe("collection") { collectionSpotlight() } else null }
@@ -424,11 +427,20 @@ class ModernLibraryRepository(
 		return posterSection("imdb", ImdbTop250.NAME, items)
 	}
 
-	private suspend fun collections(): LibrarySection? {
+	/**
+	 * Collections of the kind of the library: in films all but those with only series, in TV shows
+	 * those with series (known from the last look into the collections, it doesn't wait for it).
+	 */
+	private suspend fun collections(libraryId: UUID, kind: LibraryKind): LibrarySection? {
+		val kinds = catalog.cached()
+		val shows = kind == LibraryKind.SHOWS
+		if (shows && kinds.withSeries.isEmpty()) return null
 		val items = api.itemsApi.getItems(
 			GetItemsRequest(
 				includeItemTypes = setOf(BaseItemKind.BOX_SET),
 				recursive = true,
+				ids = if (shows) kinds.withSeries.take(MAX_COLLECTION_IDS) else null,
+				excludeItemIds = if (shows) null else kinds.seriesOnly.take(MAX_COLLECTION_IDS).ifEmpty { null },
 				sortBy = setOf(ItemSortBy.RANDOM),
 				fields = setOf(ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
 				imageTypeLimit = 1,
@@ -437,7 +449,8 @@ class ModernLibraryRepository(
 			)
 		).content.items
 		val title = context.getString(R.string.library_collections)
-		return posterSection("collections", title, items, seeAll = BrowseFilter(title = title, collections = true, sort = BrowseSort.NAME))
+		val seeAll = BrowseFilter(title = title, libraryId = libraryId, kind = kind, collections = true, collectionsOf = kind, sort = BrowseSort.NAME)
+		return posterSection("collections", title, items, seeAll = seeAll)
 	}
 
 	/** The movies of a random collection, with its name */
@@ -446,6 +459,8 @@ class ModernLibraryRepository(
 			GetItemsRequest(
 				includeItemTypes = setOf(BaseItemKind.BOX_SET),
 				recursive = true,
+				// Not a collection of series in the films
+				excludeItemIds = catalog.cached().seriesOnly.take(MAX_COLLECTION_IDS).ifEmpty { null },
 				sortBy = setOf(ItemSortBy.RANDOM),
 				enableImages = false,
 				enableTotalRecordCount = false,
@@ -787,6 +802,7 @@ class ModernLibraryRepository(
 		const val HERO_SLIDES = 8
 		const val HERO_CANDIDATES = 20
 		const val SECTION_LIMIT = 20
+		const val MAX_COLLECTION_IDS = 150
 		/** Rows loading at the same time after the first ones */
 		const val PARALLEL_ROWS = 3
 		const val LONG_SECTION_LIMIT = 40

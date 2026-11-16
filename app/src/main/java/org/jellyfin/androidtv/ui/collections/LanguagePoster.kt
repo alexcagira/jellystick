@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -101,6 +103,104 @@ object LanguagePoster {
 
 		return image
 	}
+
+	/**
+	 * Poster of a streaming service collection: a screen with a play sign (no brand logos), the
+	 * name of the service and "TV Shows".
+	 */
+	fun drawService(title: String, subtitle: String): ImageBitmap {
+		val image = ImageBitmap(WIDTH, HEIGHT)
+		val size = Size(WIDTH.toFloat(), HEIGHT.toFloat())
+		// Each service its own colour, always the same one
+		val accent = SERVICE_COLORS[Math.floorMod(title.lowercase().hashCode(), SERVICE_COLORS.size)]
+
+		CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), size) {
+			drawRect(
+				Brush.verticalGradient(
+					0f to accent.copy(alpha = 0.55f).compositeOver(Color(0xFF0D1422)),
+					0.55f to Color(0xFF0D1422),
+					1f to Color(0xFF05070C),
+				)
+			)
+			drawCircle(
+				brush = Brush.radialGradient(
+					0f to accent.copy(alpha = 0.35f),
+					1f to Color.Transparent,
+					center = Offset(size.width / 2, 560f),
+					radius = 620f,
+				),
+				radius = 620f,
+				center = Offset(size.width / 2, 560f),
+			)
+
+			// Screen with a play sign and its stand
+			val screenWidth = 560f
+			val screenHeight = 360f
+			val left = (size.width - screenWidth) / 2
+			val top = 340f
+			drawRoundRect(
+				color = Color.White.copy(alpha = 0.10f),
+				topLeft = Offset(left, top),
+				size = Size(screenWidth, screenHeight),
+				cornerRadius = CornerRadius(36f),
+			)
+			drawRoundRect(
+				color = Color.White.copy(alpha = 0.85f),
+				topLeft = Offset(left, top),
+				size = Size(screenWidth, screenHeight),
+				cornerRadius = CornerRadius(36f),
+				style = Stroke(14f),
+			)
+			val centerX = size.width / 2
+			val centerY = top + screenHeight / 2
+			val play = Path().apply {
+				moveTo(centerX - 50f, centerY - 70f)
+				lineTo(centerX + 80f, centerY)
+				lineTo(centerX - 50f, centerY + 70f)
+				close()
+			}
+			drawPath(play, Color.White)
+			drawRoundRect(
+				color = Color.White.copy(alpha = 0.85f),
+				topLeft = Offset(centerX - 110f, top + screenHeight + 40f),
+				size = Size(220f, 14f),
+				cornerRadius = CornerRadius(7f),
+			)
+
+			drawRect(accent, topLeft = Offset(size.width / 2 - 60f, 900f), size = Size(120f, 8f))
+		}
+
+		val bitmap = image.asAndroidBitmap()
+		val canvas = android.graphics.Canvas(bitmap)
+		val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+			color = 0xFFFFFFFF.toInt()
+			textAlign = Paint.Align.CENTER
+			typeface = typeface(800)
+			textSize = fitTextSize(title, 128f, WIDTH - 140f)
+		}
+		canvas.drawText(title, WIDTH / 2f, 1060f, titlePaint)
+		val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+			color = accent.toArgb()
+			textAlign = Paint.Align.CENTER
+			typeface = typeface(700)
+			textSize = 58f
+			letterSpacing = 0.25f
+		}
+		canvas.drawText(subtitle.uppercase(), WIDTH / 2f, 1170f, subtitlePaint)
+
+		return image
+	}
+
+	private val SERVICE_COLORS = listOf(
+		Color(0xFF41B6E6),
+		Color(0xFFE5484D),
+		Color(0xFF8E6CEF),
+		Color(0xFF2FBF71),
+		Color(0xFFF2A93B),
+		Color(0xFFEF6FB4),
+		Color(0xFF3E7BFA),
+		Color(0xFF16B3A6),
+	)
 
 	/** JPEG bytes of a poster for uploading it to the server */
 	fun encode(image: ImageBitmap): ByteArray = ByteArrayOutputStream().use { stream ->

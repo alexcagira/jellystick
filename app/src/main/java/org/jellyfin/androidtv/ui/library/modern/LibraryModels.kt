@@ -58,6 +58,11 @@ data class BrowseFilter(
 	val kind: LibraryKind? = null,
 	/** The collections (box sets) instead of movies */
 	val collections: Boolean = false,
+	/**
+	 * Collections of a TV show library: only those with series. Of a film library: all but those
+	 * with only series. null: every collection
+	 */
+	val collectionsOf: LibraryKind? = null,
 	/** Genre shown in the title and the filter */
 	val genre: String? = null,
 	/** Its names on the server (English and Spanish); [genre] when empty */

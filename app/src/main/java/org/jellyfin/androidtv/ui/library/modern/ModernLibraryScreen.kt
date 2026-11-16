@@ -1,8 +1,10 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+// LocalBringIntoViewSpec is still experimental in the Compose version used by the app
+@file:OptIn(ExperimentalFoundationApi::class)
 
 package org.jellyfin.androidtv.ui.library.modern
 
 import android.os.Bundle
+import androidx.compose.foundation.ExperimentalFoundationApi
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -372,7 +374,7 @@ fun ModernLibraryScreen(
 		}
 	}
 
-	// Focus: the card focused before, otherwise \"Play\" in the media bar. The first rows come
+	// Focus: the card focused before, otherwise "Play" in the media bar. The first rows come
 	// before the media bar: the pills meanwhile
 	LaunchedEffect(state.heroLoaded, state.sections.isNotEmpty()) {
 		if (initialFocusDone || (!state.heroLoaded && state.sections.isEmpty())) return@LaunchedEffect
@@ -408,7 +410,7 @@ fun ModernLibraryScreen(
 		}
 	}
 
-	// The media bar came after the first rows: its \"Play\" button, unless a key was pressed since
+	// The media bar came after the first rows: its "Play" button, unless a key was pressed since
 	LaunchedEffect(focusHeroWhenLoaded, state.heroLoaded) {
 		if (!focusHeroWhenLoaded || !state.heroLoaded) return@LaunchedEffect
 		focusHeroWhenLoaded = false
@@ -484,13 +486,16 @@ fun ModernLibraryScreen(
 							if (other.id != library.id) navigationRepository.navigate(Destinations.modernLibrary(other), true)
 						},
 						onBrowse = { navigationRepository.navigate(Destinations.libraryBrowse(library)) },
-						// Movies: every collection
-						onCollections = if (library.libraryKind == LibraryKind.MOVIES) {
-							{
-								val title = context.getString(R.string.library_collections)
-								navigationRepository.navigate(Destinations.modernBrowse(BrowseFilter(title = title, collections = true)))
-							}
-						} else null,
+						// The collections of this kind: of films in Films, of series in TV Shows
+						onCollections = {
+							val title = context.getString(R.string.library_collections)
+							val kind = library.libraryKind
+							navigationRepository.navigate(
+								Destinations.modernBrowse(
+									BrowseFilter(title = title, libraryId = library.id, kind = kind, collections = true, collectionsOf = kind)
+								)
+							)
+						},
 						modifier = Modifier
 							.padding(top = 4.dp, bottom = 4.dp)
 							// Not while the media bar loads: the page stays where it will be
@@ -589,7 +594,7 @@ private fun HeroPlaceholder(height: Dp) {
 	}
 }
 
-/** The libraries of the same kind (Films, Películas...) and \"Browse\", under the media bar */
+/** The libraries of the same kind (Films, Películas...) and "Browse", under the media bar */
 @Composable
 private fun LibraryPills(
 	libraries: List<BaseItemDto>,

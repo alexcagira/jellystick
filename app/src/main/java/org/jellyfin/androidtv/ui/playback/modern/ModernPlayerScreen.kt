@@ -87,7 +87,7 @@ private const val TICKS_PER_MS = 10_000L
 private enum class ControlsFocus { DEFAULT, SEEK_BAR }
 
 /** Menus opened from the buttons on the bottom right */
-internal enum class PlayerMenu { AUDIO, SUBTITLES, CHAPTERS, QUALITY, SPEED, SUBTITLE_OFFSET }
+internal enum class PlayerMenu { AUDIO, SUBTITLES, CHAPTERS, QUALITY, SPEED, SUBTITLE_OFFSET, PLAYBACK_MODE }
 
 /**
  * Streaming style player controls:
@@ -459,6 +459,12 @@ private fun PlayerControls(
 						icon = R.drawable.ic_select_quality,
 						contentDescription = stringResource(R.string.modern_player_quality),
 						onClick = { onMenu(PlayerMenu.QUALITY) },
+					)
+					// Direct play, remux or transcoding: for files that don't play well as they are
+					PlayerIconButton(
+						icon = R.drawable.ic_playback_mode,
+						contentDescription = stringResource(R.string.modern_player_playback_mode),
+						onClick = { onMenu(PlayerMenu.PLAYBACK_MODE) },
 					)
 					PlayerIconButton(
 						icon = R.drawable.ic_playback_speed,

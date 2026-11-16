@@ -971,8 +971,30 @@ private fun EpisodeCard(
 		) { focused ->
 			CardArtwork(url = entry.imageUrl, fallbackTitle = entry.title)
 
-			// Readability of the progress bar
-			if (entry.progress != null) {
+			// Quality top left (bottom left under "Next up", above the progress bar), audio flags
+			// and the watched check top right, like the other 16:9 cards
+			val qualityOnTop = entry.quality != null && !entry.isNext
+			val qualityBelow = entry.quality != null && entry.isNext
+			if (qualityOnTop || entry.languages.isNotEmpty()) {
+				Box(
+					modifier = Modifier
+						.align(Alignment.TopCenter)
+						.fillMaxWidth()
+						.height(40.dp)
+						.background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.55f), 1f to Color.Transparent))
+				)
+			}
+			if (qualityOnTop) {
+				QualityBadges(
+					quality = entry.quality,
+					modifier = Modifier
+						.align(Alignment.TopStart)
+						.padding(start = 6.dp, top = 6.dp, end = 90.dp),
+				)
+			}
+
+			// Readability of the progress bar (and the quality above it)
+			if (entry.progress != null || qualityBelow) {
 				Box(
 					modifier = Modifier
 						.align(Alignment.BottomCenter)
@@ -998,22 +1020,39 @@ private fun EpisodeCard(
 				)
 			}
 
-			if (entry.played) {
-				Box(
-					modifier = Modifier
-						.align(Alignment.TopEnd)
-						.padding(6.dp)
-						.size(20.dp)
-						.background(ModernHomeColors.Accent, CircleShape),
-					contentAlignment = Alignment.Center,
-				) {
-					Icon(
-						imageVector = ImageVector.vectorResource(R.drawable.ic_check),
-						contentDescription = null,
-						tint = Color.White,
-						modifier = Modifier.size(12.dp),
-					)
+			Row(
+				horizontalArrangement = Arrangement.spacedBy(5.dp),
+				verticalAlignment = Alignment.CenterVertically,
+				modifier = Modifier
+					.align(Alignment.TopEnd)
+					.padding(6.dp),
+			) {
+				LanguageFlags(languages = entry.languages)
+
+				if (entry.played) {
+					Box(
+						modifier = Modifier
+							.size(20.dp)
+							.background(ModernHomeColors.Accent, CircleShape),
+						contentAlignment = Alignment.Center,
+					) {
+						Icon(
+							imageVector = ImageVector.vectorResource(R.drawable.ic_check),
+							contentDescription = null,
+							tint = Color.White,
+							modifier = Modifier.size(12.dp),
+						)
+					}
 				}
+			}
+
+			if (qualityBelow) {
+				QualityBadges(
+					quality = entry.quality,
+					modifier = Modifier
+						.align(Alignment.BottomStart)
+						.padding(start = 10.dp, bottom = if (entry.progress != null) 18.dp else 8.dp),
+				)
 			}
 
 			if (focused) {

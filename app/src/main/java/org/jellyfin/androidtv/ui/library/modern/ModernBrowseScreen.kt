@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,6 +79,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.jellyfin.androidtv.R
+import org.jellyfin.androidtv.ui.collections.ServiceCollectionsDialog
+import org.jellyfin.androidtv.ui.collections.LanguageCollectionsDialog
 import org.jellyfin.androidtv.ui.base.CircularProgressIndicator
 import org.jellyfin.androidtv.ui.base.Icon
 import org.jellyfin.androidtv.ui.base.Text
@@ -178,6 +181,14 @@ class ModernBrowseViewModel(
 			_state.update { it.copy(ratings = ratings) }
 		}
 	}
+
+	/** After making a collection: the grid again, with it */
+	fun refresh() {
+		_state.update { it.copy(total = null, failed = false, version = it.version + 1, jumpIndex = null) }
+		reload()
+	}
+
+	suspend fun library(id: UUID): BaseItemDto? = repository.item(id)
 
 	private fun reload() {
 		loadJob?.cancel()
@@ -331,6 +342,11 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 	var currentLetter by remember { mutableStateOf<Char?>(null) }
 	var dialog by remember { mutableStateOf<BrowseDialog?>(null) }
 	var lastDialog by remember { mutableStateOf<BrowseDialog?>(null) }
+	// Collections page of a library: make collections of it by service (TV shows) or audio language
+	var collectionDialog by remember { mutableStateOf<CollectionMaker?>(null) }
+	val library by produceState<BaseItemDto?>(null, filter.libraryId, filter.collections) {
+		value = if (filter.collections) filter.libraryId?.let { viewModel.library(it) } else null
+	}
 
 	fun openDetails(id: UUID) = navigationRepository.navigate(Destinations.itemDetails(id))
 	fun play(item: BaseItemDto) {
@@ -449,6 +465,12 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 							onShuffle = {
 								scope.launch { viewModel.randomItem()?.let(::play) }
 							},
+							onByService = if (library?.libraryKind == LibraryKind.SHOWS) {
+								{ collectionDialog = CollectionMaker.SERVICE }
+							} else null,
+							onByLanguage = if (library?.libraryKind != null) {
+								{ collectionDialog = CollectionMaker.LANGUAGE }
+							} else null,
 						)
 					}
 
@@ -608,10 +630,30 @@ fun ModernBrowseScreen(viewModel: ModernBrowseViewModel) {
 			onOpen = ::openDetails,
 			onChanged = {},
 		)
+
+		library?.let { library ->
+			ServiceCollectionsDialog(
+				visible = collectionDialog == CollectionMaker.SERVICE,
+				library = library,
+				onDismissRequest = { collectionDialog = null },
+				onChanged = viewModel::refresh,
+			)
+			LanguageCollectionsDialog(
+				visible = collectionDialog == CollectionMaker.LANGUAGE,
+				library = library,
+				onDismissRequest = {
+					collectionDialog = null
+					// A collection may have been made
+					viewModel.refresh()
+				},
+			)
+		}
 	}
 }
 
 private enum class BrowseDialog { GENRES, RATINGS, SORT }
+
+private enum class CollectionMaker { SERVICE, LANGUAGE }
 
 private val BrowseSort.label: Int
 	get() = when (this) {
@@ -647,6 +689,8 @@ private fun BrowseHeader(
 	onRatings: () -> Unit,
 	onSort: () -> Unit,
 	onShuffle: () -> Unit,
+	onByService: (() -> Unit)? = null,
+	onByLanguage: (() -> Unit)? = null,
 ) {
 	Column(modifier = Modifier.fillMaxWidth()) {
 		Row(verticalAlignment = Alignment.Bottom) {
@@ -725,6 +769,25 @@ private fun BrowseHeader(
 				onClick = onShuffle,
 				outlined = true,
 			)
+			// Collections page: make new ones
+			if (onByService != null) {
+				FilterPill(
+					text = stringResource(R.string.browse_collections_by_service),
+					icon = R.drawable.ic_add,
+					selected = false,
+					onClick = onByService,
+					outlined = true,
+				)
+			}
+			if (onByLanguage != null) {
+				FilterPill(
+					text = stringResource(R.string.browse_collections_by_language),
+					icon = R.drawable.ic_add,
+					selected = false,
+					onClick = onByLanguage,
+					outlined = true,
+				)
+			}
 		}
 	}
 }

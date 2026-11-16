@@ -130,7 +130,8 @@ class ModernDetailsRepository(
 					api.tvShowsApi.getEpisodes(
 						seriesId = id,
 						seasonId = item.id,
-						fields = setOf(ItemFields.OVERVIEW, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO),
+						// Media streams: quality and audio flags on each episode
+						fields = setOf(ItemFields.OVERVIEW, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO, ItemFields.MEDIA_STREAMS),
 					).content.items
 				}
 			}.orEmpty()
@@ -417,6 +418,8 @@ class ModernDetailsRepository(
 			progress = if (runtime > 0 && position > 0) (position.toFloat() / runtime.toFloat()).coerceIn(0f, 1f) else null,
 			played = episode.userData?.played == true,
 			isNext = isNext,
+			quality = MediaBadges.quality(episode)?.takeUnless { it.isEmpty },
+			languages = MediaBadges.audioLanguages(episode),
 		)
 	}
 

@@ -11,3 +11,15 @@ captures/
 # Signing keys (Jellystick release)
 *.jks
 *.keystore
+
+# Output of Build → Generate Signed App Bundle or APK (the APK goes to the GitHub releases, and
+# R8's mapping.txt is over GitHub's 100 MB limit)
+app/release/
+app/debug/
+*.apk
+*.aab
+mapping.txt
+
+# Jellystick zips and patches downloaded next to the project
+jellystick-v*.zip
+jellystick-v*.patch

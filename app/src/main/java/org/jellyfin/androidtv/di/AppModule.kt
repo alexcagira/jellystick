@@ -35,7 +35,10 @@ import org.jellyfin.androidtv.ui.details.modern.ModernDetailsViewModel
 import org.jellyfin.androidtv.ui.details.modern.ThemeMusicPlayer
 import org.jellyfin.androidtv.ui.home.modern.HomeCache
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeRepository
+import org.jellyfin.androidtv.ui.collections.CollectionCatalog
+import org.jellyfin.androidtv.ui.settings.update.AppUpdater
 import org.jellyfin.androidtv.ui.collections.LanguageCollectionsRepository
+import org.jellyfin.androidtv.ui.collections.ServiceCollectionsRepository
 import org.jellyfin.androidtv.ui.home.modern.ItemActions
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeViewModel
 import org.jellyfin.androidtv.ui.home.modern.ModernWatchlistViewModel
@@ -179,14 +182,18 @@ val appModule = module {
 	single { TmdbTrendingClient(BuildConfig.TMDB_API_KEY) }
 	single { ModernHomeRepository(get(), get(), get()) }
 	single { ItemActions(get(), get()) }
-	single { LanguageCollectionsRepository(androidContext(), get(), get()) }
+	single { CollectionCatalog(androidContext(), get()) }
+	// Settings → Update Jellystick
+	single { AppUpdater(androidContext()) }
+	single { LanguageCollectionsRepository(androidContext(), get(), get(), get()) }
+	single { ServiceCollectionsRepository(androidContext(), get(), get(), get()) }
 	single { SharedQueueServer(androidContext(), get(), get()) }
 	single { HomeCache(androidContext()) }
 	single { ModernDetailsRepository(get(), get()) }
 	single { MusicCache(androidContext()) }
 	single { ImdbTop250(androidContext(), get()) }
-	single { ModernLibraryRepository(androidContext(), get(), get(), get()) }
-	single { LibraryBrowseRepository(get()) }
+	single { ModernLibraryRepository(androidContext(), get(), get(), get(), get()) }
+	single { LibraryBrowseRepository(get(), get()) }
 	single { ModernMusicRepository(get(), get()) }
 	single { MusicItemRepository(get(), get()) }
 	single { FavouriteTracks(get()) }

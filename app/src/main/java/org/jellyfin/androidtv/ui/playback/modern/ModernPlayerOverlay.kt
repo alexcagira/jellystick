@@ -8,9 +8,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.constant.getQualityProfiles
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.playback.PlaybackController
+import org.jellyfin.androidtv.ui.playback.PlaybackFallback
 import org.jellyfin.androidtv.ui.playback.PlaybackControllerContainer
 import org.jellyfin.androidtv.ui.playback.VideoQualityController
 import org.jellyfin.androidtv.ui.playback.VideoSpeedController
@@ -20,6 +22,7 @@ import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.MediaSegmentType
 import org.jellyfin.sdk.model.api.MediaStreamType
+import org.jellyfin.sdk.model.api.PlayMethod
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Duration
@@ -233,6 +236,33 @@ class ModernPlayerOverlay(
 			)
 		}
 	}
+
+	/** Direct play, remux, audio or full conversion by the server: kept for the whole series */
+	fun playbackModeOptions(): List<PlayerOption> {
+		val controller = controller ?: return emptyList()
+		val current = controller.getPlaybackFallbackLevel()
+		return listOf(
+			PlaybackFallback.DIRECT to R.string.modern_player_mode_direct,
+			PlaybackFallback.REMUX to R.string.modern_player_mode_remux,
+			PlaybackFallback.TRANSCODE_AUDIO to R.string.modern_player_mode_audio,
+			PlaybackFallback.TRANSCODE_ALL to R.string.modern_player_mode_all,
+		).map { (level, label) ->
+			PlayerOption(
+				label = context.getString(label),
+				selected = level == current,
+				onSelect = { if (level != controller.getPlaybackFallbackLevel()) controller.setPlaybackFallbackLevel(level) },
+			)
+		}
+	}
+
+	/** How the current stream plays */
+	fun playMethodLabel(): String = context.getString(
+		when (controller?.currentStreamInfo?.playMethod) {
+			PlayMethod.DIRECT_PLAY -> R.string.modern_player_method_direct
+			PlayMethod.DIRECT_STREAM -> R.string.modern_player_method_stream
+			else -> R.string.modern_player_method_transcode
+		}
+	)
 
 	fun speedOptions(): List<PlayerOption> {
 		val controller = controller ?: return emptyList()

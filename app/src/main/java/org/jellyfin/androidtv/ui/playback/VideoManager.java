@@ -80,6 +80,8 @@ public class VideoManager {
     private DynamicsProcessing mDynamicsProcessing;
     private Limiter mLimiter;
     private PlaybackControllerNotifiable mPlaybackControllerNotifiable;
+    // For the start watchdog (PlaybackStartWatchdog): did the decoder give a picture
+    private boolean renderedFirstFrame = false;
     private PlaybackOverlayFragmentHelper _helper;
     public ExoPlayer mExoPlayer;
     private PlayerView mExoPlayerView;
@@ -176,6 +178,11 @@ public class VideoManager {
                 if (mPlaybackControllerNotifiable != null) {
                     mPlaybackControllerNotifiable.onPlaybackSpeedChange(playbackParameters.speed);
                 }
+            }
+
+            @Override
+            public void onRenderedFirstFrame() {
+                renderedFirstFrame = true;
             }
 
             @Override
@@ -337,6 +344,26 @@ public class VideoManager {
         return mExoPlayer.isPlaying();
     }
 
+    /** A video frame was shown since the stream was set */
+    public boolean hasRenderedFirstFrame() {
+        return renderedFirstFrame;
+    }
+
+    /** Position straight from the player, also while it isn't playing */
+    public long getPlayerPosition() {
+        return mExoPlayer == null ? 0 : mExoPlayer.getCurrentPosition();
+    }
+
+    /** Loading data (start, seek, slow network) */
+    public boolean isWaitingForData() {
+        return mExoPlayer != null && mExoPlayer.getPlaybackState() == Player.STATE_BUFFERING;
+    }
+
+    /** Ready and asked to play: the time should move */
+    public boolean isReadyToPlay() {
+        return mExoPlayer != null && mExoPlayer.getPlaybackState() == Player.STATE_READY && mExoPlayer.getPlayWhenReady();
+    }
+
     public void start() {
         if (mExoPlayer == null) {
             Timber.e("mExoPlayer should not be null!!");
@@ -427,6 +454,7 @@ public class VideoManager {
                     .setSubtitleConfigurations(subtitleConfigurations)
                     .build();
 
+            renderedFirstFrame = false;
             mExoPlayer.setMediaItem(mediaItem);
             mExoPlayer.prepare();
         } catch (IllegalStateException e) {

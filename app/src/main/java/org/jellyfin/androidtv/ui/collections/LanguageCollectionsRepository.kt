@@ -115,6 +115,7 @@ class LanguageCollectionsRepository(
 	private val context: Context,
 	private val api: ApiClient,
 	private val userRepository: UserRepository,
+	private val catalog: CollectionCatalog,
 ) {
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private val file = File(context.filesDir, "language_collections.json")
@@ -270,6 +271,9 @@ class LanguageCollectionsRepository(
 		ids.drop(IDS_PER_REQUEST).chunked(IDS_PER_REQUEST).forEach { chunk ->
 			api.collectionApi.addToCollection(collectionId, chunk)
 		}
+		// Series ones only in the Collections page of the TV shows, film ones in the one of the films
+		val series = scan.kind == LanguageCollectionKind.SERIES
+		catalog.remember(collectionId, series = series, movies = !series, count = ids.size)
 
 		val user = requireNotNull(userId)
 		mutex.withLock {
