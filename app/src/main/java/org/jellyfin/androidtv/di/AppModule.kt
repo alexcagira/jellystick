@@ -47,6 +47,7 @@ import org.jellyfin.androidtv.ui.collections.ImdbTop250
 import org.jellyfin.androidtv.ui.library.modern.LibraryBrowseRepository
 import org.jellyfin.androidtv.ui.library.modern.ModernBrowseViewModel
 import org.jellyfin.androidtv.ui.library.modern.AudioLanguageIndex
+import org.jellyfin.androidtv.ui.music.MusicStopper
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryRepository
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryViewModel
 import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
@@ -190,6 +191,7 @@ val appModule = module {
 	single { LanguageCollectionsRepository(androidContext(), get(), get(), get()) }
 	single { ServiceCollectionsRepository(androidContext(), get(), get(), get()) }
 	single { SharedQueueServer(androidContext(), get(), get()) }
+	single { MusicStopper(get(), get(), get()) }
 	single { HomeCache(androidContext()) }
 	single { ModernDetailsRepository(get(), get()) }
 	single { MusicCache(androidContext()) }
@@ -237,7 +239,7 @@ val appModule = module {
 	single { ItemLauncher() }
 	single { KeyProcessor() }
 	single { ReportingHelper(get(), get()) }
-	single<PlaybackHelper> { SdkPlaybackHelper(get(), get(), get(), get()) }
+	single<PlaybackHelper> { SdkPlaybackHelper(get(), get(), get(), get(), get()) }
 
 	factory { (context: Context) -> SearchFragmentDelegate(context, get(), get()) }
 }

@@ -2,6 +2,7 @@ package org.jellyfin.androidtv.ui.music.nowplaying
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.graphicsLayer
@@ -69,6 +70,9 @@ import org.koin.compose.koinInject
 
 private const val BUTTON_HIGHLIGHT_MS = 3_000L
 
+/** Extra room at the top while "Next up" shows: the card (20 dp from the top, 68 dp high) above the cover */
+private val NEXT_UP_SPACE = 48.dp
+
 /**
  * Full screen view of the song: cover, name, album and artist over the blurred cover, and the
  * lyrics (bigger) when they are shown. OK shows or hides the lyrics (small button in the corner),
@@ -92,6 +96,9 @@ internal fun NowPlayingScreensaver(
 	var buttonActive by remember { mutableStateOf(false) }
 	var buttonTouch by remember { mutableIntStateOf(0) }
 	val buttonAlpha by animateFloatAsState(if (buttonActive) 1f else 0.35f, tween(400), label = "LyricsButton")
+	// "Next up" in the last seconds of the song: the cover and the lyrics move down to make room for it
+	val nextUp = rememberNextUp(playbackManager)
+	val nextUpSpace by animateDpAsState(if (nextUp.visible) NEXT_UP_SPACE else 0.dp, tween(500), label = "NextUpSpace")
 
 	BackHandler(onBack = onExit)
 
@@ -153,7 +160,7 @@ internal fun NowPlayingScreensaver(
 		BoxWithConstraints(
 			modifier = Modifier
 				.fillMaxSize()
-				.padding(horizontal = 72.dp, vertical = 52.dp),
+				.padding(start = 72.dp, end = 72.dp, top = 52.dp + nextUpSpace, bottom = 52.dp),
 			contentAlignment = Alignment.Center,
 		) {
 			if (showLyrics) {
@@ -213,6 +220,12 @@ internal fun NowPlayingScreensaver(
 				)
 			}
 		}
+
+		// The next song, over everything else
+		NextUpNotice(
+			state = nextUp,
+			modifier = Modifier.align(Alignment.TopStart).padding(top = 20.dp, start = 40.dp),
+		)
 
 		// Progress of the song, thin line at the bottom
 		Box(

@@ -22,6 +22,7 @@ import org.jellyfin.androidtv.auth.repository.SessionRepository
 import org.jellyfin.androidtv.auth.repository.UserRepository
 import org.jellyfin.androidtv.integration.LeanbackChannelWorker
 import org.jellyfin.androidtv.ui.InteractionTrackerViewModel
+import org.jellyfin.androidtv.ui.music.MusicStopper
 import org.jellyfin.androidtv.ui.background.AppBackground
 import org.jellyfin.androidtv.ui.base.JellyfinTheme
 import org.jellyfin.androidtv.ui.base.ProvideLocalInteractionTracker
@@ -44,6 +45,7 @@ class MainActivity : FragmentActivity() {
 	private val interactionTrackerViewModel by viewModel<InteractionTrackerViewModel>()
 	private val workManager by inject<WorkManager>()
 	private val playbackManager by inject<PlaybackManager>()
+	private val musicStopper by inject<MusicStopper>()
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		applyTheme()
@@ -123,6 +125,10 @@ class MainActivity : FragmentActivity() {
 			sessionRepository.restoreSession(destroyOnly = true)
 		}
 	}
+
+	// ☰ of the remote while there is music: stops it, whatever the screen (before the screens get it)
+	override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+		musicStopper.handleMenuKey(event) || super.dispatchKeyEvent(event)
 
 	// Forward key events to fragments
 

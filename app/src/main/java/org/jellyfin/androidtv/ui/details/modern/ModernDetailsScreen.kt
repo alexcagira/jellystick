@@ -247,7 +247,7 @@ fun ModernDetailsScreen(
 	}
 
 	// Initial focus: restore the last focused element, otherwise the play button (or first card)
-	LaunchedEffect(state.loading, blocks.size) {
+	LaunchedEffect(state.loading, blocks.size, state.partial) {
 		if (state.loading || initialFocusDone || blocks.isEmpty()) return@LaunchedEffect
 
 		if (restoreKey != null && restoreIndex in blocks.indices) {
@@ -258,6 +258,8 @@ fun ModernDetailsScreen(
 				return@LaunchedEffect
 			}
 		}
+		// The element to focus again can be in a row still loading
+		if (restoreKey != null && restoreKey != "hero" && state.partial) return@LaunchedEffect
 
 		awaitFrames(1)
 		initialFocusDone = primaryFocusRequester.tryRequestFocus()

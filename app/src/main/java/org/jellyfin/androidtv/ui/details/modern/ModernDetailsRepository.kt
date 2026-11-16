@@ -43,47 +43,75 @@ class ModernDetailsRepository(
 	private val api: ApiClient,
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
 ) {
-	suspend fun load(itemId: UUID): DetailsState = withContext(Dispatchers.IO) {
-		val item = api.userLibraryApi.getItem(itemId).content
-		val kind = when (item.type) {
-			BaseItemKind.MOVIE -> DetailsKind.MOVIE
-			BaseItemKind.SERIES -> DetailsKind.SERIES
-			BaseItemKind.SEASON -> DetailsKind.SEASON
-			BaseItemKind.PERSON -> DetailsKind.PERSON
-			else -> null
-		}
+	/**
+	 * Everything of the page. Movies and series give [onPartial] the header and buttons as soon as
+	 * the item is there, and the seasons before the similar titles: "More like this" is the slowest
+	 * request (the server compares the whole library) and the page waited for it.
+	 */
+	suspend fun load(itemId: UUID, onPartial: ((DetailsState) -> Unit)? = null): DetailsState = withContext(Dispatchers.IO) {
+		coroutineScope {
+			// Only the posters need the hidden titles: asked meanwhile
+			val hiddenAsync = async { safe("hidden libraries") { libraryVisibilityRepository.hiddenItemIds() }.orEmpty() }
+			val item = try {
+				api.userLibraryApi.getItem(itemId).content
+			} catch (err: Exception) {
+				hiddenAsync.cancel()
+				throw err
+			}
+			val kind = when (item.type) {
+				BaseItemKind.MOVIE -> DetailsKind.MOVIE
+				BaseItemKind.SERIES -> DetailsKind.SERIES
+				BaseItemKind.SEASON -> DetailsKind.SEASON
+				BaseItemKind.PERSON -> DetailsKind.PERSON
+				else -> null
+			}
 
-		if (kind == null) return@withContext DetailsState(loading = false, item = item, kind = null)
-
-		val hidden = safe("hidden libraries") { libraryVisibilityRepository.hiddenItemIds() }.orEmpty()
-		when (kind) {
-			DetailsKind.MOVIE -> loadMovie(item, hidden)
-			DetailsKind.SERIES -> loadSeries(item, hidden)
-			DetailsKind.SEASON -> loadSeason(item)
-			DetailsKind.PERSON -> loadPerson(item, hidden)
+			when (kind) {
+				null -> {
+					hiddenAsync.cancel()
+					DetailsState(loading = false, item = item, kind = null)
+				}
+				DetailsKind.MOVIE -> loadMovie(item, { hiddenAsync.await() }, onPartial)
+				DetailsKind.SERIES -> loadSeries(item, { hiddenAsync.await() }, onPartial)
+				DetailsKind.SEASON -> {
+					hiddenAsync.cancel()
+					loadSeason(item)
+				}
+				DetailsKind.PERSON -> loadPerson(item, hiddenAsync.await())
+			}
 		}
 	}
 
-	private suspend fun loadMovie(item: BaseItemDto, hidden: Set<UUID>): DetailsState = coroutineScope {
+	private suspend fun loadMovie(
+		item: BaseItemDto,
+		hidden: suspend () -> Set<UUID>,
+		onPartial: ((DetailsState) -> Unit)?,
+	): DetailsState = coroutineScope {
 		val similar = async { safe("similar") { similarItems(item.id) }.orEmpty() }
 		val header = header(item)
 
-		DetailsState(
+		val main = DetailsState(
 			loading = false,
 			item = item,
 			kind = DetailsKind.MOVIE,
 			header = header,
 			backgroundUrl = header.backgroundUrl,
 			cast = cast(item.people),
-			similar = posters(similar.await(), hidden),
 			isFavorite = item.userData?.isFavorite == true,
 			isPlayed = item.userData?.played == true,
 			watchlistItemId = item.id,
 			isInWatchlist = item.userData?.likes == true,
 		)
+		onPartial?.invoke(main.copy(partial = true))
+
+		main.copy(similar = posters(similar.await(), hidden()))
 	}
 
-	private suspend fun loadSeries(item: BaseItemDto, hidden: Set<UUID>): DetailsState = coroutineScope {
+	private suspend fun loadSeries(
+		item: BaseItemDto,
+		hidden: suspend () -> Set<UUID>,
+		onPartial: ((DetailsState) -> Unit)?,
+	): DetailsState = coroutineScope {
 		val seasonsAsync = async {
 			safe("seasons") {
 				api.tvShowsApi.getSeasons(
@@ -96,29 +124,39 @@ class ModernDetailsRepository(
 		val firstEpisodeAsync = async { safe("first episode") { firstEpisode(item.id) } }
 		val similarAsync = async { safe("similar") { similarItems(item.id) }.orEmpty() }
 
+		// 1. The header and buttons
+		val first = header(item)
+		val main = DetailsState(
+			loading = false,
+			item = item,
+			kind = DetailsKind.SERIES,
+			header = first,
+			backgroundUrl = first.backgroundUrl,
+			cast = cast(item.people),
+			isFavorite = item.userData?.isFavorite == true,
+			isPlayed = item.userData?.played == true,
+			watchlistItemId = item.id,
+			isInWatchlist = item.userData?.likes == true,
+			themeSeriesId = item.id,
+		)
+		onPartial?.invoke(main.copy(partial = true))
+
+		// 2. Seasons and the episode to play
 		val seasons = seasonsAsync.await()
 		val header = header(item, seasonCount = seasons.count { (it.indexNumber ?: 0) > 0 }.takeIf { it > 0 })
 		val nextUp = nextUpAsync.await()
 		// Not started (or finished) series start again at the first episode
 		val playEpisode = nextUp ?: firstEpisodeAsync.await()
-
-		DetailsState(
-			loading = false,
-			item = item,
-			kind = DetailsKind.SERIES,
+		val withSeasons = main.copy(
 			header = header,
-			backgroundUrl = header.backgroundUrl,
 			nextUp = nextUp?.let { nextUpCard(it) },
 			seasons = seasons.map { seasonCard(it, item) },
-			cast = cast(item.people),
-			similar = posters(similarAsync.await(), hidden),
-			isFavorite = item.userData?.isFavorite == true,
-			isPlayed = item.userData?.played == true,
 			playTarget = playEpisode?.let { playTarget(it) },
-			watchlistItemId = item.id,
-			isInWatchlist = item.userData?.likes == true,
-			themeSeriesId = item.id,
 		)
+		onPartial?.invoke(withSeasons.copy(partial = true))
+
+		// 3. More like this
+		withSeasons.copy(similar = posters(similarAsync.await(), hidden()))
 	}
 
 	private suspend fun loadSeason(item: BaseItemDto): DetailsState = coroutineScope {

@@ -35,6 +35,7 @@ import org.jellyfin.androidtv.ui.composable.blurHashPainter
 import org.jellyfin.androidtv.ui.composable.modifier.fadingEdges
 import org.jellyfin.androidtv.ui.composable.modifier.overscan
 import org.jellyfin.androidtv.ui.composable.rememberPlayerPositionInfo
+import org.jellyfin.androidtv.ui.music.nowplaying.NextUpNotice
 import org.jellyfin.androidtv.ui.player.base.PlayerSeekbar
 import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
 import org.jellyfin.androidtv.util.apiclient.getUrl
@@ -93,6 +94,14 @@ fun DreamContentNowPlaying(
 				.padding(horizontal = 50.dp),
 		)
 	}
+
+	// The next song, in the last seconds of this one
+	NextUpNotice(
+		playbackManager = playbackManager,
+		modifier = Modifier
+			.align(Alignment.TopStart)
+			.overscan(),
+	)
 
 	// Metadata overlay (includes title / progress)
 	Row(

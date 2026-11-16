@@ -22,7 +22,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - **Series collections by streaming service** (Netflix, HBO Max, Prime Video, Disney+, Apple TV+…) or TV network, also kept up to date. The *Collections* pill of TV show libraries only lists series collections, and the one of film libraries leaves them out.
 
 ### Details pages
-- New pages for movies, series, seasons and people: full-screen backdrop with logo, rating, genres and overview; Next up, seasons, episode carousel, cast and similar titles.
+- New pages for movies, series, seasons and people: full-screen backdrop with logo, rating, genres and overview; Next up, seasons, episode carousel, cast and similar titles. They open at once and the slowest part (*More like this*) comes after.
 - **Play/Resume S01:E05** button, favourite, trailer, watched, file info and **Watchlist** (synced with the KefinTweaks watchlist on the web).
 - Switch seasons without leaving the page, ✓ to mark episodes as watched, and **quality and flags on every episode**.
 - **Series theme song** with fade in and out.
@@ -40,9 +40,10 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 ### Music
 - New music page: media bar with recommendations (*Because you listen to…*), **stations** by artist and genre, configurable rows and quick links.
 - Album, playlist, artist and genre pages with a **heart on every song** and an automatic **Favourite Tracks** playlist.
-- Redesigned **Now Playing**: optional lyrics, ⏪/⏩ on the remote change songs, the next cover is already loaded, and a **screensaver** with lyrics.
+- Redesigned **Now Playing**: optional lyrics, ⏪/⏩ on the remote change songs, the next cover is already loaded, and a **screensaver** with lyrics and a **Next up** card (cover, song and album of the next one) in the last 10 seconds.
+- The **☰ button** on the remote stops the music from any screen (like *Stop*).
 - A *now playing* bubble in the navigation bar.
-- **Shared queue**: a QR code lets anyone on your Wi-Fi add songs from their phone, even by pasting Spotify, Apple Music or YouTube Music links (they're matched against your library; missing ones are saved as requests).
+- **Shared queue**: a QR code lets anyone on your Wi-Fi search your library and add songs or albums from their phone. When the queue ends, what played is kept: a new song starts from itself and the earlier ones stay in the queue to play again, until you press ☰.
 - Fixes: the queue no longer stops after 5 or 6 songs, and the Fire TV doesn't go to sleep while music is playing.
 
 ### Search
@@ -50,6 +51,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - Without text: genres as colour tiles and popular tags; music-only search with music genres.
 
 ### Fire TV
-- Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo and banner on navy (a full tile on the Fire TV home screen): installs next to the official app. The server dashboard shows it as *Jellystick*.
+- Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo and banner: installs next to the official app. On the Fire TV home screen the logo sits on the grey of the tile, like other apps. The server dashboard shows it as *Jellystick*.
+- The player opens sooner: the next episodes of the queue are loaded once it plays.
 - **Update from Settings**: downloads and installs the latest version published on GitHub. The app version is the release's (v1.2.2, v1.2.3…).
 - Optimized release build (R8 + baseline profile), smooth scrolling between rows, and focus returns to where you were.

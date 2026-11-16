@@ -225,6 +225,7 @@
 
     <!-- Páginas de música: álbumes, listas, artistas, géneros, reproduciendo -->
     <string name="music_add_to_playlist">Añadir a una lista</string>
+    <string name="music_next_up">Next up</string>
     <string name="music_new_playlist">Nueva lista</string>
     <string name="music_create">Crear</string>
     <string name="music_added_to_playlist">Añadida a %1$s</string>

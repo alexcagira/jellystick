@@ -17,6 +17,16 @@ class VideoQueueManager {
 
 	fun getCurrentVideoQueue(): List<BaseItemDto> = _currentVideoQueue
 
+	/**
+	 * More titles at the end of the queue being played: the next episodes, asked once the playback
+	 * started (the player shares this list). Only when the queue still ends with [afterId].
+	 */
+	fun appendToVideoQueue(afterId: java.util.UUID, items: List<BaseItemDto>) {
+		val queue = _currentVideoQueue as? MutableList<BaseItemDto> ?: return
+		if (items.isEmpty() || queue.lastOrNull()?.id != afterId) return
+		queue.addAll(items)
+	}
+
 	fun setCurrentMediaPosition(currentMediaPosition: Int) {
 		if (currentMediaPosition !in 0.._currentVideoQueue.size) return
 

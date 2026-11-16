@@ -258,8 +258,16 @@ la **lupa** para buscar solo música.
 - **Salvapantallas**: portada, canción, álbum y artista sobre la portada difuminada; con la letra activada,
   la letra grande al lado, sin moverse. **OK** muestra u oculta la
   letra (botón discreto abajo a la derecha), play/pausa pausa, y cualquier otro botón lo cierra.
+- **Next up**: en los últimos 10 segundos de cada canción, arriba a la izquierda del salvapantallas (el de
+  Reproduciendo ahora y el de la app) sale una tarjeta compacta con la portada, el nombre y el álbum de la
+  siguiente (`NextUpNotice.kt`). En el de Reproduciendo ahora la portada y la letra bajan un poco mientras
+  se ve, para que no la tapen. No sale si la cola acaba con esa canción ni en canciones de menos de 30 s.
 - **Cola**: portadas con canción y artista · álbum debajo, y la posición ("3 / 24"). OK salta a esa canción;
-  mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista.
+  mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista. Las canciones
+  **ya escuchadas** siguen a la izquierda, más tenues, para volver a ponerlas (la fila empieza en la actual).
+- **☰ del mando (en cualquier pantalla)**: lo mismo que *Detener*: para la música, vacía la cola (también las
+  canciones ya escuchadas) y cierra la cola compartida. Solo cuando hay música; si no, el botón hace lo de
+  siempre (`ui/music/MusicStopper.kt`).
 
 ### Cola compartida (como una "fiesta")
 
@@ -268,14 +276,9 @@ cualquiera en el mismo Wi-Fi lo escanea con la cámara del móvil, busca cancion
 al final de la cola. No necesitan app ni cuenta de Jellyfin; la web la sirve la propia tele
 (puerto 8765) y usa tu sesión.
 
-- También pueden **pegar un enlace** de Spotify, Apple Music o YouTube Music (en la app: Compartir →
-  Copiar enlace). La tele lee el nombre de la canción (o del álbum) y su artista y busca la misma en tu
-  biblioteca de Jellyfin: solo puede sonar música que tengas en el servidor.
+- Solo suena música de tu biblioteca: la web ya no tiene la casilla para pegar enlaces de Spotify, Apple
+  Music o YouTube Music (la tele aún entiende `/api/link`, pero nada lo usa).
 - Si no sonaba nada, empieza a sonar lo que añadan; si tenías la música en pausa, sigue en pausa.
-- Las canciones de enlaces que no están en tu biblioteca quedan apuntadas como **peticiones** (se ven en la
-  ventana de la cola compartida en la tele), para añadirlas al servidor más tarde. La tele no puede reproducir
-  música de Spotify, Apple Music o YouTube Music: es contenido protegido que solo sus propias apps pueden
-  reproducir, con la cuenta de quien paga la suscripción.
 - Si la página no abre: el móvil tiene que estar en el mismo Wi-Fi que la tele (no en la red de invitados,
   que suele aislar los dispositivos). La dirección usa ahora la IP de la red activa de la tele; antes podía
   salir la de Wi-Fi Direct (192.168.49.1), que los móviles no alcanzan.
@@ -286,6 +289,9 @@ al final de la cola. No necesitan app ni cuenta de Jellyfin; la web la sirve la 
   nuevas (antes volvía a la primera), *Play* recupera la reproducción tras un error de red, y el Fire TV
   no entra en reposo mientras suena música aunque nadie toque el mando. La música tampoco usa ya el
   *audio offload* salvo que lo actives en los ajustes del reproductor (en Fire TV puede congelar el sonido).
+- **Cuando la cola se acaba** se guarda todo lo que sonó: si alguien añade otra canción empieza por ella (p. ej.
+  la sexta de la cola) y las anteriores siguen en la cola de *Reproduciendo ahora* para volver a ponerlas. Solo
+  se borran con **Detener** o con **☰** del mando, que además cierran la cola compartida (luego se empieza otra).
 - El enlace lleva un código que cambia cada vez que empiezas a compartir. *Dejar de compartir* lo corta.
 - La página es `app/src/main/res/raw/shared_queue.html`.
 
@@ -452,6 +458,16 @@ a mano (también *Reempaquetar*, el remux solo, y en archivos Dolby Vision el in
 tu usuario tenga permiso para ello en el servidor y que el servidor pueda hacerlo (CPU o aceleración por hardware).
 El código está en `ui/playback/PlaybackFallback.kt`.
 
+**Abrir el reproductor más rápido**: al reproducir un episodio solo se piden antes ese y los dos siguientes (con
+toda su información); los demás de la cola (hasta 150) se añaden 15 s después, ya reproduciendo. Antes se pedían
+los 150 con pistas, capítulos e imágenes de trickplay y, con el servidor ocupado (tareas programadas), el
+reproductor tardaba segundos en abrirse (`SdkPlaybackHelper.QUICK_EPISODE_LIMIT`).
+
+**Fichas al momento**: la ficha de una película o serie sale en cuanto llega el título (cabecera, botones y
+reparto); las temporadas y el siguiente episodio después, y *Más como esto* lo último, porque es la petición más
+lenta (el servidor compara toda la biblioteca) y la ficha la esperaba. *Reproducir* antes de que llegue el
+siguiente episodio lo busca en ese momento. Al volver tras reproducir, la ficha se cambia entera al final.
+
 **Arranque rápido**: el inicio guarda lo que mostró la última vez y lo enseña al momento al abrir la app; las
 filas nuevas se cargan por detrás y el carrusel nuevo aparece en el siguiente arranque.
 
@@ -475,6 +491,12 @@ Ajustes (icono de engranaje) → Personalización → Inicio → **Pantalla de i
 Al cambiarlo, vuelve a abrir el inicio (o reinicia la app). El inicio clásico sigue disponible.
 
 ## Icono y banner (Jellystick)
+
+**Icono con fondo transparente**: el Fire TV pone las apps instaladas fuera de la Appstore en una burbuja gris
+con el icono cuadrado en el centro. Con el fondo azul marino se veía un cuadrado oscuro con barras grises a los
+lados; ahora el icono (`mipmap-*/app_icon.png` y el adaptable, con `drawable/app_icon_background.xml`
+transparente) es solo el logo, así que la casilla entera es del gris del Fire TV, como las demás apps de fuera
+de la Appstore.
 
 La app se llama **Jellystick** (también la versión debug: `app_name_release` y `app_name_debug` en
 `values/strings.xml`). El banner que muestra el Fire TV (`mipmap-*/app_banner.png` y

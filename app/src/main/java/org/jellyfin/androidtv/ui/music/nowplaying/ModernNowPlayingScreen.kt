@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -91,6 +92,7 @@ import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
 import org.jellyfin.androidtv.ui.music.modern.formatDuration
 import org.jellyfin.androidtv.ui.navigation.Destinations
 import org.jellyfin.androidtv.ui.navigation.NavigationRepository
+import org.jellyfin.androidtv.ui.music.MusicStopper
 import org.jellyfin.androidtv.ui.playback.MediaManager
 import org.jellyfin.androidtv.ui.player.base.PlayerSeekbar
 import org.jellyfin.androidtv.util.apiclient.albumPrimaryImage
@@ -133,6 +135,7 @@ fun ModernNowPlayingScreen() {
 	val api = koinInject<ApiClient>()
 	val playbackManager = koinInject<PlaybackManager>()
 	val mediaManager = koinInject<MediaManager>()
+	val musicStopper = koinInject<MusicStopper>()
 	val navigationRepository = koinInject<NavigationRepository>()
 	val favouriteTracks = koinInject<FavouriteTracks>()
 	val imageLoader = koinInject<ImageLoader>()
@@ -158,9 +161,28 @@ fun ModernNowPlayingScreen() {
 	val playFocusRequester = remember { FocusRequester() }
 	val backgroundState = remember { mutableStateOf<String?>(null) }
 
-	// Upcoming songs: the queue only knows them once peeked
+	// Upcoming songs: the queue only knows them once peeked. None when the queue ran to its end
 	LaunchedEffect(entry, entries, playbackOrder) {
-		upcoming = playbackManager.queue.peekNext(QUEUE_PEEK).toList()
+		upcoming = if (entry == null) emptyList() else playbackManager.queue.peekNext(QUEUE_PEEK).toList()
+	}
+	// Songs already played: they stay in the queue to play again (also once it ended, e.g. a shared
+	// queue: a new song plays from its place after them) until Stop or ☰
+	val played = remember(entries, entry, entryIndex, upcoming, playbackOrder) {
+		when {
+			entry == null || entryIndex < 0 -> entries
+			playbackOrder == PlaybackOrder.DEFAULT -> entries.take(entryIndex)
+			else -> entries.filter { it != entry && it !in upcoming }
+		}
+	}
+
+	// Stop (here, or ☰ anywhere): the queue is emptied and this screen closes
+	var hadQueue by remember { mutableStateOf(false) }
+	LaunchedEffect(entries.isEmpty() && entry == null) {
+		if (entries.isNotEmpty() || entry != null) hadQueue = true
+		else if (hadQueue) {
+			hadQueue = false
+			navigationRepository.goBack()
+		}
 	}
 
 	val image = item?.songImage()
@@ -305,8 +327,7 @@ fun ModernNowPlayingScreen() {
 				ControlButton(R.drawable.ic_next, stringResource(R.string.lbl_next_item)) { mediaManager.nextAudioItem() }
 				// Stop: ends the queue and leaves this screen
 				ControlButton(R.drawable.ic_stop, stringResource(R.string.music_stop)) {
-					mediaManager.stopAudio(true)
-					navigationRepository.goBack()
+					musicStopper.stop()
 				}
 				// Favourite: only the heart, red when the song is a favourite
 				val favorite = item?.let { isFavorite(it) } == true
@@ -331,8 +352,15 @@ fun ModernNowPlayingScreen() {
 				ControlButton(R.drawable.ic_photos, stringResource(R.string.music_screensaver)) { screensaver = true }
 			}
 
-			// Queue: the current song and what comes next
-			val queue = listOfNotNull(entry) + upcoming
+			// Queue: the songs played (dimmed), the current one and what comes next
+			val queue = played + listOfNotNull(entry) + upcoming
+			val currentIndex = played.size
+			val queueState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex)
+			var queueFocused by remember { mutableStateOf(false) }
+			// The current song first in view, unless the row is being browsed
+			LaunchedEffect(entry, currentIndex) {
+				if (!queueFocused) queueState.scrollToItem(currentIndex.coerceAtMost((queue.size - 1).coerceAtLeast(0)))
+			}
 			Row(
 				verticalAlignment = Alignment.CenterVertically,
 				modifier = Modifier
@@ -359,14 +387,18 @@ fun ModernNowPlayingScreen() {
 				}
 			}
 			LazyRow(
+				state = queueState,
 				horizontalArrangement = Arrangement.spacedBy(12.dp),
 				contentPadding = PaddingValues(horizontal = ModernHomeDimens.ScreenPaddingHorizontal, vertical = 6.dp),
+				modifier = Modifier.onFocusChanged { queueFocused = it.hasFocus },
 			) {
 				itemsIndexed(queue, key = { index, queueEntry -> "${index}_${queueEntry.baseItem?.id}" }) { index, queueEntry ->
+					val isCurrent = index == currentIndex && entry != null
 					QueueCard(
 						entry = queueEntry,
-						playing = index == 0 && entry != null,
-						onClick = { if (index > 0) mediaManager.playFrom(queueEntry) },
+						playing = isCurrent,
+						played = index < currentIndex,
+						onClick = { if (!isCurrent) mediaManager.playFrom(queueEntry) },
 						onLongClick = {
 							lastMenuEntry = queueEntry
 							menuEntry = queueEntry
@@ -576,6 +608,8 @@ private fun ControlButton(
 private fun QueueCard(
 	entry: QueueEntry,
 	playing: Boolean,
+	/** Already played: dimmed, it can be played again */
+	played: Boolean = false,
 	onClick: () -> Unit,
 	onLongClick: () -> Unit,
 ) {
@@ -588,7 +622,11 @@ private fun QueueCard(
 	val image = song?.let { it.itemImages[ImageType.PRIMARY] ?: it.albumPrimaryImage ?: it.parentImages[ImageType.PRIMARY] }
 	val url = remember(image) { image?.getUrl(api, maxWidth = 240) }
 
-	Column(modifier = Modifier.width(QUEUE_CARD_SIZE)) {
+	Column(
+		modifier = Modifier
+			.width(QUEUE_CARD_SIZE)
+			.graphicsLayer { alpha = if (played && !focused) PLAYED_ALPHA else 1f },
+	) {
 		Box(
 			modifier = Modifier
 				.graphicsLayer {
@@ -662,5 +700,7 @@ internal fun BaseItemDto.artistsText(): String? =
 	artists?.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: albumArtist
 
 private const val QUEUE_PEEK = 100
+/** Songs of the queue already played */
+private const val PLAYED_ALPHA = 0.45f
 private val QUEUE_CARD_SIZE = 64.dp
 private const val CLOCK_TICK_MS = 15_000L

@@ -19,11 +19,14 @@ import org.jellyfin.androidtv.integration.dream.composable.DreamHost
 import org.jellyfin.androidtv.ui.InteractionTrackerViewModel
 import org.jellyfin.androidtv.ui.base.dialog.DialogBase
 import org.jellyfin.androidtv.util.isMediaSessionKeyEvent
+import org.jellyfin.androidtv.ui.music.MusicStopper
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 @Composable
 fun InAppScreensaver() {
 	val interactionTrackerViewModel = koinViewModel<InteractionTrackerViewModel>()
+	val musicStopper = koinInject<MusicStopper>()
 	val visible by interactionTrackerViewModel.visible.collectAsState()
 
 	DialogBase(
@@ -43,6 +46,8 @@ fun InAppScreensaver() {
 				interactionTrackerViewModel.notifyInteraction(canCancel = true, userInitiated = false)
 			}
 			.onKeyEvent { event ->
+				// ☰ stops the music here too (the screensaver is a window of its own)
+				musicStopper.handleMenuKey(event.nativeKeyEvent)
 				if (!event.nativeKeyEvent.isMediaSessionKeyEvent()) {
 					interactionTrackerViewModel.notifyInteraction(
 						canCancel = event.type == KeyEventType.KeyUp,

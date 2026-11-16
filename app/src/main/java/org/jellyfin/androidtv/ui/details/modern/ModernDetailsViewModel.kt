@@ -102,7 +102,16 @@ class ModernDetailsViewModel(
 			if (showLoading) _state.update { it.copy(loading = true, failed = false) }
 
 			val loaded = try {
-				repository.load(id)
+				repository.load(
+					itemId = id,
+					// Opening the page: the header at once, the rows as they come. A refresh (after
+					// playing) replaces the whole page at the end instead, so nothing jumps
+					onPartial = if (showLoading) { partial ->
+						_state.update { current ->
+							if (itemId == id && (current.loading || current.partial)) partial.copy(libraries = current.libraries) else current
+						}
+					} else null,
+				)
 			} catch (err: CancellationException) {
 				throw err
 			} catch (err: Exception) {
@@ -205,7 +214,8 @@ class ModernDetailsViewModel(
 
 		return when (state.kind) {
 			DetailsKind.MOVIE -> item.id
-			DetailsKind.SERIES -> state.playTarget?.id ?: runCatching { repository.firstEpisodeId(item.id) }.getOrNull()
+			// Before the next episode is known (page still loading): asked now
+			DetailsKind.SERIES -> state.playTarget?.id ?: runCatching { repository.resolvePlayableId(item) }.getOrNull()
 			DetailsKind.SEASON -> state.playTarget?.id ?: state.episodes.firstOrNull()?.item?.id
 
 			DetailsKind.PERSON, null -> null

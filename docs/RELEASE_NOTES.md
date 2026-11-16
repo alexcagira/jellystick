@@ -22,7 +22,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - **Colecciones de series por plataforma** (Netflix, HBO Max, Prime Video, Disney+, Apple TV+, Movistar Plus+…) o por cadena, también al día. La pill *Colecciones* de las series solo muestra colecciones de series, y la de películas las deja fuera.
 
 ### Fichas
-- Fichas nuevas de películas, series, temporadas y personas: fondo a pantalla completa con logo, valoración, géneros y sinopsis; Next up, temporadas, carrusel de episodios, reparto y similares.
+- Fichas nuevas de películas, series, temporadas y personas: fondo a pantalla completa con logo, valoración, géneros y sinopsis; Next up, temporadas, carrusel de episodios, reparto y similares. Se abren al momento y lo más lento (*Más como esto*) llega después.
 - Botón **Reproducir/Reanudar T01:E05**, favoritos, tráiler, visto, información del archivo y **Watchlist** (sincronizada con la de KefinTweaks en la web).
 - Cambio de temporada sin salir de la página, ✓ para marcar episodios como vistos y **calidad y banderas en cada episodio**.
 - **Sintonía de la serie** (theme song) con fundidos.
@@ -40,9 +40,10 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 ### Música
 - Página de música nueva: media bar con recomendaciones (*Porque escuchas a…*), **radios** por artista y género, filas configurables y accesos rápidos.
 - Páginas de álbum, lista, artista y género con **corazón en cada canción** y lista automática **Favourite Tracks**.
-- **Reproduciendo ahora** rediseñado: letra opcional, ⏪/⏩ del mando cambian de canción, la siguiente portada ya cargada y **salvapantallas** con letra.
+- **Reproduciendo ahora** rediseñado: letra opcional, ⏪/⏩ del mando cambian de canción, la siguiente portada ya cargada y **salvapantallas** con letra y aviso **Next up** (portada, canción y álbum de la siguiente) en los últimos 10 segundos.
+- El botón **☰ del mando** detiene la música desde cualquier pantalla (como *Detener*).
 - Burbuja de *música sonando* en la barra de navegación.
-- **Cola compartida**: código QR para que cualquiera en tu Wi-Fi añada canciones desde el móvil, también pegando enlaces de Spotify, Apple Music o YouTube Music (se buscan en tu biblioteca; lo que falta queda como petición).
+- **Cola compartida**: código QR para que cualquiera en tu Wi-Fi busque en tu biblioteca y añada canciones o álbumes desde el móvil. Si la cola se acaba, lo que sonó se guarda: una canción nueva empieza por ella y las anteriores siguen en la cola para volver a ponerlas, hasta pulsar ☰.
 - Arreglos: la cola ya no se para tras 5 o 6 canciones y el Fire TV no entra en reposo con música sonando.
 
 ### Búsqueda
@@ -50,6 +51,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - Sin texto: géneros como tiles de color y etiquetas populares; búsqueda solo de música con géneros musicales.
 
 ### Fire TV
-- App propia **Jellystick** (`com.jellystick.tv`) con nombre, logo y banner verdes sobre fondo azul marino (casilla completa en el inicio del Fire TV): se instala junto a la app oficial. El panel del servidor la muestra como *Jellystick*.
+- App propia **Jellystick** (`com.jellystick.tv`) con nombre, logo y banner verdes: se instala junto a la app oficial. En el inicio del Fire TV el logo va sobre el gris de la casilla, como las demás apps. El panel del servidor la muestra como *Jellystick*.
+- El reproductor se abre antes: los episodios siguientes de la cola se piden ya reproduciendo.
 - **Actualizar desde Ajustes**: descarga e instala la última versión publicada en GitHub. La versión de la app es la de la release (v1.2.2, v1.2.3…).
 - Versión release optimizada (R8 + baseline profile), scroll suave entre filas y el foco vuelve al elemento en el que estabas.

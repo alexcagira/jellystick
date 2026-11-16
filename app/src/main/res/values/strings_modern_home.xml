@@ -225,6 +225,7 @@
 
     <!-- Music pages: albums, playlists, artists, genres, now playing -->
     <string name="music_add_to_playlist">Add to playlist</string>
+    <string name="music_next_up">Next up</string>
     <string name="music_new_playlist">New playlist</string>
     <string name="music_create">Create</string>
     <string name="music_added_to_playlist">Added to %1$s</string>

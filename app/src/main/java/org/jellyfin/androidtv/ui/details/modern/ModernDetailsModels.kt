@@ -120,4 +120,6 @@ data class DetailsState(
 	val themeSeriesId: UUID? = null,
 	/** All seasons of the series, to switch season from a season page */
 	val seasonTabs: List<SeasonTab> = emptyList(),
+	/** First part of the page (header and buttons): the slower rows (seasons, similar...) come later */
+	val partial: Boolean = false,
 )

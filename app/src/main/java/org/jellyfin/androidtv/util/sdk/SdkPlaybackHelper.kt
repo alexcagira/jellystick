@@ -7,6 +7,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.R
@@ -14,6 +15,7 @@ import org.jellyfin.androidtv.data.repository.ItemRepository
 import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.ui.playback.PlaybackControllerContainer
 import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
+import org.jellyfin.androidtv.ui.playback.VideoQueueManager
 import org.jellyfin.androidtv.util.PlaybackHelper
 import org.jellyfin.androidtv.util.apiclient.Response
 import org.jellyfin.sdk.api.client.ApiClient
@@ -29,6 +31,7 @@ import org.jellyfin.sdk.model.api.ItemFilter
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.MediaType
 import org.jellyfin.sdk.model.extensions.ticks
+import timber.log.Timber
 import java.util.UUID
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -38,9 +41,18 @@ class SdkPlaybackHelper(
 	private val userPreferences: UserPreferences,
 	private val playbackLauncher: PlaybackLauncher,
 	private val playbackControllerContainer: PlaybackControllerContainer,
+	private val videoQueueManager: VideoQueueManager,
 ) : PlaybackHelper {
 	companion object {
 		const val ITEM_QUERY_LIMIT = 150
+
+		/**
+		 * Episodes asked before the player opens: the one chosen and the next ones. The rest of the
+		 * queue (up to [ITEM_QUERY_LIMIT]) comes once it plays: 150 episodes with all their media
+		 * information took seconds on a busy server, and the player waited for them.
+		 */
+		const val QUICK_EPISODE_LIMIT = 3
+		private val MORE_EPISODES_DELAY = 15.seconds
 	}
 
 	override fun getItemsToPlay(
@@ -71,6 +83,7 @@ class SdkPlaybackHelper(
 		mainItem: BaseItemDto,
 		allowIntros: Boolean,
 		shuffle: Boolean,
+		quickStart: Boolean = false,
 	): List<BaseItemDto> = withContext(Dispatchers.IO) {
 		when (mainItem.type) {
 			BaseItemKind.EPISODE -> {
@@ -80,7 +93,7 @@ class SdkPlaybackHelper(
 						seriesId = seriesId,
 						startItemId = mainItem.id,
 						isMissing = false,
-						limit = ITEM_QUERY_LIMIT,
+						limit = if (quickStart) QUICK_EPISODE_LIMIT else ITEM_QUERY_LIMIT,
 						fields = ItemRepository.itemFields
 					)
 
@@ -275,7 +288,9 @@ class SdkPlaybackHelper(
 			val pos = item.userData?.playbackPositionTicks?.ticks?.minus(resumeSubtractDuration) ?: Duration.ZERO
 
 			val allowIntros = pos == Duration.ZERO && item.type == BaseItemKind.MOVIE
-			val items = getItems(item, allowIntros, shuffle)
+			// Episodes: only the next few before the player opens, the others once it plays
+			val quickStart = item.type == BaseItemKind.EPISODE && !shuffle
+			val items = getItems(item, allowIntros, shuffle, quickStart)
 
 			playbackLauncher.launch(
 				context,
@@ -285,6 +300,29 @@ class SdkPlaybackHelper(
 				0,
 				shuffle,
 			)
+
+			if (quickStart && items.size >= QUICK_EPISODE_LIMIT) appendMoreEpisodes(items.last())
+		}
+	}
+
+	/** The rest of the episodes of the queue, a moment after the playback started */
+	private fun appendMoreEpisodes(lastEpisode: BaseItemDto) {
+		val seriesId = lastEpisode.seriesId ?: return
+		ProcessLifecycleOwner.get().lifecycleScope.launch {
+			delay(MORE_EPISODES_DELAY)
+			val more = runCatching {
+				withContext(Dispatchers.IO) {
+					api.tvShowsApi.getEpisodes(
+						seriesId = seriesId,
+						startItemId = lastEpisode.id,
+						isMissing = false,
+						limit = ITEM_QUERY_LIMIT - QUICK_EPISODE_LIMIT + 1,
+						fields = ItemRepository.itemFields,
+					).content.items
+				}
+			}.onFailure { Timber.w(it, "Unable to load the next episodes") }.getOrNull() ?: return@launch
+			// The first one is the last episode of the queue
+			videoQueueManager.appendToVideoQueue(lastEpisode.id, more.dropWhile { it.id == lastEpisode.id })
 		}
 	}
 
