@@ -523,7 +523,7 @@ de la Appstore.
 
 La app se llama **Jellystick** (también la versión debug: `app_name_release` y `app_name_debug` en
 `values/strings.xml`). El banner que muestra el Fire TV (`mipmap-*/app_banner.png` y
-`drawable/app_banner_foreground.xml`) lleva el logo de Jellyfin en verde (degradado `#9BE15D` → `#00B37A`) y el
+`drawable/app_banner_foreground.xml`) lleva el **rombo** de Jellystick en verde (degradado `#9BE15D` → `#00B37A`) y el
 nombre Jellystick, igual que el logo de dentro de la app (`drawable/app_logo.xml`, `drawable-v24/app_logo.xml`,
 colores en `values/logo.xml` y `src/debug/res/values/logo.xml`): arranque, barra y salvapantallas.
 
@@ -543,8 +543,13 @@ que desinstalar Jellystick e instalarla otra vez (reiniciar o borrar datos no ba
 
 Si el Fire TV sigue enseñando el banner o el nombre antiguos, desinstala la app y vuelve a instalarla (el
 launcher guarda la imagen de las apps ya instaladas); si aun así no cambia, reinicia el Fire TV. El icono
-(`mipmap-*/app_icon.png` y `drawable/app_icon_foreground.xml`) es el mismo logo en verde. El logo de Jellyfin
-tiene licencia CC BY-SA 4.0; el texto está dibujado con Montserrat Bold (SIL Open Font License).
+(`mipmap-*/app_icon.png` y `drawable/app_icon_foreground.xml`) es el mismo logo en verde.
+
+**El logo es propio**: un rombo (un poco más alto que ancho) con las esquinas redondeadas, hueco, y otro rombo
+pequeño dentro; ya no usa el triángulo de Jellyfin, que es una marca suya. Está en todos los sitios: icono
+(normal y monocromo), banner y casillas del Fire TV, logo de arranque, barra y salvapantallas, el icono de
+*Acerca de* y de los servidores en Ajustes (`drawable/ic_jellyfin.xml`, mismo nombre de recurso) y las imágenes
+de `docs/images`. El texto está dibujado con Montserrat Bold (SIL Open Font License).
 
 ## Clave de TMDB (opcional, para completar "Trending this week")
 

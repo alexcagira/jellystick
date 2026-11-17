@@ -51,7 +51,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - Without text: genres as colour tiles and popular tags; music-only search with music genres.
 
 ### Fire TV
-- Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo and banner: installs next to the official app. On the Fire TV home screen the logo sits on the grey of the tile, like other apps. The server dashboard shows it as *Jellystick*.
+- Its own **Jellystick** app (`com.jellystick.tv`) with a green name, logo (its own rhombus) and banner: installs next to the official app. On the Fire TV home screen the logo sits on the grey of the tile, like other apps. The server dashboard shows it as *Jellystick*.
 - The player opens sooner and goes first: pressing play pauses whatever else was loading, and the next episodes of the queue are loaded once it plays.
 - **App language** in Settings (under Subtitles): the TV's or any of Jellyfin's translations. Jellystick's new screens are in English and Spanish.
 - **Update from Settings**: downloads and installs the latest version published on GitHub. The app version is the release's (v1.2.2, v1.2.3…).

@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Jellystick: Jellyfin logo in green with the name of the app -->
+<!-- Jellystick: Jellystick rhombus logo with the name of the app -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="348.0dp"
     android:height="72dp"
     android:viewportWidth="348.0"
     android:viewportHeight="72">
-    <path android:pathData="M24.71,49.16c-1.55,-3.12 8.63,-21.57 11.79,-21.57 3.17,0 13.32,18.49 11.79,21.57 -1.53,3.08 -22.02,3.12 -23.58,0z">
+    <path android:pathData="M35.03,28.48Q36.5,26.83 37.97,28.48L43.22,34.35Q44.69,36 43.22,37.65L37.97,43.52Q36.5,45.18 35.03,43.52L29.78,37.65Q28.31,36 29.78,34.35Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="72.5"
-                android:endY="63"
-                android:startX="12.5"
-                android:startY="30"
+                android:endX="61.7"
+                android:endY="64.23"
+                android:startX="14.45"
+                android:startY="14.83"
                 android:tileMode="clamp">
                 <item
                     android:color="#9BE15D"
@@ -25,13 +25,13 @@
     </path>
     <path
         android:fillType="evenOdd"
-        android:pathData="M0.98,65C-3.69,55.61 26.98,0 36.5,0c9.53,0 40.15,55.71 35.53,65s-66.37,9.39 -71.04,0m12.26,-8.15c3.07,6.15 43.52,6.08 46.55,0 3.03,-6.09 -17.03,-42.59 -23.27,-42.59S10.17,50.69 13.23,56.85z">
+        android:pathData="M31.46,6.37Q36.5,0.72 41.54,6.37L62.96,30.36Q68,36 62.96,41.65L41.54,65.64Q36.5,71.28 31.46,65.64L10.04,41.65Q5,36 10.04,30.36ZM33.94,18.4Q36.5,15.54 39.06,18.4L52.21,33.14Q54.77,36 52.21,38.87L39.06,53.6Q36.5,56.47 33.94,53.6L20.79,38.87Q18.23,36 20.79,33.14Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="72.5"
-                android:endY="63"
-                android:startX="12.5"
-                android:startY="30"
+                android:endX="61.7"
+                android:endY="64.23"
+                android:startX="14.45"
+                android:startY="14.83"
                 android:tileMode="clamp">
                 <item
                     android:color="#9BE15D"

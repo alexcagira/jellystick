@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Jellystick: Jellyfin logo in green with the name of the app -->
+<!-- Jellystick: Jellystick rhombus logo with the name of the app -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="320dp"
@@ -11,13 +11,13 @@
         android:scaleY="0.8"
         android:translateX="-8.62"
         android:translateY="18.04">
-        <path android:pathData="M59.21,103.16C57.66,100.04 67.84,81.59 71,81.59C74.17,81.59 84.32,100.08 82.79,103.16C81.25,106.24 60.76,106.27 59.21,103.16Z">
+        <path android:pathData="M69.53,82.48Q71,80.83 72.47,82.48L77.72,88.35Q79.19,90 77.72,91.65L72.47,97.52Q71,99.17 69.53,97.52L64.28,91.65Q62.81,90 64.28,88.35Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="107"
-                android:endY="117"
-                android:startX="47"
-                android:startY="84"
+                android:endX="96.2"
+                android:endY="118.23"
+                android:startX="48.95"
+                android:startY="68.83"
                 android:type="linear">
                 <item
                     android:color="#FF9BE15D"
@@ -30,13 +30,13 @@
         </path>
         <path
             android:fillType="evenOdd"
-            android:pathData="M35.48,119C30.81,109.61 61.48,54 71,54C80.53,54 111.15,109.71 106.53,119C101.9,128.28 40.16,128.39 35.48,119ZM47.74,110.85C50.8,117 91.25,116.93 94.28,110.85C97.31,104.76 77.25,68.26 71.01,68.26C64.77,68.26 44.67,104.69 47.74,110.85Z">
+            android:pathData="M65.96,60.36Q71,54.72 76.04,60.36L97.46,84.36Q102.5,90 97.46,95.65L76.04,119.64Q71,125.28 65.96,119.64L44.54,95.65Q39.5,90 44.54,84.36ZM68.44,72.4Q71,69.54 73.56,72.4L86.71,87.14Q89.27,90 86.71,92.87L73.56,107.6Q71,110.46 68.44,107.6L55.29,92.87Q52.73,90 55.29,87.14Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:endX="107"
-                android:endY="117"
-                android:startX="47"
-                android:startY="84"
+                android:endX="96.2"
+                android:endY="118.23"
+                android:startX="48.95"
+                android:startY="68.83"
                 android:type="linear">
                 <item
                     android:color="#FF9BE15D"

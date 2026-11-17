@@ -51,7 +51,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - Sin texto: géneros como tiles de color y etiquetas populares; búsqueda solo de música con géneros musicales.
 
 ### Fire TV
-- App propia **Jellystick** (`com.jellystick.tv`) con nombre, logo y banner verdes: se instala junto a la app oficial. En el inicio del Fire TV el logo va sobre el gris de la casilla, como las demás apps. El panel del servidor la muestra como *Jellystick*.
+- App propia **Jellystick** (`com.jellystick.tv`) con nombre, logo (un rombo propio) y banner verdes: se instala junto a la app oficial. En el inicio del Fire TV el logo va sobre el gris de la casilla, como las demás apps. El panel del servidor la muestra como *Jellystick*.
 - El reproductor se abre antes y tiene prioridad: al darle a reproducir, lo demás que se estaba cargando espera, y los episodios siguientes de la cola se piden ya reproduciendo.
 - **Idioma de la app** en Ajustes (debajo de Subtítulos): el de la tele o cualquiera de las traducciones de Jellyfin. Las pantallas nuevas de Jellystick están en inglés y español.
 - **Actualizar desde Ajustes**: descarga e instala la última versión publicada en GitHub. La versión de la app es la de la release (v1.2.2, v1.2.3…).

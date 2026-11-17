@@ -149,5 +149,5 @@ Jellystick is based on [Jellyfin for Android TV](https://github.com/jellyfin/jel
 [Jellyfin project](https://jellyfin.org) and its contributors, and keeps its license: the
 [GNU General Public License v2.0](LICENSE). Its source code is this repository.
 
-The logo is the Jellyfin logo (CC BY-SA 4.0) in green; the name is drawn with Montserrat Bold (SIL Open Font License).
+The rhombus logo is Jellystick's own; the name is drawn with Montserrat Bold (SIL Open Font License).
 Jellyfin is a trademark of its owners; Jellystick is not endorsed by them. Fire TV is a trademark of Amazon.
