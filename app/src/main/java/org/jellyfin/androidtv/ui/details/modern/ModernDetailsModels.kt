@@ -27,6 +27,10 @@ data class DetailsHeader(
 	val backgroundUrl: String?,
 	val glassUrl: String?,
 	val rating: Float?,
+	/** [rating] is IMDb's (otherwise the server's) */
+	val ratingFromImdb: Boolean = false,
+	/** Average rating on Letterboxd (0–5), films only, once read */
+	val letterboxdRating: Float? = null,
 	val year: Int?,
 	val runtimeMinutes: Int?,
 	val seasonCount: Int?,

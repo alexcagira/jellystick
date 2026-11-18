@@ -239,6 +239,12 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         return mCurrentStreamInfo;
     }
 
+    /** What the player on the device does with the stream (stream info panel) */
+    @Nullable
+    public PlayerStats getPlayerStats() {
+        return mVideoManager != null && mVideoManager.isInitialized() ? mVideoManager.getPlayerStats() : null;
+    }
+
     public boolean canSeek() {
         return !isLiveTv;
     }

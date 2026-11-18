@@ -6,6 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.data.repository.LibraryVisibilityRepository
+import org.jellyfin.androidtv.ui.home.modern.ImdbRatings
 import org.jellyfin.androidtv.ui.home.modern.HomeCard
 import org.jellyfin.androidtv.ui.home.modern.MediaBadges
 import org.jellyfin.androidtv.ui.home.modern.ModernImageSizes
@@ -169,7 +170,7 @@ class ModernDetailsRepository(
 						seriesId = id,
 						seasonId = item.id,
 						// Media streams: quality and audio flags on each episode
-						fields = setOf(ItemFields.OVERVIEW, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO, ItemFields.MEDIA_STREAMS),
+						fields = setOf(ItemFields.OVERVIEW, ItemFields.PRIMARY_IMAGE_ASPECT_RATIO, ItemFields.MEDIA_STREAMS, ItemFields.PROVIDER_IDS),
 					).content.items
 				}
 			}.orEmpty()
@@ -346,7 +347,9 @@ class ModernDetailsRepository(
 			backgroundUrl = item.blurredBackdropUrl(api) ?: series?.blurredBackdropUrl(api),
 			glassUrl = item.blurredBackdropUrl(api, ModernImageSizes.GLASS, ModernImageSizes.GLASS_BLUR)
 				?: series?.blurredBackdropUrl(api, ModernImageSizes.GLASS, ModernImageSizes.GLASS_BLUR),
-			rating = (item.communityRating ?: series?.communityRating)?.takeIf { it > 0f },
+			// IMDb's rating (its dataset), otherwise the server's
+			rating = ImdbRatings.rating(item) ?: ImdbRatings.rating(series),
+			ratingFromImdb = (ImdbRatings.imdbRating(item) ?: ImdbRatings.imdbRating(series)) != null,
 			year = item.productionYear ?: item.premiereDate?.year,
 			runtimeMinutes = if (item.type == BaseItemKind.MOVIE) item.runTimeTicks?.let { (it / TICKS_PER_MINUTE).toInt() } else null,
 			seasonCount = seasonCount,
@@ -396,7 +399,7 @@ class ModernDetailsRepository(
 		quality = MediaBadges.quality(item),
 		languages = MediaBadges.audioLanguages(item),
 		unplayedCount = if (item.type == BaseItemKind.SERIES) item.userData?.unplayedItemCount?.takeIf { it > 0 } else null,
-		rating = item.communityRating?.takeIf { it > 0f },
+		rating = ImdbRatings.rating(item),
 		year = item.productionYear,
 		playId = if (item.type == BaseItemKind.SERIES) null else item.id,
 	)
@@ -452,7 +455,7 @@ class ModernDetailsRepository(
 			overview = episode.overview?.takeIf { it.isNotBlank() },
 			imageUrl = episode.landscapeImage()?.getUrl(api, maxWidth = EPISODE_IMAGE_WIDTH),
 			runtimeMinutes = (runtime / TICKS_PER_MINUTE).toInt().takeIf { it > 0 },
-			rating = episode.communityRating?.takeIf { it > 0f },
+			rating = ImdbRatings.rating(episode),
 			progress = if (runtime > 0 && position > 0) (position.toFloat() / runtime.toFloat()).coerceIn(0f, 1f) else null,
 			played = episode.userData?.played == true,
 			isNext = isNext,

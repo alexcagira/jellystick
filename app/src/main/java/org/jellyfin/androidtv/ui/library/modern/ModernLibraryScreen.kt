@@ -68,6 +68,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
@@ -115,6 +116,8 @@ private const val HERO_HEIGHT_FRACTION = 0.7f
 private const val CONTINUE_SECTION = "continue"
 /** The audio languages of the library are read once the page has loaded */
 private const val AUDIO_LANGUAGES_DELAY_MS = 15_000L
+/** Notices of new titles close together: the rows load once */
+private const val LIBRARY_CHANGE_DEBOUNCE_MS = 1_500L
 private val TOP_BAR_SPACE = 80.dp
 private const val PILLS_SECTION = "pills"
 
@@ -163,6 +166,13 @@ class ModernLibraryViewModel(
 			BackgroundTraffic.playRequests.drop(1).collect {
 				sectionsJob?.cancel()
 				continueJob?.cancel()
+			}
+		}
+		// New titles on the server: the rows again (a scan sends several notices in a row)
+		viewModelScope.launch {
+			dataRefreshService.libraryChanged.drop(1).collectLatest {
+				delay(LIBRARY_CHANGE_DEBOUNCE_MS)
+				refresh()
 			}
 		}
 	}

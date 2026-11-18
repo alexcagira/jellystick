@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -87,17 +88,14 @@ class SdkPlaybackHelper(
 	): List<BaseItemDto> = withContext(Dispatchers.IO) {
 		when (mainItem.type) {
 			BaseItemKind.EPISODE -> {
-				val seriesId = mainItem.seriesId
-				if (userPreferences[UserPreferences.mediaQueuingEnabled] && seriesId != null) {
-					val response by api.tvShowsApi.getEpisodes(
-						seriesId = seriesId,
-						startItemId = mainItem.id,
-						isMissing = false,
+				if (userPreferences[UserPreferences.mediaQueuingEnabled] && mainItem.seriesId != null) {
+					// The chosen one and the next ones (never empty: see EpisodeQueue)
+					EpisodeQueue.from(
+						api = api,
+						episode = mainItem,
 						limit = if (quickStart) QUICK_EPISODE_LIMIT else ITEM_QUERY_LIMIT,
-						fields = ItemRepository.itemFields
+						fields = ItemRepository.itemFields,
 					)
-
-					response.items
 				} else {
 					listOf(mainItem)
 				}
@@ -111,7 +109,10 @@ class SdkPlaybackHelper(
 					limit = ITEM_QUERY_LIMIT,
 					fields = ItemRepository.itemFields,
 				)
-				response.items
+				// Empty when the server's list of the series misses its episodes: from its folder
+				response.items.ifEmpty {
+					EpisodeQueue.ofFolder(api, mainItem.id, shuffle, ITEM_QUERY_LIMIT, ItemRepository.itemFields)
+				}
 			}
 
 			BaseItemKind.SEASON -> {
@@ -123,7 +124,9 @@ class SdkPlaybackHelper(
 					limit = ITEM_QUERY_LIMIT,
 					fields = ItemRepository.itemFields,
 				)
-				response.items
+				response.items.ifEmpty {
+					EpisodeQueue.ofFolder(api, mainItem.id, shuffle, ITEM_QUERY_LIMIT, ItemRepository.itemFields)
+				}
 			}
 
 			BaseItemKind.FOLDER -> {
@@ -283,19 +286,37 @@ class SdkPlaybackHelper(
 				userPreferences[UserPreferences.resumeSubtractDuration].toIntOrNull()?.seconds
 					?: Duration.ZERO
 
-			val item = withContext(Dispatchers.IO) {
-				val response by api.userLibraryApi.getItem(itemId)
-				response
+			val (item, items) = try {
+				val item = withContext(Dispatchers.IO) {
+					val response by api.userLibraryApi.getItem(itemId)
+					response
+				}
+				val allowIntros = item.userData?.playbackPositionTicks.let { it == null || it == 0L } && item.type == BaseItemKind.MOVIE
+				// Episodes: only the next few before the player opens, the others once it plays
+				val quickStart = item.type == BaseItemKind.EPISODE && !shuffle
+				val items = getItems(item, allowIntros, shuffle, quickStart)
+					// Something that plays by itself (an episode, a movie) plays even if its list failed
+					.ifEmpty { if (item.mediaSources.isNullOrEmpty()) emptyList() else listOf(item) }
+				item to items
+			} catch (error: CancellationException) {
+				throw error
+			} catch (error: Exception) {
+				// It used to do nothing at all: now it says so
+				Timber.e(error, "Unable to load the items to play for $itemId")
+				Toast.makeText(context, R.string.msg_playback_load_failed, Toast.LENGTH_LONG).show()
+				return@launch
+			}
+
+			if (items.isEmpty()) {
+				Timber.w("Nothing to play for $itemId")
+				Toast.makeText(context, R.string.msg_no_playable_items, Toast.LENGTH_LONG).show()
+				return@launch
 			}
 
 			val resumePosition = item.userData?.playbackPositionTicks?.ticks?.minus(resumeSubtractDuration) ?: Duration.ZERO
 			// Played again from the beginning (no intros: it was already started)
 			val pos = if (fromStart) Duration.ZERO else resumePosition
-
-			val allowIntros = resumePosition == Duration.ZERO && item.type == BaseItemKind.MOVIE
-			// Episodes: only the next few before the player opens, the others once it plays
 			val quickStart = item.type == BaseItemKind.EPISODE && !shuffle
-			val items = getItems(item, allowIntros, shuffle, quickStart)
 
 			playbackLauncher.launch(
 				context,
@@ -312,20 +333,13 @@ class SdkPlaybackHelper(
 
 	/** The rest of the episodes of the queue, a moment after the playback started */
 	private fun appendMoreEpisodes(lastEpisode: BaseItemDto) {
-		val seriesId = lastEpisode.seriesId ?: return
+		if (lastEpisode.seriesId == null) return
 		ProcessLifecycleOwner.get().lifecycleScope.launch {
 			delay(MORE_EPISODES_DELAY)
-			val more = runCatching {
-				withContext(Dispatchers.IO) {
-					api.tvShowsApi.getEpisodes(
-						seriesId = seriesId,
-						startItemId = lastEpisode.id,
-						isMissing = false,
-						limit = ITEM_QUERY_LIMIT - QUICK_EPISODE_LIMIT + 1,
-						fields = ItemRepository.itemFields,
-					).content.items
-				}
-			}.onFailure { Timber.w(it, "Unable to load the next episodes") }.getOrNull() ?: return@launch
+			// Same way as the first ones (from the series folder when the server's list misses them)
+			val more = withContext(Dispatchers.IO) {
+				EpisodeQueue.from(api, lastEpisode, ITEM_QUERY_LIMIT - QUICK_EPISODE_LIMIT + 1, ItemRepository.itemFields)
+			}
 			// The first one is the last episode of the queue
 			videoQueueManager.appendToVideoQueue(lastEpisode.id, more.dropWhile { it.id == lastEpisode.id })
 		}

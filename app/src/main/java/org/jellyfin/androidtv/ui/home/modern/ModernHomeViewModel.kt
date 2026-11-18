@@ -78,6 +78,14 @@ class ModernHomeViewModel(
 				loadSections(debounce = Duration.ZERO)
 			}
 		}
+		// New titles on the server: the rows again
+		viewModelScope.launch {
+			dataRefreshService.libraryChanged.drop(1).collect { refresh() }
+		}
+		// The IMDb ratings came after the rows (the first time they are downloaded): the stars again
+		viewModelScope.launch {
+			ImdbRatings.loaded.drop(1).collect { loaded -> if (loaded) refresh() }
+		}
 		// Something is going to play: the rows being loaded stop, the player gets the server first
 		viewModelScope.launch {
 			BackgroundTraffic.playRequests.drop(1).collect {

@@ -39,7 +39,6 @@ import org.jellyfin.androidtv.ui.shared.toolbar.MainToolbar
 import org.jellyfin.androidtv.ui.shared.toolbar.MainToolbarActiveButton
 import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.sockets.subscribe
-import org.jellyfin.sdk.model.api.LibraryChangedMessage
 import org.jellyfin.sdk.model.api.UserDataChangedMessage
 import org.jellyfin.androidtv.ui.collections.ImdbTop250
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryRepository
@@ -146,10 +145,7 @@ class HomeFragment : Fragment() {
 					api.webSocket.subscribe<UserDataChangedMessage>()
 						.onEach { modernHomeViewModel.refresh() }
 						.launchIn(this)
-
-					api.webSocket.subscribe<LibraryChangedMessage>()
-						.onEach { modernHomeViewModel.refresh() }
-						.launchIn(this)
+					// New titles: see ModernHomeViewModel (DataRefreshService.libraryChanged)
 				}
 			}
 		}

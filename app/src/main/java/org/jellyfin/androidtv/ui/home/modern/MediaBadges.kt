@@ -78,24 +78,28 @@ object MediaBadges {
 	}
 
 	/**
-	 * Decide which "new" label each series gets, based on the most recently added episodes.
+	 * Decide which "new" label each series gets, based on the episodes released (aired) lately:
+	 * the date the episode came out, not the day it was added to the server.
 	 *
-	 * Rules (per series, only episodes added in the last [windowDays] days are considered):
-	 * - Episode 1 of season 1 was added → [NewContentLabel.NEW_SERIES]
-	 * - Episode 1 of a later season was added → [NewContentLabel.NEW_SEASON]
+	 * Rules (per series, only episodes released in the last [windowDays] days, up to today):
+	 * - Episode 1 of season 1 came out → [NewContentLabel.NEW_SERIES]
+	 * - Episode 1 of a later season came out → [NewContentLabel.NEW_SEASON]
 	 * - Anything else → [NewContentLabel.NEW_EPISODE]
 	 *
-	 * @param recentEpisodes episodes sorted by date added (newest first), requested with `ItemFields.DATE_CREATED`
+	 * @param airedEpisodes episodes with their premiere date, newest first
 	 */
 	fun newContentLabels(
-		recentEpisodes: List<BaseItemDto>,
+		airedEpisodes: List<BaseItemDto>,
 		now: LocalDateTime = LocalDateTime.now(),
 		windowDays: Long = NEW_CONTENT_WINDOW_DAYS,
 	): Map<UUID, NewContentLabel> {
 		val cutoff = now.minusDays(windowDays)
 
-		return recentEpisodes
-			.filter { episode -> episode.seriesId != null && episode.dateCreated?.isAfter(cutoff) == true }
+		return airedEpisodes
+			.filter { episode ->
+				val aired = episode.premiereDate
+				episode.seriesId != null && aired != null && aired.isAfter(cutoff) && !aired.isAfter(now)
+			}
 			.groupBy { episode -> requireNotNull(episode.seriesId) }
 			.mapValues { (_, episodes) ->
 				// Season 0 contains specials and never counts as a new season

@@ -33,6 +33,7 @@ import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.exoplayer.DecoderCounters;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -93,6 +94,11 @@ public class VideoManager {
     private long mMetaDuration = -1;
     private long lastExoPlayerPosition = -1;
     private boolean nightModeEnabled;
+    // Decoders opened by the player, for the stream info panel (null: none, e.g. audio passthrough)
+    @Nullable
+    private String videoDecoderName = null;
+    @Nullable
+    private String audioDecoderName = null;
 
     public boolean isContracted = false;
 
@@ -112,6 +118,30 @@ public class VideoManager {
         if (userPreferences.get(UserPreferences.Companion.getDebuggingEnabled())) {
             mExoPlayer.addAnalyticsListener(new EventLogger());
         }
+
+        // The decoders in use, shown in the stream info panel
+        mExoPlayer.addAnalyticsListener(new AnalyticsListener() {
+            @Override
+            public void onVideoDecoderInitialized(@NonNull AnalyticsListener.EventTime eventTime, @NonNull String decoderName, long initializedTimestampMs, long initializationDurationMs) {
+                videoDecoderName = decoderName;
+            }
+
+            @Override
+            public void onAudioDecoderInitialized(@NonNull AnalyticsListener.EventTime eventTime, @NonNull String decoderName, long initializedTimestampMs, long initializationDurationMs) {
+                audioDecoderName = decoderName;
+            }
+
+            @Override
+            public void onVideoDecoderReleased(@NonNull AnalyticsListener.EventTime eventTime, @NonNull String decoderName) {
+                if (decoderName.equals(videoDecoderName)) videoDecoderName = null;
+            }
+
+            @Override
+            public void onAudioDecoderReleased(@NonNull AnalyticsListener.EventTime eventTime, @NonNull String decoderName) {
+                // Switched to an audio track that goes as it is to the TV (passthrough)
+                if (decoderName.equals(audioDecoderName)) audioDecoderName = null;
+            }
+        });
 
         // Volume normalisation (audio night mode).
         if (nightModeEnabled) {
@@ -347,6 +377,31 @@ public class VideoManager {
         return isInitialized() && mExoPlayer.getDuration() > 0 ? mExoPlayer.getDuration() : mMetaDuration;
     }
 
+    /** What the player is doing with the current stream (stream info panel), null without a player */
+    public @Nullable PlayerStats getPlayerStats() {
+        if (mExoPlayer == null) return null;
+        Format video = mExoPlayer.getVideoFormat();
+        Format audio = mExoPlayer.getAudioFormat();
+        DecoderCounters videoCounters = mExoPlayer.getVideoDecoderCounters();
+        long buffered = Math.max(0, mExoPlayer.getBufferedPosition() - mExoPlayer.getCurrentPosition());
+        return new PlayerStats(
+                video != null ? video.sampleMimeType : null,
+                video != null ? video.codecs : null,
+                video != null ? video.width : -1,
+                video != null ? video.height : -1,
+                video != null ? video.frameRate : -1f,
+                video != null ? video.bitrate : -1,
+                audio != null ? audio.sampleMimeType : null,
+                audio != null ? audio.channelCount : -1,
+                audio != null ? audio.sampleRate : -1,
+                audio != null ? audio.bitrate : -1,
+                video != null ? videoDecoderName : null,
+                audio != null ? audioDecoderName : null,
+                videoCounters != null ? videoCounters.droppedBufferCount : 0,
+                buffered
+        );
+    }
+
     public long getBufferedPosition() {
         if (!isInitialized())
             return -1;
@@ -457,6 +512,8 @@ public class VideoManager {
             return;
         }
         Timber.i("Video path set to: %s", path);
+        videoDecoderName = null;
+        audioDecoderName = null;
 
         try {
             // Add external subtitles

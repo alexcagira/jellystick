@@ -23,6 +23,7 @@ import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.MediaSegmentType
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.PlayMethod
+import org.jellyfin.sdk.model.api.TranscodingInfo
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Duration
@@ -78,6 +79,14 @@ class ModernPlayerOverlay(
 			if (!userPreferences[UserPreferences.modernPlayerEnabled]) return false
 			return items.orEmpty().none { it.type == BaseItemKind.TV_CHANNEL || it.type == BaseItemKind.PROGRAM }
 		}
+
+		/**
+		 * The modern player is on screen: ☰ opens its stream info instead of stopping the music
+		 * (MainActivity / MusicStopper)
+		 */
+		@Volatile
+		@JvmStatic
+		var isShowing: Boolean = false
 	}
 
 	private val playbackControllerContainer by inject<PlaybackControllerContainer>()
@@ -268,6 +277,16 @@ class ModernPlayerOverlay(
 				)
 			} else null
 		)
+	}
+
+	/** How the current stream plays, null before it starts */
+	fun playMethod(): PlayMethod? = controller?.currentStreamInfo?.playMethod
+
+	/** The stream info panel (☰): [transcoding] is what the server says about the stream */
+	fun streamInfo(transcoding: TranscodingInfo?): List<StreamInfoSection> {
+		val controller = controller ?: return emptyList()
+		val quality = getQualityProfiles(context)[qualityController.currentQuality]
+		return StreamInfoBuilder(context).build(controller, transcoding, quality)
 	}
 
 	/** How the current stream plays */

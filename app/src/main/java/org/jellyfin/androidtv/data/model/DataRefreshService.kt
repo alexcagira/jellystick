@@ -35,6 +35,18 @@ class DataRefreshService {
 		_playbackStopReported.value = PlaybackStopReported(itemId)
 	}
 
+	private val _libraryChanged = MutableStateFlow(0L)
+
+	/**
+	 * The server added, changed or removed titles (time of the last notice): the pages showing them
+	 * load again. See MainActivity for where the notices come from
+	 */
+	val libraryChanged: StateFlow<Long> = _libraryChanged.asStateFlow()
+
+	fun onLibraryChanged() {
+		_libraryChanged.value = System.currentTimeMillis()
+	}
+
 	private val _playbackStopped = MutableStateFlow<PlaybackStopped?>(null)
 
 	/** Last video stopped (when the player stops, before the server knows) */

@@ -85,7 +85,7 @@ class ModernHomeRepository(
 				recursive = true,
 				sortBy = setOf(ItemSortBy.RANDOM),
 				imageTypes = setOf(ImageType.BACKDROP),
-				fields = setOf(ItemFields.OVERVIEW, ItemFields.GENRES, ItemFields.MEDIA_STREAMS),
+				fields = setOf(ItemFields.OVERVIEW, ItemFields.GENRES, ItemFields.MEDIA_STREAMS, ItemFields.PROVIDER_IDS),
 				imageTypeLimit = 1,
 				enableTotalRecordCount = false,
 				limit = HERO_CANDIDATES,
@@ -182,7 +182,7 @@ class ModernHomeRepository(
 		labelsMutex.withLock {
 			val session = cacheKey()
 			labelsCache?.takeIf { it.session == session && System.currentTimeMillis() - it.time < LABELS_TTL_MS }?.let { return@withContext it.labels }
-			val labels = safe("new content labels") { MediaBadges.newContentLabels(recentEpisodes()) } ?: return@withContext emptyMap()
+			val labels = safe("new content labels") { MediaBadges.newContentLabels(airedEpisodes()) } ?: return@withContext emptyMap()
 			labelsCache = LabelsCache(session, System.currentTimeMillis(), labels)
 			labels
 		}
@@ -232,6 +232,8 @@ class ModernHomeRepository(
 
 		coroutineScope {
 			val recentEpisodesAsync = async { safe("recent episodes") { recentEpisodes() }.orEmpty().withoutHidden(hidden) }
+			// New episode / season / series: what came out lately, not what was added lately
+			val airedEpisodesAsync = async { safe("aired episodes") { airedEpisodes() }.orEmpty().withoutHidden(hidden) }
 			val nextUpAsync = async {
 				safe("next up") { nextUpBySeries() }.orEmpty().filterKeys { it !in hidden }
 			}
@@ -246,7 +248,7 @@ class ModernHomeRepository(
 
 			// New episode/season labels and recently added shows are derived from the latest added episodes
 			val recentEpisodes = recentEpisodesAsync.await()
-			val labels = MediaBadges.newContentLabels(recentEpisodes)
+			val labels = MediaBadges.newContentLabels(airedEpisodesAsync.await())
 			labelsCache = LabelsCache(cacheKey(), System.currentTimeMillis(), labels)
 			val newestEpisodeBySeries = LinkedHashMap<UUID, BaseItemDto>()
 			for (episode in recentEpisodes) {
@@ -401,6 +403,26 @@ class ModernHomeRepository(
 			limit = RECENT_EPISODES_LIMIT,
 		)
 	).content.items
+
+	/** Episodes released (aired) in the window of the "new" labels, up to today, newest first */
+	private suspend fun airedEpisodes(): List<BaseItemDto> {
+		val now = LocalDateTime.now()
+		return api.itemsApi.getItems(
+			GetItemsRequest(
+				includeItemTypes = setOf(BaseItemKind.EPISODE),
+				recursive = true,
+				minPremiereDate = now.minusDays(MediaBadges.NEW_CONTENT_WINDOW_DAYS),
+				maxPremiereDate = now,
+				sortBy = setOf(ItemSortBy.PREMIERE_DATE),
+				sortOrder = setOf(SortOrder.DESCENDING),
+				isMissing = false,
+				enableImages = false,
+				enableUserData = false,
+				enableTotalRecordCount = false,
+				limit = RECENT_EPISODES_LIMIT,
+			)
+		).content.items
+	}
 
 	private suspend fun nextUpBySeries(): Map<UUID, BaseItemDto> = api.tvShowsApi.getNextUp(
 		GetNextUpRequest(
@@ -847,7 +869,8 @@ class ModernHomeRepository(
 			newLabel = seriesId?.let { context.labels[it] },
 			releaseDate = if (withReleaseDate) item.premiereDate?.toLocalDate() else null,
 			unplayedCount = if (item.type == BaseItemKind.SERIES) item.userData?.unplayedItemCount?.takeIf { it > 0 } else null,
-			rating = item.communityRating?.takeIf { it > 0f },
+			// IMDb's rating (its dataset), otherwise the server's
+			rating = ImdbRatings.rating(item),
 			year = item.productionYear,
 			episodeLabel = episodeHint?.let { episodeNumberLabel(it) },
 			playId = playId,
@@ -903,7 +926,7 @@ class ModernHomeRepository(
 		backgroundUrl = blurredBackdropUrl(api),
 		glassUrl = blurredBackdropUrl(api, maxWidth = ModernImageSizes.GLASS, blur = ModernImageSizes.GLASS_BLUR),
 		logoUrl = logoImage()?.getUrl(api, maxWidth = LOGO_IMAGE_WIDTH, maxHeight = LOGO_IMAGE_HEIGHT, format = ImageFormat.WEBP),
-		rating = communityRating,
+		rating = ImdbRatings.rating(this),
 		year = productionYear,
 		runtimeMinutes = if (type == BaseItemKind.MOVIE) runTimeTicks?.let { (it / TICKS_PER_MINUTE).toInt() } else null,
 		officialRating = officialRating,

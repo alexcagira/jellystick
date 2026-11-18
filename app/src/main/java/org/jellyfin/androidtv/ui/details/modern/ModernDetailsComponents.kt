@@ -343,6 +343,24 @@ internal fun DetailsHero(
 	}
 }
 
+/**
+ * Where a rating comes from: its name in a plain outlined tag, like the age rating (only the name,
+ * not the logos or colours of those sites)
+ */
+@Composable
+private fun RatingSource(name: String) {
+	Text(
+		text = name,
+		color = ModernHomeColors.TextSecondary,
+		fontSize = 10.sp,
+		fontWeight = FontWeight.Bold,
+		maxLines = 1,
+		modifier = Modifier
+			.border(1.dp, ModernHomeColors.BadgeBorder, RoundedCornerShape(3.dp))
+			.padding(horizontal = 4.dp, vertical = 1.dp),
+	)
+}
+
 @Composable
 private fun DetailsMetadata(header: DetailsHeader) {
 	val facts = listOfNotNull(
@@ -369,6 +387,20 @@ private fun DetailsMetadata(header: DetailsHeader) {
 				fontSize = 14.sp,
 				fontWeight = FontWeight.Bold,
 			)
+			if (header.ratingFromImdb) RatingSource("IMDb")
+			if (header.letterboxdRating == null && facts.isNotEmpty()) Text(text = "·", color = ModernHomeColors.TextSecondary, fontSize = 14.sp)
+		}
+
+		// Films: the average on Letterboxd (out of 5)
+		if (header.letterboxdRating != null) {
+			if (header.rating != null) Spacer(Modifier.width(2.dp))
+			Text(
+				text = String.format(Locale.getDefault(), "%.1f", header.letterboxdRating),
+				color = ModernHomeColors.TextPrimary,
+				fontSize = 14.sp,
+				fontWeight = FontWeight.Bold,
+			)
+			RatingSource("Letterboxd")
 			if (facts.isNotEmpty()) Text(text = "·", color = ModernHomeColors.TextSecondary, fontSize = 14.sp)
 		}
 

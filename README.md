@@ -45,8 +45,9 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
   **Trending this week** with rank numbers, **Latest Episodes**, **Latest Films**, **Recently added** and **Favourites**.
 - Poster badges: resolution (4K, 1080p…), **Dolby Vision**, **HDR10+ / HDR / HLG**, **Atmos / TrueHD / Digital** and
   **flags of the audio languages** (Latin American Spanish, Brazilian Portuguese… told apart).
-- *New episode / New season / New series* labels, no duplicates when a title is in several libraries, configurable row order.
-- Starts instantly: it shows what it showed last time and refreshes in the background.
+- **Latest Episodes** and the *New episode / New season / New series* labels go by **air date**, not by the date the file was added; no duplicates when a title is in several libraries, configurable row order.
+- **IMDb ratings** on every poster (from IMDb's official dataset, refreshed weekly).
+- Starts instantly: it shows what it showed last time and refreshes in the background; new titles on the server appear by themselves.
 
 ### Movie and TV show libraries
 - Each library gets its own page: media bar, pills with the other libraries of the same kind, **Collections** and **Browse**.
@@ -55,13 +56,14 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 - Collections made and kept up to date by the app: **IMDb Top 250**, by **audio language** and series by **streaming service** (Netflix, HBO Max, Prime Video, Disney+…).
 
 ### Details pages
-- Full-screen backdrop with logo, rating, genres and overview; *Play / Resume S01:E05*, trailer, watched, **Watchlist** (shared with KefinTweaks on the web).
+- Full-screen backdrop with logo, **IMDb** rating (and the **Letterboxd** average for movies), genres and overview; *Play / Resume S01:E05*, trailer, watched, **Watchlist** (shared with KefinTweaks on the web).
 - Seasons and episodes without leaving the page, with quality badges and flags on every episode, cast and *More like this*.
 - The series theme song plays in the background, with fades.
 
 ### Player
 - Clean screen while playing; seeking with **thumbnails** that only jumps when you press OK.
 - Chapters on the seek bar, "Ends at…", a *You're watching* screen when paused, and subtitles that move up above the controls.
+- **Stream info** with ☰: a glass panel with how the file plays (direct, remux or transcoding and why), the video, audio and subtitles, the decoders of the Fire TV and the buffer.
 - **Skip intro / credits / recap** with Jellyfin media segments or Intro Skipper.
 - **Subtitles your way**: Netflix-like, classic, bold, box or yellow styles, outline or shadow, font, size and colours, with a preview.
 - When a file can't play directly, it retries by itself with **Dolby Vision as HDR10**, converted audio or transcoding, and remembers it for the whole series.
@@ -88,10 +90,11 @@ The technical notes of every feature (in Spanish) are in [docs/MODERN_HOME.md](d
 | **Hold OK** | On a poster | Menu: play now, mark as watched / unwatched, add to / remove from watchlist, more info, go to season / show, file info, Identify (admins) |
 | **Hold OK** | On a library in the top bar | Move, hide, browse or scan the library |
 | **⏯ Play/Pause** | On a poster or a song | Plays it right away (resumes where you left it) |
-| **☰ Menu** | Anywhere, while there is music | Stops the music, empties the queue and closes the shared queue |
+| **☰ Menu** | Anywhere but the player, while there is music | Stops the music, empties the queue and closes the shared queue |
 | **OK** | Player, controls hidden | Pause / play (or *Skip intro* when it shows) |
 | **◀ / ▶** | Player | Seek with a thumbnail; hold to go faster. **OK** jumps there; **Back** or 8 seconds without pressing anything keeps playing where it was |
 | **▲ / ▼** | Player | Shows the controls (audio, subtitles, chapters, quality, playback mode, speed, subtitle offset) |
+| **☰ Menu** | Player | Shows / hides the **stream info**: direct play or transcoding and why, codecs, decoders, subtitles, buffer |
 | **⏪ / ⏩** | Player | Skip back / forward (the lengths of your Jellyfin settings, 10 s / 30 s by default) |
 | **⏪ / ⏩** | Now Playing and its screensaver | Previous / next song |
 | **⏯ Play/Pause** | Player, music, screensaver | Pause / play |
@@ -150,4 +153,6 @@ Jellystick is based on [Jellyfin for Android TV](https://github.com/jellyfin/jel
 [GNU General Public License v2.0](LICENSE). Its source code is this repository.
 
 The rhombus logo is Jellystick's own; the name is drawn with Montserrat Bold (SIL Open Font License).
+Ratings: information courtesy of IMDb (https://www.imdb.com), from its datasets for personal and non-commercial use;
+Letterboxd averages are read from letterboxd.com. Jellystick is not affiliated with IMDb or Letterboxd.
 Jellyfin is a trademark of its owners; Jellystick is not endorsed by them. Fire TV is a trademark of Amazon.

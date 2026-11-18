@@ -152,7 +152,7 @@ class ModernLibraryRepository(
 				recursive = true,
 				sortBy = setOf(ItemSortBy.RANDOM),
 				imageTypes = setOf(ImageType.BACKDROP),
-				fields = setOf(ItemFields.OVERVIEW, ItemFields.GENRES, ItemFields.MEDIA_STREAMS),
+				fields = setOf(ItemFields.OVERVIEW, ItemFields.GENRES, ItemFields.MEDIA_STREAMS, ItemFields.PROVIDER_IDS),
 				imageTypeLimit = 1,
 				enableTotalRecordCount = false,
 				limit = HERO_CANDIDATES,
@@ -315,6 +315,7 @@ class ModernLibraryRepository(
 		return section("latest_films", context.getString(R.string.library_latest_films), CardStyle.LANDSCAPE, cards)
 	}
 
+	/** The episodes released (aired) last, up to today, not the ones added last; one per series */
 	private suspend fun latestEpisodes(libraryId: UUID): LibrarySection? {
 		val items = api.itemsApi.getItems(
 			GetItemsRequest(
@@ -322,14 +323,17 @@ class ModernLibraryRepository(
 				includeItemTypes = setOf(BaseItemKind.EPISODE),
 				recursive = true,
 				isMissing = false,
-				sortBy = setOf(ItemSortBy.DATE_CREATED),
+				sortBy = setOf(ItemSortBy.PREMIERE_DATE),
 				sortOrder = setOf(SortOrder.DESCENDING),
+				maxPremiereDate = LocalDateTime.now(),
 				fields = CARD_FIELDS,
 				imageTypeLimit = 1,
 				enableTotalRecordCount = false,
-				limit = SECTION_LIMIT,
+				limit = LATEST_EPISODES_CANDIDATES,
 			)
 		).content.items
+			.distinctBy { it.seriesId ?: it.id }
+			.take(SECTION_LIMIT)
 		// Opening an episode shows its page, it doesn't start playing
 		val cards = homeRepository.landscapeCards(items, withBadges = true).map { it.copy(playOnClick = false, progress = null, remainingMinutes = null) }
 		return section("latest_episodes", context.getString(R.string.library_latest_episodes), CardStyle.LANDSCAPE, cards)
@@ -833,6 +837,8 @@ class ModernLibraryRepository(
 		const val MIN_SECTION_SIZE = 6
 		val PRELOAD_DELAY = 20.seconds
 
+		/** Episodes asked for "Latest Episodes" (several can be of the same series) */
+		const val LATEST_EPISODES_CANDIDATES = 80
 		val CARD_FIELDS = setOf(
 			ItemFields.PRIMARY_IMAGE_ASPECT_RATIO,
 			ItemFields.DATE_CREATED,

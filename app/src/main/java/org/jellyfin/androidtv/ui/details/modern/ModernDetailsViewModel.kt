@@ -1,9 +1,12 @@
 package org.jellyfin.androidtv.ui.details.modern
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +26,7 @@ import timber.log.Timber
 import java.util.UUID
 
 class ModernDetailsViewModel(
+	private val context: Context,
 	private val repository: ModernDetailsRepository,
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
 	private val dataRefreshService: DataRefreshService,
@@ -40,6 +44,7 @@ class ModernDetailsViewModel(
 	private var itemId: UUID? = null
 	private var loadJob: Job? = null
 	private var librariesJob: Job? = null
+	private var letterboxdJob: Job? = null
 	/** A refresh asked while the stop of a video was on its way to the server: done once it arrives */
 	private var refreshAfterStopReport = false
 
@@ -47,6 +52,13 @@ class ModernDetailsViewModel(
 		// Back from the player: "Resume from…" / "Resume S01:E05" and ⏮ at once, before the server has it
 		viewModelScope.launch {
 			dataRefreshService.playbackStopped.drop(1).filterNotNull().collect { stopped -> showStopped(stopped) }
+		}
+		// New episodes or seasons (or new metadata) on the server: the page again
+		viewModelScope.launch {
+			dataRefreshService.libraryChanged.drop(1).collectLatest {
+				delay(LIBRARY_CHANGE_DEBOUNCE_MS)
+				refresh()
+			}
 		}
 		viewModelScope.launch {
 			dataRefreshService.playbackStopReported.drop(1).filterNotNull().collect {
@@ -200,11 +212,29 @@ class ModernDetailsViewModel(
 
 			_state.update { current ->
 				when {
-					loaded != null -> loaded.copy(libraries = current.libraries)
+					loaded != null -> {
+						// The Letterboxd rating read before stays (the page loads again after playing)
+						val letterboxd = current.header?.letterboxdRating?.takeIf { current.item?.id == loaded.item?.id }
+						loaded.copy(libraries = current.libraries, header = loaded.header?.copy(letterboxdRating = letterboxd))
+					}
 					// Keep what is on screen when a refresh fails
 					current.item != null -> current.copy(loading = false)
 					else -> current.copy(loading = false, failed = true)
 				}
+			}
+
+			val item = loaded?.item
+			if (loaded?.kind == DetailsKind.MOVIE && item != null && _state.value.header?.letterboxdRating == null) loadLetterboxd(item)
+		}
+	}
+
+	/** Films: their average on Letterboxd, beside the IMDb rating once it comes */
+	private fun loadLetterboxd(item: BaseItemDto) {
+		letterboxdJob?.cancel()
+		letterboxdJob = viewModelScope.launch {
+			val rating = LetterboxdRatings.rating(context, item) ?: return@launch
+			_state.update { state ->
+				if (state.item?.id == item.id) state.copy(header = state.header?.copy(letterboxdRating = rating)) else state
 			}
 		}
 	}
@@ -313,3 +343,6 @@ class ModernDetailsViewModel(
 		return runCatching { repository.localTrailerIds(item.id) }.getOrDefault(emptyList())
 	}
 }
+
+/** Notices of new titles close together: the page loads once */
+private const val LIBRARY_CHANGE_DEBOUNCE_MS = 1_500L

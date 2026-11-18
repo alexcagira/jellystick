@@ -69,6 +69,7 @@ import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.ui.base.Icon
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.androidtv.ui.home.modern.BebasNeue
+import org.jellyfin.androidtv.ui.home.modern.ImdbRatings
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
@@ -114,6 +115,8 @@ fun ModernPlayerScreen(
 	// Changes on every key press, restarts the auto hide timer
 	var lastInteraction by remember { mutableLongStateOf(0L) }
 	var menu by remember { mutableStateOf<PlayerMenu?>(null) }
+	// Stream info panel (☰)
+	var infoVisible by remember { mutableStateOf(false) }
 	// Position being sought: only applied with OK
 	var scrubMs by remember { mutableStateOf<Long?>(null) }
 	val scrubbing = scrubMs != null
@@ -157,7 +160,12 @@ fun ModernPlayerScreen(
 		overlay.setControlsTop(if (controlsVisible) seekBarTop else null)
 	}
 	DisposableEffect(Unit) {
-		onDispose { overlay.setControlsTop(null) }
+		// ☰ is for the stream info while the player shows (not the music stop)
+		ModernPlayerOverlay.isShowing = true
+		onDispose {
+			ModernPlayerOverlay.isShowing = false
+			overlay.setControlsTop(null)
+		}
 	}
 
 	// Focus: the controls when they appear, the screen itself (key handling) when they hide
@@ -193,6 +201,19 @@ fun ModernPlayerScreen(
 				val isDown = event.type == KeyEventType.KeyDown
 				val isBack = event.key == Key.Back || event.key == Key.Escape
 
+				// ☰ opens or closes the stream info (when released); the controls hide to make room
+				if (event.key == Key.Menu) {
+					if (event.type == KeyEventType.KeyUp) {
+						if (infoVisible) infoVisible = false
+						else {
+							infoVisible = true
+							scrubMs = null
+							controlsVisible = false
+						}
+					}
+					return@onPreviewKeyEvent true
+				}
+
 				if (controlsVisible) {
 					if (isDown) lastInteraction = System.currentTimeMillis()
 					// Back forgets the position being sought, otherwise hides the controls (it doesn't
@@ -205,6 +226,12 @@ fun ModernPlayerScreen(
 						return@onPreviewKeyEvent true
 					}
 					return@onPreviewKeyEvent false
+				}
+
+				// Back closes the stream info first (the skip button, if any, goes before)
+				if (isBack && infoVisible && !skipVisible) {
+					if (isDown) infoVisible = false
+					return@onPreviewKeyEvent true
 				}
 
 				when (event.key) {
@@ -262,6 +289,9 @@ fun ModernPlayerScreen(
 		) {
 			PauseIndicator()
 		}
+
+		// Stream info on the right; out of the way while the controls show
+		StreamInfoPanel(overlay = overlay, visible = infoVisible && !controlsVisible)
 
 		AnimatedVisibility(
 			visible = controlsVisible,
@@ -502,7 +532,7 @@ private fun PlayerControls(
 /**
  * "Rick and Morty - S9:E1 - There's Something About Morty (2026)" or "Movie (2024)".
  */
-private fun playerTitle(item: BaseItemDto): String {
+internal fun playerTitle(item: BaseItemDto): String {
 	val year = (item.productionYear ?: item.premiereDate?.year)?.let { " ($it)" }.orEmpty()
 	if (item.type != BaseItemKind.EPISODE) return item.name.orEmpty() + year
 
@@ -841,7 +871,7 @@ private fun PausedInfo(state: ModernPlayerState) {
 				item.runTimeTicks?.let { ticks ->
 					Text(text = formatRuntimeShort(ticks / TICKS_PER_MS), color = ModernHomeColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
 				}
-				item.communityRating?.takeIf { it > 0f }?.let { rating ->
+				ImdbRatings.rating(item)?.let { rating ->
 					Text(
 						text = "★ " + String.format(Locale.getDefault(), "%.1f", rating),
 						color = ModernHomeColors.TextPrimary,

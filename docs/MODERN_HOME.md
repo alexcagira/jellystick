@@ -12,15 +12,17 @@ calidad (Dolby Vision, Atmos, HDR, 4K…) y fecha de estreno.
 | Continue Watching | Episodios/películas a medias y siguientes episodios mezclados, ordenados por lo último que viste (para el siguiente episodio cuenta la última vez que viste la serie). Al salir de un vídeo se pide de nuevo **en cuanto el servidor tiene la posición** (antes devolvía la anterior), solo esa fila y sin esperar a las demás; lo mismo en las páginas de películas y series |
 | Watchlist | Películas y series marcadas con el botón de watchlist (ver más abajo) |
 | Trending this week | Lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador). Los huecos se rellenan con las tendencias de TMDB (si hay clave) y con lo mejor valorado reciente |
-| Latest Episodes | Episodios por fecha de emisión (una tarjeta por serie, con la fecha) |
+| Latest Episodes | Episodios por fecha de emisión, hasta hoy (una tarjeta por serie, con la fecha); no por fecha de añadido |
 | Latest Films | Películas por fecha de estreno, con la fecha |
 | Recently added movies / shows | Por fecha de añadido al servidor |
 | Favourites | Tus favoritos |
 
-Reglas de las etiquetas rojas (últimos 14 días, `MediaBadges.NEW_CONTENT_WINDOW_DAYS`):
+Reglas de las etiquetas rojas: episodios **emitidos** en los últimos 14 días (`MediaBadges.NEW_CONTENT_WINDOW_DAYS`),
+por su fecha de emisión (`PremiereDate`), no por cuándo se añadieron. Una temporada antigua que acabas de
+añadir no lleva etiqueta:
 
-- Se añadió el episodio 1 de la temporada 1 → **New series**
-- Se añadió el episodio 1 de otra temporada → **New season**
+- El episodio 1 de la temporada 1 salió hace menos de 14 días → **New series**
+- El episodio 1 de otra temporada → **New season**
 - Cualquier otro episodio → **New episode**
 
 Si una película o serie está en varias bibliotecas (por ejemplo, una por idioma) solo aparece una vez por fila.
@@ -68,7 +70,8 @@ el inicio:
   biblioteca de series solo muestran colecciones con series, y las de películas dejan fuera las que solo tienen
   series (ver *Colecciones de series* más abajo).
 - **Seguir viendo** solo de esa biblioteca: películas a medias, o episodios a medias y siguientes episodios.
-- **Últimas películas** (estrenos más recientes de la biblioteca) o **Últimos episodios** en series, como tarjetas
+- **Últimas películas** (estrenos más recientes de la biblioteca) o **Últimos episodios** en series (por fecha de
+  emisión, hasta hoy, uno por serie), como tarjetas
   16:9 con la calidad (4K, HDR, Dolby Vision...) arriba a la izquierda y las banderas de idioma arriba a la derecha.
 - **Añadido recientemente**.
 - Todos los pósters llevan las etiquetas de calidad, HDR, Dolby Vision y las banderas de idioma del audio, también
@@ -265,7 +268,7 @@ la **lupa** para buscar solo música.
 - **Cola**: portadas con canción y artista · álbum debajo, y la posición ("3 / 24"). OK salta a esa canción;
   mantener OK: Reproducir desde aquí, Quitar de la cola, Favoritos, Ir al álbum, Ir al artista. Las canciones
   **ya escuchadas** siguen a la izquierda, más tenues, para volver a ponerlas (la fila empieza en la actual).
-- **☰ del mando (en cualquier pantalla)**: lo mismo que *Detener*: para la música, vacía la cola (también las
+- **☰ del mando (en cualquier pantalla menos el reproductor de vídeo)**: lo mismo que *Detener*: para la música, vacía la cola (también las
   canciones ya escuchadas) y cierra la cola compartida. Solo cuando hay música; si no, el botón hace lo de
   siempre (`ui/music/MusicStopper.kt`).
 
@@ -380,6 +383,57 @@ también a mano, eligiendo otra vez la plataforma (*Actualizar colección*). Si 
 plataforma, le falta la cadena en los metadatos: *Actualizar metadatos* en el servidor la añade. El código
 está en `ui/collections/` (`ServiceCollectionsRepository.kt`, `StreamingServices.kt`, `CollectionCatalog.kt`).
 
+## Valoraciones: IMDb y Letterboxd
+
+- Las **estrellas** (pósters, media bar, fichas, episodios y pantalla de pausa) son la nota de **IMDb**. Salen del
+  conjunto de datos oficial de IMDb `title.ratings.tsv.gz` (https://developer.imdb.com/non-commercial-datasets/,
+  uso personal y no comercial, sin clave), que la app descarga 1 minuto después de abrirse la primera vez
+  (unos 8 MB) y después una vez por semana. Se guarda en el dispositivo (`imdb_ratings.bin`, unos 8 MB) y se busca
+  por el id de IMDb de cada título (`ProviderIds.Imdb`). Los títulos sin id de IMDb, o hasta que termina la primera
+  descarga, siguen con la nota del servidor (la de TMDb con los proveedores por defecto). En la ficha, junto a la
+  nota pone **IMDb** cuando es la de IMDb (`ImdbRatings.kt`).
+- En la ficha de una **película** sale además la nota media de **Letterboxd** (de 0 a 5). Letterboxd no tiene API
+  pública: la app abre la página de la película (`letterboxd.com/imdb/tt…/`, o por el id de TMDb) y lee la nota de
+  su etiqueta `twitter:data2`, como las extensiones del navegador. Se guarda una semana (un día si no tiene nota).
+  Si Letterboxd cambia su página o bloquea la petición, simplemente no sale (`LetterboxdRatings.kt`).
+
+## Cola de episodios (series largas)
+
+Al reproducir un episodio, la app pide al servidor ese episodio y los siguientes
+(`Shows/{serie}/Episodes?startItemId=`). El servidor arma esa lista con las temporadas y la "clave de serie" que
+guarda cada episodio: si un episodio tiene una clave antigua (la serie se identificó de nuevo, se actualizó el
+servidor…) o un número de temporada que no cuadra, se queda fuera, y si era el elegido la lista llega vacía y **no
+pasaba nada** al darle a reproducir (South Park desde *Continue Watching* o desde la ficha). Ahora
+(`EpisodeQueue.kt`):
+
+- Si la lista no empieza por el episodio elegido, falla o tarda más de 12 s, los episodios se leen de la carpeta de
+  la serie, ordenados por temporada y episodio (primero solo el orden, sin la información de los archivos; luego los
+  que se van a reproducir con todo).
+- Si tampoco aparece, el episodio se reproduce solo. Reproducir una serie o una temporada usa el mismo respaldo.
+- Si aun así no se puede cargar, sale un aviso en vez de no hacer nada.
+
+En el servidor suele arreglarse con *Actualizar metadatos → Reemplazar todos los metadatos* de la serie (o un
+escaneo completo de la biblioteca), que vuelve a guardar la clave en cada episodio.
+
+## Títulos nuevos en el servidor
+
+El inicio, las páginas de bibliotecas y las fichas se recargan solos cuando el servidor avisa de cambios en la
+biblioteca (`DataRefreshService.libraryChanged`, avisos en `MainActivity`):
+
+- `LibraryChanged`: el servidor lo manda después de esperar a que no haya más cambios, **30 s** por defecto
+  (`LibraryUpdateDuration`). Antes, además, la vigilancia en tiempo real espera **60 s** desde que aparece un
+  archivo nuevo antes de escanearlo (`LibraryMonitorDelay`).
+- Si tu usuario es administrador, la app también recibe el fin de cada actualización de un título
+  (`RefreshProgress` al 100 %) y recarga en ese momento, sin esperar a `LibraryChanged`.
+
+Para que lleguen antes, baja esos valores en el `system.xml` del servidor (en Docker, `/config/config/system.xml`
+o `/config/system.xml`) con Jellyfin parado, y arráncalo otra vez:
+
+```xml
+<LibraryMonitorDelay>10</LibraryMonitorDelay>
+<LibraryUpdateDuration>5</LibraryUpdateDuration>
+```
+
 ## Fichas de películas, series, temporadas y personas
 
 "More info" (y cualquier ficha de la app) abre la nueva página para películas, series, temporadas y
@@ -434,6 +488,24 @@ Controles nuevos para películas y episodios (la TV en directo mantiene los orig
   reproducción**, **velocidad** y **desfase de subtítulos**. En pausa se ven dos barras discretas en el centro. Se ocultan solos a los 5 segundos; **Atrás** también los oculta.
 - **En pausa** (sin controles): "Estás viendo" con el logo, temporada y episodio, año, duración, valoración y
   sinopsis.
+- **☰ del mando: información de reproducción**. Abre (y cierra) un panel de cristal translúcido a la derecha, sin
+  quitar el foco al vídeo: el mando sigue controlando el reproductor. Se actualiza cada segundo:
+  - *Reproducción*: directa, transmisión directa (remux) o transcodificación, el **motivo** (contenedor, códec de
+    audio, subtítulos que hay que grabar, límite de calidad…), el *Modo de reproducción* de la app si no es el
+    automático y, cuando el servidor convierte, su progreso, fps y aceleración (VAAPI, QSV… o software). El motivo
+    sale de la URL de transcodificación y de la sesión del servidor (`/Sessions?deviceId=`), que se pide cada 3 s
+    solo si no es reproducción directa.
+  - *Archivo*: nombre, contenedor, tamaño y bitrate.
+  - *Vídeo* y *Audio*: el original (códec, perfil, bits, HDR / Dolby Vision con su perfil, resolución, fps,
+    bitrate, canales, frecuencia), lo que **envía** el servidor si lo convierte y lo que hace el Fire TV: el
+    decodificador que abrió (`c2.mtk.hevc.decoder`…), o *passthrough* si el audio va sin decodificar a la tele o
+    la barra de sonido, y los fotogramas perdidos.
+  - *Subtítulos*: idioma, formato y si van aparte, dentro del vídeo o grabados por el servidor (en naranja: eso
+    obliga a transcodificar).
+  - *Conexión*: segundos de vídeo ya descargados (búfer) y la calidad máxima elegida.
+  En naranja lo que le cuesta trabajo al servidor. Se cierra con ☰ o **Atrás**; mientras se ven los controles se
+  aparta y vuelve al ocultarlos. En el reproductor ☰ ya no detiene la música (`StreamInfo.kt`,
+  `StreamInfoPanel.kt`, `VideoManager.getPlayerStats`).
 - **Saltar intro / Saltar créditos / Saltar resumen**: usa los segmentos del servidor (plugin *Intro Skipper* o
   segmentos de Jellyfin 10.10+) cuando su acción es "Preguntar" en los ajustes de reproducción (segmentos multimedia). OK salta.
 - **Desfase de subtítulos**: de ±0,1 s o ±0,5 s, se reinicia en cada reproducción. No afecta a los subtítulos
