@@ -27,7 +27,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - New pages for movies, series, seasons and people: full-screen backdrop with logo, rating, genres and overview; Next up, seasons, episode carousel, cast and similar titles. They open at once and the slowest part (*More like this*) comes after.
 - **IMDb** rating and, for movies, the **Letterboxd** average (0 to 5).
 - **Play / Resume S01:E05 / Resume from 1:05:32** button with **⏮** next to it to start from the beginning, favourite, trailer, watched, file info and **Watchlist** (synced with the KefinTweaks watchlist on the web).
-- Switch seasons without leaving the page (on long series the season pills scroll to the current season by themselves), ✓ to mark episodes as watched, and **quality and flags on every episode**.
+- Switch seasons without leaving the page (on long series the season pills scroll to the current season by themselves and follow the cursor), ✓ to mark episodes as watched, and **quality and flags on every episode**.
 - **Series theme song** with fade in and out.
 - Poster menu (long press on OK): play, watched/unwatched, **add to watchlist**, more info, go to the series or season, file info and **Identify**, like on the web (admin).
 

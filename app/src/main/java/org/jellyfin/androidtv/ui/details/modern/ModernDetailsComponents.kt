@@ -852,6 +852,9 @@ internal fun EpisodesHeader(
 	}
 }
 
+/** Room kept between the focused season pill and the edges, so the next seasons show */
+private val SEASON_PILLS_FOCUS_MARGIN = 96.dp
+
 /**
  * Season switcher in the style of the navigation bar: "Season 1 | Season 2 | Season 3".
  * Moving down from the buttons above lands on the current season. With many seasons the pills
@@ -872,6 +875,11 @@ private fun SeasonTabs(
 	val pillBounds = remember(tabs) { HashMap<java.util.UUID, Pair<Int, Int>>() }
 	var viewportWidth by remember { mutableIntStateOf(0) }
 	var scrolledOnce by remember { mutableStateOf(false) }
+	// The page doesn't scroll by itself on focus (NoAutoScrollBringIntoViewSpec), and the pills got
+	// that too: moving through them, the one with the focus went off screen. Here they follow the
+	// focus, with room to see the next ones
+	val density = LocalDensity.current
+	val followFocus = remember(density) { KeepInViewBringIntoViewSpec(marginPx = with(density) { SEASON_PILLS_FOCUS_MARGIN.toPx() }) }
 
 	// The current season in the middle of the visible part (at once the first time, smoothly after)
 	LaunchedEffect(selectedId, tabs, viewportWidth) {
@@ -887,29 +895,31 @@ private fun SeasonTabs(
 		modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, top = 4.dp, end = ModernHomeDimens.ScreenPaddingHorizontal),
 		verticalAlignment = Alignment.CenterVertically,
 	) {
-		Row(
-			modifier = Modifier
-				// Measured after the episode count, so the count always has room
-				.weight(1f, fill = false)
-				.background(Color.Black.copy(alpha = 0.35f), CircleShape)
-				.border(1.dp, ModernHomeColors.GlassBorder, CircleShape)
-				.onSizeChanged { viewportWidth = it.width }
-				.horizontalScroll(scrollState)
-				.padding(4.dp)
-				.then(if (hasSelected) Modifier.focusRestorer(selectedFocusRequester) else Modifier.focusRestorer())
-				.focusGroup(),
-			horizontalArrangement = Arrangement.spacedBy(2.dp),
-			verticalAlignment = Alignment.CenterVertically,
-		) {
-			for (tab in tabs) {
-				SeasonTabButton(
-					text = tab.name,
-					selected = tab.id == selectedId,
-					onClick = { onSelected(tab) },
-					modifier = Modifier
-						.onPlaced { coordinates -> pillBounds[tab.id] = coordinates.positionInParent().x.roundToInt() to coordinates.size.width }
-						.then(if (tab.id == selectedId) Modifier.focusRequester(selectedFocusRequester) else Modifier),
-				)
+		CompositionLocalProvider(LocalBringIntoViewSpec provides followFocus) {
+			Row(
+				modifier = Modifier
+					// Measured after the episode count, so the count always has room
+					.weight(1f, fill = false)
+					.background(Color.Black.copy(alpha = 0.35f), CircleShape)
+					.border(1.dp, ModernHomeColors.GlassBorder, CircleShape)
+					.onSizeChanged { viewportWidth = it.width }
+					.horizontalScroll(scrollState)
+					.padding(4.dp)
+					.then(if (hasSelected) Modifier.focusRestorer(selectedFocusRequester) else Modifier.focusRestorer())
+					.focusGroup(),
+				horizontalArrangement = Arrangement.spacedBy(2.dp),
+				verticalAlignment = Alignment.CenterVertically,
+			) {
+				for (tab in tabs) {
+					SeasonTabButton(
+						text = tab.name,
+						selected = tab.id == selectedId,
+						onClick = { onSelected(tab) },
+						modifier = Modifier
+							.onPlaced { coordinates -> pillBounds[tab.id] = coordinates.positionInParent().x.roundToInt() to coordinates.size.width }
+							.then(if (tab.id == selectedId) Modifier.focusRequester(selectedFocusRequester) else Modifier),
+					)
+				}
 			}
 		}
 

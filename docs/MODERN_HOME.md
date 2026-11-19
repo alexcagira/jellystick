@@ -481,8 +481,9 @@ botones (*Play*, favoritos, tráiler, visto, información del archivo, watchlist
 todas las opciones). Debajo: *Next up*, temporadas, episodios, reparto y títulos similares.
 
 Encima de los episodios, las **temporadas** van en pastillas; en series con muchas (South Park, Los Simpson) la fila se
-desplaza sola para que la temporada actual quede a la vista, al abrir la ficha y al cambiar de temporada
-(`SeasonTabs`).
+desplaza sola para que la temporada actual quede a la vista, al abrir la ficha y al cambiar de temporada, y sigue al
+cursor al moverte por ellas, dejando sitio para ver las siguientes (`SeasonTabs`; la página no se desplaza sola con el
+foco, `NoAutoScrollBringIntoViewSpec`, así que las pastillas llevan su propio `KeepInViewBringIntoViewSpec`).
 
 En series y temporadas el botón muestra el episodio: **Resume S01:E05** si ya lo empezaste, **Play S02:E01**
 si no (en español, *Reanudar T01:E05* / *Reproducir T02:E01*). En películas empezadas hace más de un minuto el
