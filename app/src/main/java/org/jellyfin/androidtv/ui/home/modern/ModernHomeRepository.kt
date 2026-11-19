@@ -239,7 +239,7 @@ class ModernHomeRepository(
 			}
 			val continueWatchingAsync = async { safe("continue watching") { continueWatching() }.orEmpty().withoutHidden(hidden) }
 			// The slowest row (plays of every user), started first and added last
-			val trendingAsync = async { safe("trending") { trending() }.orEmpty().withoutHidden(hidden) }
+			val trendingAsync = async { safe("trending") { trending(hidden) }.orEmpty() }
 			val latestEpisodesAsync = async { safe("latest episodes") { latestEpisodes() }.orEmpty().withoutHidden(hidden) }
 			val latestFilmsAsync = async { safe("latest films") { latestFilms() }.orEmpty().withoutHidden(hidden) }
 			val recentMoviesAsync = async { safe("recent movies") { recentMovies() }.orEmpty().withoutHidden(hidden) }
@@ -506,16 +506,35 @@ class ModernHomeRepository(
 	/**
 	 * "Trending this week": what was watched the most on this server in the last 7 days (all users
 	 * when the current user is an administrator). Empty spots are filled with the TMDB weekly trends
-	 * (when a key is configured) and then with the best rated recent titles.
+	 * (when a key is configured) and then with the best rated recent titles, then of all time.
+	 *
+	 * The ten places are counted once the titles of hidden libraries and the copies of a title in
+	 * other libraries (one per language) are left out: counted before, they left 6 or 7.
 	 */
-	private suspend fun trending(): List<BaseItemDto> {
-		val ranked = LinkedHashSet<UUID>()
-		ranked += safe("most watched") { cachedMostWatched() }.orEmpty()
-		if (ranked.size < RANKED_LIMIT && tmdb.isConfigured) ranked += safe("tmdb trending") { tmdbTrendingIds() }.orEmpty()
-		if (ranked.size < RANKED_LIMIT) ranked += safe("top rated") { topRatedIds() }.orEmpty()
+	private suspend fun trending(hidden: Set<UUID>): List<BaseItemDto> {
+		val sources: List<Pair<String, suspend () -> List<UUID>>> = listOf(
+			"most watched" to { cachedMostWatched() },
+			"tmdb trending" to { if (tmdb.isConfigured) tmdbTrendingIds() else emptyList() },
+			"top rated" to { topRated(minPremiereDate = LocalDateTime.now().minusYears(2)).map { it.id } },
+			"top rated of all time" to { topRated(minPremiereDate = null).map { it.id } },
+		)
 
-		// Fetch a few extra in case some of them are duplicates
-		return itemsByIds(ranked.take(RANKED_LIMIT * 2), CARD_FIELDS)
+		// One id per title, in the order of the sources
+		val picked = LinkedHashMap<String, UUID>()
+		val seen = HashSet<UUID>()
+		for ((name, source) in sources) {
+			if (picked.size >= RANKED_LIMIT) break
+			val ids = safe(name) { source() }.orEmpty().filter { it !in hidden && seen.add(it) }
+			if (ids.isEmpty()) continue
+			// Just enough to tell the copies of a title apart (and the series of hidden libraries)
+			val items = safe("$name titles") { itemsByIds(ids, setOf(ItemFields.PROVIDER_IDS)) }.orEmpty().withoutHidden(hidden)
+			for (item in items) {
+				if (picked.size >= RANKED_LIMIT) break
+				picked.putIfAbsent(MediaBadges.duplicateKey(item), item.id)
+			}
+		}
+
+		return itemsByIds(picked.values.toList(), CARD_FIELDS)
 	}
 
 	private class WatchScore {
@@ -608,12 +627,6 @@ class ModernHomeRepository(
 		return refs.mapNotNull { ref -> index[ref.key] }.distinct()
 	}
 
-	private suspend fun topRatedIds(): List<UUID> {
-		val recent = topRated(minPremiereDate = LocalDateTime.now().minusYears(2))
-		val allTime = if (recent.size < RANKED_LIMIT) topRated(minPremiereDate = null) else emptyList()
-		return (recent + allTime).map { it.id }.distinct()
-	}
-
 	private suspend fun topRated(minPremiereDate: LocalDateTime?): List<BaseItemDto> = api.itemsApi.getItems(
 		GetItemsRequest(
 			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
@@ -624,7 +637,8 @@ class ModernHomeRepository(
 			enableImages = false,
 			enableUserData = false,
 			enableTotalRecordCount = false,
-			limit = RANKED_LIMIT,
+			// Several libraries can have the same titles: enough to fill the ten places with different ones
+			limit = TOP_RATED_CANDIDATES,
 		)
 	).content.items
 
@@ -952,6 +966,8 @@ class ModernHomeRepository(
 		const val HERO_CANDIDATES = 20
 		const val SECTION_LIMIT = 30
 		const val RANKED_LIMIT = 10
+		/** Best rated titles asked to fill "Trending this week" */
+		const val TOP_RATED_CANDIDATES = 40
 		const val TRENDING_DAYS = 7L
 		const val RECENTLY_PLAYED_LIMIT = 200
 		const val NEXT_UP_LIMIT = 150

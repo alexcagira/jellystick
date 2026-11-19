@@ -70,6 +70,18 @@ class PlaybackFallback(context: Context) {
 
 	private val preferences = context.getSharedPreferences("playback_fallback", Context.MODE_PRIVATE)
 
+	init {
+		// 1.3.2: Dolby Vision + HDR10+ plays as Dolby Vision on the Fire TV (no remux, no black
+		// screen). What was kept for each series before is forgotten once: a series that still
+		// fails is moved back by the start watchdog on its first try
+		if (preferences.getInt(KEY_VERSION, 0) < VERSION) {
+			preferences.edit {
+				clear()
+				putInt(KEY_VERSION, VERSION)
+			}
+		}
+	}
+
 	private fun key(item: BaseItemDto) = (item.seriesId ?: item.id).toString()
 
 	/** Level that worked before for the series of [item] (or the item) */
@@ -148,6 +160,8 @@ class PlaybackFallback(context: Context) {
 }
 
 private const val DOLBY_VISION_PREFIX = "dv:"
+private const val KEY_VERSION = "_version"
+private const val VERSION = 1
 private const val MAX_WIDTH = 1920
 private const val MAX_HEIGHT = 1080
 private const val MAX_BITRATE = 20_000_000

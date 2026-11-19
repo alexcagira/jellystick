@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.text.TextOutput
 import org.jellyfin.androidtv.ui.playback.PlaybackFallback
+import org.jellyfin.androidtv.util.profile.KnownDefects
 
 /**
  * Subtitle timing offset of the current playback, changed from the player controls.
@@ -76,6 +77,7 @@ class SubtitleOffsetRenderersFactory(
 				.setEventListener(eventListener)
 				.setMaxDroppedFramesToNotify(DefaultRenderersFactory.MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY),
 			stripAlways = dolbyVisionAsHdr10,
+			hideHdr10PlusFromDolbyVision = KnownDefects.hevcDoviHdr10PlusHandledByPlayer,
 		)
 	}
 
@@ -106,22 +108,152 @@ private class SubtitleOffsetRenderer(renderer: Renderer) : ForwardingRenderer(re
 }
 
 /**
- * Video renderer that, while Dolby Vision plays as HDR10 (the setting, [stripAlways], or the
- * playback fallback), removes the Dolby Vision metadata of each frame (the RPU, NAL unit type 62,
- * and an enhancement layer, 63) before the HEVC decoder gets it. Decoders should ignore those NAL
- * units, but on a Fire TV some frames came out with blocks of older frames.
+ * Video renderer that fixes the frames of Dolby Vision files before the decoder gets them:
+ * - While Dolby Vision plays as HDR10 (the setting, [stripAlways], or the playback fallback), it
+ *   removes the Dolby Vision metadata of each frame (the RPU, NAL unit type 62, and an enhancement
+ *   layer, 63) before the HEVC decoder gets it. Decoders should ignore those NAL units, but on a
+ *   Fire TV some frames came out with blocks of older frames.
+ * - While Dolby Vision plays as Dolby Vision on a device that gives a black screen with Dolby
+ *   Vision + HDR10+ files ([hideHdr10PlusFromDolbyVision], Fire TV 4K / 4K Max), it hides the HDR10+
+ *   metadata of each frame from the Dolby Vision decoder (see [Hdr10PlusSei]).
  */
 @OptIn(UnstableApi::class)
 private class DolbyVisionAsHdr10VideoRenderer(
 	builder: MediaCodecVideoRenderer.Builder,
 	private val stripAlways: Boolean,
+	private val hideHdr10PlusFromDolbyVision: Boolean,
 ) : MediaCodecVideoRenderer(builder) {
+	private val hdr10PlusSei = Hdr10PlusSei()
+
 	override fun onQueueInputBuffer(buffer: DecoderInputBuffer) {
 		super.onQueueInputBuffer(buffer)
 		val data = buffer.data ?: return
-		if (!stripAlways && !PlaybackFallback.decodeDolbyVisionAsHdr10) return
-		if (data.isReadOnly || codecInfo?.mimeType != MimeTypes.VIDEO_H265) return
-		DolbyVisionNalUnits.stripTrailing(data)
+		if (data.isReadOnly) return
+		when (codecInfo?.mimeType) {
+			MimeTypes.VIDEO_H265 -> if (stripAlways || PlaybackFallback.decodeDolbyVisionAsHdr10) DolbyVisionNalUnits.stripTrailing(data)
+			MimeTypes.VIDEO_DOLBY_VISION -> if (hideHdr10PlusFromDolbyVision) hdr10PlusSei.hide(data)
+		}
+	}
+}
+
+/**
+ * HDR10+ metadata in HEVC frames: an SEI message (user data registered by ITU-T T.35, payload type
+ * 4) with the HDR10+ signature (country 0xB5, provider 0x003C, oriented code 0x0001, application 4).
+ *
+ * Files with both Dolby Vision (profile 8) and HDR10+ give a black screen on the Fire TV 4K / 4K
+ * Max when the Dolby Vision decoder gets the HDR10+ messages; without them it plays Dolby Vision
+ * (what Plex does). Each HDR10+ message is turned into an unregistered user data message (payload
+ * type 5), which decoders skip: one byte changed in place, the frame isn't copied or resized.
+ * Dolby Vision doesn't use HDR10+, nothing is lost.
+ */
+internal class Hdr10PlusSei {
+	// The SEI unit without its emulation prevention bytes, and where each byte is in the frame
+	private var rbsp = ByteArray(INITIAL_SIZE)
+	private var positions = IntArray(INITIAL_SIZE)
+
+	/** Hide the HDR10+ messages of the access unit in [data] (Annex B, with start codes). Returns how many */
+	fun hide(data: ByteBuffer): Int {
+		val start = data.position()
+		val end = data.limit()
+		val scanEnd = minOf(end, start + MAX_SCAN)
+		var hidden = 0
+		var index = start
+		while (true) {
+			val startCode = nextStartCode(data, index, scanEnd) ?: break
+			val header = startCode + 3
+			if (header + 2 >= end) break
+			val type = (data.get(header).toInt() shr 1) and 0x3F
+			// The SEI messages come before the first slice of the frame
+			if (type < FIRST_NON_VCL_TYPE) break
+			val unitEnd = nextStartCode(data, header + 2, end) ?: end
+			if (type == NAL_UNIT_TYPE_PREFIX_SEI) hidden += hideInUnit(data, header + 2, unitEnd)
+			index = unitEnd
+		}
+		return hidden
+	}
+
+	/** The SEI messages of one NAL unit (payload from [from] to [to]) */
+	private fun hideInUnit(data: ByteBuffer, from: Int, to: Int): Int {
+		val length = unescape(data, from, to)
+		var hidden = 0
+		var p = 0
+		// Until the trailing bits (0x80) of the unit
+		while (p < length - 1) {
+			var payloadType = 0
+			while (p < length && rbsp[p] == FF) { payloadType += 255; p++ }
+			if (p >= length) break
+			val typeIndex = p
+			payloadType += rbsp[p].toInt() and 0xFF
+			p++
+			var payloadSize = 0
+			while (p < length && rbsp[p] == FF) { payloadSize += 255; p++ }
+			if (p >= length) break
+			payloadSize += rbsp[p].toInt() and 0xFF
+			p++
+			if (p + payloadSize > length) break
+			if (payloadType == PAYLOAD_TYPE_T35 && payloadSize >= MIN_UNREGISTERED_SIZE && isHdr10Plus(p)) {
+				data.put(positions[typeIndex], PAYLOAD_TYPE_UNREGISTERED)
+				hidden++
+			}
+			p += payloadSize
+		}
+		return hidden
+	}
+
+	private fun isHdr10Plus(at: Int): Boolean {
+		for (i in SIGNATURE.indices) if (rbsp[at + i] != SIGNATURE[i]) return false
+		return true
+	}
+
+	/** Copy the unit without its emulation prevention bytes (00 00 03), keeping where each byte was */
+	private fun unescape(data: ByteBuffer, from: Int, to: Int): Int {
+		val size = to - from
+		if (rbsp.size < size) {
+			rbsp = ByteArray(size)
+			positions = IntArray(size)
+		}
+		var length = 0
+		var zeros = 0
+		for (i in from until to) {
+			val byte = data.get(i)
+			if (zeros >= 2 && byte == THREE) {
+				zeros = 0
+				continue
+			}
+			zeros = if (byte == ZERO) zeros + 1 else 0
+			rbsp[length] = byte
+			positions[length] = i
+			length++
+		}
+		return length
+	}
+
+	/** Index of the next 00 00 01 from [from] (before [end]) */
+	private fun nextStartCode(data: ByteBuffer, from: Int, end: Int): Int? {
+		var index = from
+		while (index + 2 < end) {
+			if (data.get(index + 2) == ONE && data.get(index + 1) == ZERO && data.get(index) == ZERO) return index
+			index++
+		}
+		return null
+	}
+
+	private companion object {
+		const val NAL_UNIT_TYPE_PREFIX_SEI = 39
+		/** NAL unit types below this one are slices */
+		const val FIRST_NON_VCL_TYPE = 32
+		const val PAYLOAD_TYPE_T35 = 4
+		const val PAYLOAD_TYPE_UNREGISTERED: Byte = 5
+		/** A user data unregistered message has a 16 byte UUID */
+		const val MIN_UNREGISTERED_SIZE = 16
+		/** How far into a frame the SEI messages are looked for (they come before the slices) */
+		const val MAX_SCAN = 64 * 1024
+		const val INITIAL_SIZE = 1024
+		val SIGNATURE = byteArrayOf(0xB5.toByte(), 0x00, 0x3C, 0x00, 0x01, 0x04)
+		const val FF: Byte = -1
+		const val ZERO: Byte = 0
+		const val ONE: Byte = 1
+		const val THREE: Byte = 3
 	}
 }
 

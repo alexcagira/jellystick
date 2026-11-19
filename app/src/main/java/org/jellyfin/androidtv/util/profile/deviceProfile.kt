@@ -507,7 +507,8 @@ fun createDeviceProfile(
 		}
 
 		if (KnownDefects.hevcDoviHdr10PlusBug) {
-			add(VideoRangeType.DOVI_WITH_HDR10_PLUS)
+			// Jellystick: profile 8 + HDR10+ plays as Dolby Vision on the device (KnownDefects)
+			if (!KnownDefects.hevcDoviHdr10PlusHandledByPlayer) add(VideoRangeType.DOVI_WITH_HDR10_PLUS)
 			add(VideoRangeType.DOVI_WITH_ELHDR10_PLUS)
 		}
 	} - forceEnabledHdr + forceDisabledHdr

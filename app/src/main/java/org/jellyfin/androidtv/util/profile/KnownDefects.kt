@@ -21,5 +21,13 @@ private val modelsWithUnreportedDoviProfile7Support = listOf(
 
 object KnownDefects {
 	val hevcDoviHdr10PlusBug = Build.MODEL in modelsWithDoViHdr10PlusBug
+
+	/**
+	 * Jellystick plays Dolby Vision profile 8 + HDR10+ on those devices as Dolby Vision: the player
+	 * hides the HDR10+ metadata of each frame from the Dolby Vision decoder (what gave the black
+	 * screen, see `Hdr10PlusSei`), like Plex. The server doesn't have to remove Dolby Vision (remux,
+	 * HDR10+ on the TV) any more. Profile 7 (enhancement layer) still goes through the server.
+	 */
+	val hevcDoviHdr10PlusHandledByPlayer = hevcDoviHdr10PlusBug
 	val unreportedDoviProfile7Support = Build.MODEL in modelsWithUnreportedDoviProfile7Support
 }

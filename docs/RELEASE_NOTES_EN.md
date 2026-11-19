@@ -5,7 +5,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 
 ### Home
 - Streaming-style home screen: floating glass navigation bar, media bar with title logos and a blurred background of the current slide.
-- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity; it changes instantly when you leave a video, without waiting for the server, also on the movie and TV show pages), **Watchlist**, **Trending this week** with rank numbers (most watched on your server, TMDB optional), **Latest Episodes** (by air date, not by date added), **Latest Films**, **Recently added** and **Favourites**.
+- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity; it changes instantly when you leave a video, without waiting for the server, also on the movie and TV show pages), **Watchlist**, **Trending this week** ranked 1 to 10 (most watched on your server, TMDB optional; hidden libraries and copies of the same title don't count), **Latest Episodes** (by air date, not by date added), **Latest Films**, **Recently added** and **Favourites**.
 - Poster badges: resolution (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** and **flags for the audio languages** (Latin American Spanish with the Mexican flag, Brazilian Portuguese…).
 - Red *New episode / New season / New series* labels only for what **aired** in the last 14 days (an old season you just added gets no label).
 - No duplicates when a title is in several libraries (e.g. one per language).
@@ -40,6 +40,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - Fixed: some episodes of long series (South Park) **did nothing** when played from *Continue Watching* or the details page; when the server's episode list leaves them out, the app reads them from the series folder.
 - **Skip intro / credits / recap** with Jellyfin media segments or Intro Skipper.
 - When a file fails in direct play, the app automatically retries with **Dolby Vision as HDR10, converted audio or transcoding** from the same position, and remembers it for the whole series.
+- **Dolby Vision + HDR10+ played directly, as Dolby Vision** on the Fire TV 4K / 4K Max (e.g. *The Rings of Power*), like Plex: the server used to remove Dolby Vision (remux) and the TV showed HDR. The app hides the HDR10+ metadata from the Dolby Vision decoder, which is what made the screen black. Atmos audio goes through as passthrough.
 - Fire TV options: **play Dolby Vision as HDR10** (no blocks of earlier frames: the Dolby Vision metadata is removed before decoding), and *audio offload* can be turned off (avoids frozen video with Atmos).
 
 ### Music

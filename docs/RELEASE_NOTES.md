@@ -5,7 +5,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 
 ### Inicio
 - Pantalla de inicio estilo plataforma de streaming: barra de navegación flotante con efecto cristal, media bar con logos y fondo difuminado de la diapositiva actual.
-- Filas: **Continue Watching** (a medias y siguientes episodios, por actividad reciente; cambia al instante al salir de un vídeo, sin esperar al servidor, también en las páginas de películas y series), **Watchlist**, **Trending this week** con números (lo más visto en tu servidor, TMDB opcional), **Latest Episodes** (por fecha de emisión, no de añadido), **Latest Films**, **Recently added** y **Favourites**.
+- Filas: **Continue Watching** (a medias y siguientes episodios, por actividad reciente; cambia al instante al salir de un vídeo, sin esperar al servidor, también en las páginas de películas y series), **Watchlist**, **Trending this week** con números del 1 al 10 (lo más visto en tu servidor, TMDB opcional; sin contar bibliotecas ocultas ni copias del mismo título), **Latest Episodes** (por fecha de emisión, no de añadido), **Latest Films**, **Recently added** y **Favourites**.
 - Etiquetas en los pósters: resolución (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** y **banderas de los idiomas de audio** (español latino con bandera de México, portugués de Brasil…).
 - Etiquetas rojas *New episode / New season / New series* solo para lo **emitido** en los últimos 14 días (una temporada antigua recién añadida no lleva etiqueta).
 - Sin duplicados cuando un título está en varias bibliotecas (p. ej. una por idioma).
@@ -40,6 +40,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - Arreglado: algunos episodios de series largas (South Park) **no hacían nada** al darles a reproducir desde *Continue Watching* o la ficha; si la lista de episodios del servidor no los incluye, la app los lee de la carpeta de la serie.
 - **Saltar intro / créditos / resumen** con los segmentos de Jellyfin o Intro Skipper.
 - Si un archivo no funciona en reproducción directa, la app reintenta sola con **Dolby Vision como HDR10, audio convertido o transcodificación**, desde el mismo punto, y lo recuerda para toda la serie.
+- **Dolby Vision + HDR10+ en directo y en Dolby Vision** en el Fire TV 4K / 4K Max (p. ej. *Los anillos de poder*), como Plex: antes el servidor quitaba Dolby Vision (remux) y la tele mostraba HDR. La app oculta los metadatos HDR10+ al decodificador Dolby Vision, que era lo que dejaba la pantalla en negro. El audio Atmos va en *passthrough*.
 - Opciones para Fire TV: **Dolby Vision como HDR10** (sin bloques de fotogramas anteriores: se quitan los metadatos Dolby Vision antes de decodificar) y *audio offload* desactivable (evita vídeo congelado con Atmos).
 
 ### Música

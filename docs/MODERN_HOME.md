@@ -11,7 +11,7 @@ calidad (Dolby Vision, Atmos, HDR, 4K…) y fecha de estreno.
 | Carrusel principal | Películas y series aleatorias con fondo (prioriza las que tienen logo) |
 | Continue Watching | Episodios/películas a medias y siguientes episodios mezclados, ordenados por lo último que viste (para el siguiente episodio cuenta la última vez que viste la serie). Al salir de un vídeo se pide de nuevo **en cuanto el servidor tiene la posición** (antes devolvía la anterior), solo esa fila y sin esperar a las demás; lo mismo en las páginas de películas y series |
 | Watchlist | Películas y series marcadas con el botón de watchlist (ver más abajo) |
-| Trending this week | Lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador). Los huecos se rellenan con las tendencias de TMDB (si hay clave) y con lo mejor valorado reciente |
+| Trending this week | Lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador). Los huecos se rellenan con las tendencias de TMDB (si hay clave) y con lo mejor valorado reciente y de siempre, hasta **10 títulos distintos**: los de bibliotecas ocultas y las copias del mismo título en otra biblioteca (una por idioma) no ocupan sitio |
 | Latest Episodes | Episodios por fecha de emisión, hasta hoy (una tarjeta por serie, con la fecha); no por fecha de añadido |
 | Latest Films | Películas por fecha de estreno, con la fecha |
 | Recently added movies / shows | Por fecha de añadido al servidor |
@@ -569,9 +569,24 @@ filas nuevas se cargan por detrás y el carrusel nuevo aparece en el siguiente a
 **Vídeo congelado con Dolby Atmos** (pantalla negra y el tiempo no avanza): el *audio offload* está desactivado por
 defecto (Ajustes → Personalización → Inicio → **Audio offload**).
 
-**Pantalla negra con Dolby Vision**: si un archivo Dolby Vision (por ejemplo WEB-DL "DV HDR10+") se queda en negro,
-activa Ajustes → Personalización → Inicio → **Reproducir Dolby Vision como HDR10**. Los archivos Dolby Vision
-perfil 8 llevan una capa HDR10, que se reproduce con el decodificador HEVC normal.
+**Dolby Vision + HDR10+ en el Fire TV (WEB-DL "DV HDR10+", p. ej. *Los anillos de poder*)**: el Fire TV 4K / 4K Max
+se queda en negro si el decodificador Dolby Vision recibe también los metadatos HDR10+. Jellyfin para Android TV lo
+evita diciéndole al servidor que ese tipo no se soporta (`KnownDefects.hevcDoviHdr10PlusBug`): el servidor quita
+Dolby Vision al vuelo (*Re-muxing* en el panel) y la tele recibe HDR10+. Jellystick hace lo que Plex: el archivo se
+reproduce **en directo** y, solo cuando lo decodifica el decodificador Dolby Vision, cada mensaje HDR10+ del fotograma
+(SEI T.35 de tipo 4 con la firma B5 003C 0001 04) se convierte en uno de tipo 5 que los decodificadores ignoran: un
+byte por fotograma, sin copiar nada (`Hdr10PlusSei` en `ui/playback/modern/SubtitleOffset.kt`). La tele recibe
+**Dolby Vision** y el audio E-AC3 Atmos va en *passthrough*. El perfil 7 (con capa de mejora) sigue pasando por el
+servidor. Si aun así se queda en negro, el vigilante del arranque pasa a *Dolby Vision como HDR10* (que conserva
+HDR10+) y lo recuerda para la serie.
+
+Al instalar la 1.3.2 se olvida una vez lo recordado para cada serie (modo de reproducción y Dolby Vision como HDR10):
+lo que siga fallando vuelve a aprenderse solo en el primer intento.
+
+**Pantalla negra con Dolby Vision (otros casos)**: si un archivo Dolby Vision se queda en negro, activa Ajustes →
+Personalización → Inicio → **Reproducir Dolby Vision como HDR10** (o el interruptor del *Modo de reproducción* solo
+para esa serie). Los archivos Dolby Vision perfil 8 llevan una capa HDR10, que se reproduce con el decodificador HEVC
+normal. Con ese ajuste activado **todo** el Dolby Vision sale como HDR10.
 
 **Cuadros de fotogramas anteriores con Dolby Vision como HDR10**: cada fotograma Dolby Vision lleva al final sus
 metadatos (la RPU, NAL de tipo 62, y en el perfil 7 la capa de mejora, tipo 63). El decodificador HEVC debería

@@ -66,6 +66,7 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 - **Stream info** with ☰: a glass panel with how the file plays (direct, remux or transcoding and why), the video, audio and subtitles, the decoders of the Fire TV and the buffer.
 - **Skip intro / credits / recap** with Jellyfin media segments or Intro Skipper.
 - **Subtitles your way**: Netflix-like, classic, bold, box or yellow styles, outline or shadow, font, size and colours, with a preview.
+- **Dolby Vision + HDR10+ files play directly as Dolby Vision** on the Fire TV 4K / 4K Max (with Atmos passthrough), like Plex, instead of being remuxed by the server to HDR.
 - When a file can't play directly, it retries by itself with **Dolby Vision as HDR10**, converted audio or transcoding, and remembers it for the whole series.
 
 ### Music
