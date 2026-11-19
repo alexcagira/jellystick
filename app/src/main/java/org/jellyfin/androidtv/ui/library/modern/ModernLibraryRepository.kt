@@ -203,6 +203,7 @@ class ModernLibraryRepository(
 			fun <T> row(block: suspend () -> T) = async { permits.withPermit { BackgroundTraffic.awaitTurn(); block() } }
 
 			val nextUpAsync = row { if (movies) emptyList() else safe("next up") { nextUp(libraryId) }.orEmpty() }
+			val trendingAsync = row { safe("trending") { trending(libraryId, kind) } }
 			val genresAsync = row { safe("genres") { genres(libraryId, kind) }.orEmpty() }
 			val watchedAsync = row { safe("because watched") { becauseWatched(libraryId, kind) } }
 			val imdbAsync = row { if (movies) safe("imdb") { imdb() } else null }
@@ -226,6 +227,7 @@ class ModernLibraryRepository(
 			val genrePicks = genrePicksAsync.await()
 			val sections = listOfNotNull(
 				continueSection(resume, nextUpAsync.await()),
+				trendingAsync.await(),
 				latest,
 				recent,
 				watchedAsync.await(),
@@ -295,6 +297,17 @@ class ModernLibraryRepository(
 	}
 
 	/** Newest releases of the library (not the last ones added): 16:9 with quality and audio flags */
+	/** "Trending this week" of this library (TMDB, then IMDb: ModernHomeRepository.trendingTitles), 1 to 10 */
+	private suspend fun trending(libraryId: UUID, kind: LibraryKind): LibrarySection? {
+		val ids = homeRepository.trendingTitles(parentId = libraryId, types = setOf(kind.itemType))
+		if (ids.isEmpty()) return null
+		val byId = query(libraryId, kind, limit = ids.size) { copy(ids = ids) }.associateBy { it.id }
+		val items = ids.mapNotNull { byId[it] }
+		if (items.isEmpty()) return null
+		val cards = homeRepository.posterCards(items, lookupSeriesMedia = false, withNewContentLabels = true)
+		return section("trending", context.getString(R.string.modern_home_trending), CardStyle.RANKED, cards, items = items)
+	}
+
 	private suspend fun latestFilms(libraryId: UUID): LibrarySection? {
 		val items = api.itemsApi.getItems(
 			GetItemsRequest(
@@ -780,7 +793,7 @@ class ModernLibraryRepository(
 
 		homeRepository.prefetchSeriesMedia(seriesIds)
 		sections.map { section ->
-			if (section.style != CardStyle.POSTER || section.items.none { it.type == BaseItemKind.SERIES }) section
+			if (section.style == CardStyle.LANDSCAPE || section.items.none { it.type == BaseItemKind.SERIES }) section
 			else {
 				val cards = homeRepository.posterCards(section.items, lookupSeriesMedia = false, withNewContentLabels = true)
 				if (cards.isEmpty()) section else section.copy(cards = cards.distinctBy { it.key })

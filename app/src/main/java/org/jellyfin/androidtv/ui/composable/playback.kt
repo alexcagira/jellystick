@@ -52,20 +52,54 @@ fun rememberPlayerPositionInfo(
 	return positionInfo
 }
 
+/**
+ * Progress of the song or video playing (0 to 1), smooth. The real position is read again every
+ * second (and when the song or the play state changes) and the bar moves to where it will be a
+ * second later. It used to read it once and animate to the end of the song: after buffering, a
+ * seek or a next song of the same length the bar reached the end before the song did, and nothing
+ * set it right while the screensaver showed (leaving it did, a new bar read the position).
+ */
 @Composable
 fun rememberPlayerProgress(
 	playbackManager: PlaybackManager = koinInject(),
 ): State<Float> {
 	val playState by playbackManager.state.playState.collectAsState()
-	val active = playbackManager.state.positionInfo.active
-	val duration = playbackManager.state.positionInfo.duration
+	val entry by rememberQueueEntry(playbackManager)
+	val playing = playState == PlayState.PLAYING
+	val animatable = remember { Animatable(0f, 0f) }
 
-	return rememberPlayerProgress(
-		playing = playState == PlayState.PLAYING,
-		active = active,
-		duration = duration,
-	)
+	LaunchedEffect(playing, entry) {
+		while (true) {
+			val info = playbackManager.state.positionInfo
+			val durationMs = info.duration.inWholeMilliseconds
+			val activeMs = info.active.inWholeMilliseconds.coerceAtLeast(0)
+			animatable.snapTo(if (durationMs > 0) (activeMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f)
+
+			// Paused or stopped: where it is
+			if (!playing) break
+			// Still loading the song: its length comes in a moment
+			if (durationMs <= 0) {
+				delay(PROGRESS_SYNC_MS)
+				continue
+			}
+
+			val stepMs = PROGRESS_SYNC_MS.coerceAtMost(durationMs - activeMs).coerceAtLeast(MIN_STEP_MS)
+			val target = ((activeMs + stepMs).toFloat() / durationMs).coerceIn(0f, 1f)
+			withContext(FixedMotionDurationScale) {
+				animatable.animateTo(
+					targetValue = target,
+					animationSpec = tween(durationMillis = stepMs.toInt(), easing = LinearEasing),
+				)
+			}
+		}
+	}
+
+	return animatable.asState()
 }
+
+/** How often the progress bars read the real position */
+private const val PROGRESS_SYNC_MS = 1_000L
+private const val MIN_STEP_MS = 50L
 
 @Composable
 fun rememberPlayerProgress(

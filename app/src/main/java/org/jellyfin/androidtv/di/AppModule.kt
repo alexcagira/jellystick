@@ -12,6 +12,7 @@ import coil3.serviceLoaderEnabled
 import coil3.svg.SvgDecoder
 import coil3.util.Logger
 import org.jellyfin.androidtv.BuildConfig
+import org.jellyfin.androidtv.preference.UserPreferences
 import org.jellyfin.androidtv.auth.repository.ServerRepository
 import org.jellyfin.androidtv.auth.repository.UserRepository
 import org.jellyfin.androidtv.auth.repository.UserRepositoryImpl
@@ -198,7 +199,11 @@ val appModule = module {
 	single { LibraryVisibilityRepository(get(), get(), get(), androidContext()) }
 
 	// Modern home screen
-	single { TmdbTrendingClient(BuildConfig.TMDB_API_KEY) }
+	// The key of the settings, otherwise the one of the build (local.properties)
+	single {
+		val userPreferences = get<UserPreferences>()
+		TmdbTrendingClient { userPreferences[UserPreferences.tmdbApiKey].trim().ifEmpty { BuildConfig.TMDB_API_KEY } }
+	}
 	single { ModernHomeRepository(get(), get(), get()) }
 	single { ItemActions(get(), get()) }
 	single { CollectionCatalog(androidContext(), get()) }

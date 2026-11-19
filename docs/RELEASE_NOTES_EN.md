@@ -5,7 +5,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 
 ### Home
 - Streaming-style home screen: floating glass navigation bar, media bar with title logos and a blurred background of the current slide.
-- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity; it changes instantly when you leave a video, without waiting for the server, also on the movie and TV show pages), **Watchlist**, **Trending this week** ranked 1 to 10 (most watched on your server, TMDB optional; hidden libraries and copies of the same title don't count), **Latest Episodes** (by air date, not by date added), **Latest Films**, **Recently added** and **Favourites**.
+- Rows: **Continue Watching** (in progress and next episodes, sorted by recent activity; it changes instantly when you leave a video, without waiting for the server, also on the movie and TV show pages), **Watchlist**, **Trending this week** ranked 1 to 10: what is **trending on TMDB this week** (with your free TMDB key, in Settings → Customization → Home) and then **on IMDb** (votes gained beyond the usual, from IMDb's official data file), with the most watched on your server for the empty spots; hidden libraries and copies of the same title don't count, **Latest Episodes** (by air date, not by date added), **Latest Films**, **Recently added** and **Favourites**.
 - Poster badges: resolution (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** and **flags for the audio languages** (Latin American Spanish with the Mexican flag, Brazilian Portuguese…).
 - Red *New episode / New season / New series* labels only for what **aired** in the last 14 days (an old season you just added gets no label).
 - No duplicates when a title is in several libraries (e.g. one per language).
@@ -16,7 +16,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 
 ### Movie and TV show libraries
 - Each library gets its own page, like the home screen: media bar, pills with the other libraries of the same kind, **Collections** and **Browse**.
-- Rows: the library's Continue Watching, Latest Films / Latest Episodes (by air date; 16:9 with quality and flags), Recently added, *Because you watched… / liked… / have … in your Watchlist*, IMDb Top 250, collections, studios and networks, genres with their own titles, tags and **seasonal rows** (Halloween, Christmas, Valentine's Day, summer). Long rows end with **See all**.
+- Rows: the library's Continue Watching, the library's **Trending this week** (TMDB and IMDb), Latest Films / Latest Episodes (by air date; 16:9 with quality and flags), Recently added, *Because you watched… / liked… / have … in your Watchlist*, IMDb Top 250, collections, studios and networks, genres with their own titles, tags and **seasonal rows** (Halloween, Christmas, Valentine's Day, summer). Long rows end with **See all**.
 - Loads in steps and is cached on the device, so it shows up right away.
 - **Browse**: paged grid with an **A–Z** jump bar, filters (unwatched, watched, favourites), genres merged across languages (Action/Acción), Spanish age ratings, **audio language**, sorting, shuffle and tags.
 - An **IMDb Top 250** collection with your movies, synced every week.
@@ -46,7 +46,7 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 ### Music
 - New music page: media bar with recommendations (*Because you listen to…*), **stations** by artist and genre, configurable rows and quick links.
 - Album, playlist, artist and genre pages with a **heart on every song** and an automatic **Favourite Tracks** playlist.
-- Redesigned **Now Playing**: optional lyrics, ⏪/⏩ on the remote change songs, the next cover is already loaded, and a **screensaver** with lyrics and a **Next up** card (cover, song and album of the next one) in the last 10 seconds.
+- Redesigned **Now Playing**: optional lyrics, ⏪/⏩ on the remote change songs, the next cover is already loaded, and a **screensaver** with lyrics and a **Next up** card (cover, song and album of the next one) in the last 10 seconds. The progress bar follows the real position every second (it could reach the end before the song in the screensaver).
 - The **☰ button** on the remote stops the music from any screen (like *Stop*); in the video player it opens the stream info.
 - A *now playing* bubble in the navigation bar.
 - **Shared queue**: a QR code lets anyone on your Wi-Fi search your library and add songs or albums from their phone. When the queue ends, what played is kept: a new song starts from itself and the earlier ones stay in the queue to play again, until you press ☰.

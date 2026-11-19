@@ -116,6 +116,20 @@ fun SettingsHomeScreen() {
 		}
 
 		item {
+			// Read again each time the screen shows (it changes on the key screen)
+			val tmdbKey = userPreferences[UserPreferences.tmdbApiKey]
+
+			ListButton(
+				headingContent = { Text(stringResource(R.string.tmdb_key)) },
+				captionContent = {
+					Text(stringResource(if (tmdbKey.isNotBlank()) R.string.tmdb_key_summary_set else R.string.tmdb_key_summary_none))
+				},
+				onClick = { router.push(Routes.HOME_TMDB_KEY) },
+				modifier = Modifier.focusKey(Routes.HOME_TMDB_KEY)
+			)
+		}
+
+		item {
 			var modernMusicEnabled by rememberPreference(userPreferences, UserPreferences.modernMusicEnabled)
 
 			ListButton(

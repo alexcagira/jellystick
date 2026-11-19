@@ -273,6 +273,12 @@ class UserPreferences(context: Context) : SharedPreferenceStore(
 		var audioOffloadEnabled = booleanPreference("pref_audio_offload_enabled", false)
 
 		/**
+		 * TMDB key for "Trending this week" (Settings → Customization → Home), empty: the one of the
+		 * build, if any, otherwise the IMDb trend
+		 */
+		var tmdbApiKey = stringPreference("pref_tmdb_api_key", "")
+
+		/**
 		 * Subtitles foreground color
 		 */
 		var subtitlesBackgroundColor = longPreference("subtitles_background_color", 0x00FFFFFF)

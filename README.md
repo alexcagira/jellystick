@@ -42,7 +42,7 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 ### Home
 - Streaming-style home screen: floating glass navigation bar and a media bar with title logos over a blurred background.
 - Rows: **Continue Watching** (in progress and next episodes, updated the moment you leave the player), **Watchlist**,
-  **Trending this week** with rank numbers, **Latest Episodes**, **Latest Films**, **Recently added** and **Favourites**.
+  **Trending this week** with rank numbers (what is trending this week on **TMDB**, with your free key, and on **IMDb**), **Latest Episodes**, **Latest Films**, **Recently added** and **Favourites**.
 - Poster badges: resolution (4K, 1080p…), **Dolby Vision**, **HDR10+ / HDR / HLG**, **Atmos / TrueHD / Digital** and
   **flags of the audio languages** (Latin American Spanish, Brazilian Portuguese… told apart).
 - **Latest Episodes** and the *New episode / New season / New series* labels go by **air date**, not by the date the file was added; no duplicates when a title is in several libraries, configurable row order.
@@ -51,7 +51,7 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 
 ### Movie and TV show libraries
 - Each library gets its own page: media bar, pills with the other libraries of the same kind, **Collections** and **Browse**.
-- Rows such as *Because you watched…*, IMDb Top 250, genres, studios and networks, tags and seasonal rows (Halloween, Christmas…).
+- Rows such as **Trending this week** (TMDB and IMDb, for that library), *Because you watched…*, IMDb Top 250, genres, studios and networks, tags and seasonal rows (Halloween, Christmas…).
 - **Browse**: paged grid with an **A–Z** jump bar and filters: watched state, genres, age rating, **audio language**, sorting and shuffle.
 - Collections made and kept up to date by the app: **IMDb Top 250**, by **audio language** and series by **streaming service** (Netflix, HBO Max, Prime Video, Disney+…).
 
@@ -155,5 +155,6 @@ Jellystick is based on [Jellyfin for Android TV](https://github.com/jellyfin/jel
 
 The rhombus logo is Jellystick's own; the name is drawn with Montserrat Bold (SIL Open Font License).
 Ratings: information courtesy of IMDb (https://www.imdb.com), from its datasets for personal and non-commercial use;
-Letterboxd averages are read from letterboxd.com. Jellystick is not affiliated with IMDb or Letterboxd.
+Letterboxd averages are read from letterboxd.com. Trending lists: this product uses the TMDB API but is not endorsed or certified
+by TMDB. Jellystick is not affiliated with IMDb, Letterboxd or TMDB.
 Jellyfin is a trademark of its owners; Jellystick is not endorsed by them. Fire TV is a trademark of Amazon.

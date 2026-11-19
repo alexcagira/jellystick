@@ -46,16 +46,16 @@ class ModernHomeRepository(
 	private val tmdb: TmdbTrendingClient,
 	private val libraryVisibilityRepository: LibraryVisibilityRepository,
 ) {
-	private data class TmdbIndexCache(val server: String?, val time: Long, val index: Map<String, UUID>)
-	private data class TrendingCache(val time: Long, val refs: List<TmdbTrendingClient.TmdbRef>)
+	private data class TrendingCache(val key: String, val time: Long, val refs: List<TmdbTrendingClient.TmdbRef>)
 
-	@Volatile
-	private var tmdbIndexCache: TmdbIndexCache? = null
-
-	@Volatile
-	private var trendingCache: TrendingCache? = null
+	/** TMDB's trending lists, by kind (all, movies, TV shows) */
+	private val trendingCache = HashMap<String, TrendingCache>()
 
 	private data class MostWatchedCache(val server: String?, val time: Long, val ids: List<UUID>)
+
+	/** Movies and series with their TMDB and IMDb ids (of a library, or of all), for the trends */
+	private data class LibraryTitlesCache(val server: String?, val time: Long, val titles: List<BaseItemDto>)
+	private val libraryTitlesCache = HashMap<String, LibraryTitlesCache>()
 
 	@Volatile
 	private var mostWatchedCache: MostWatchedCache? = null
@@ -504,17 +504,18 @@ class ModernHomeRepository(
 	}
 
 	/**
-	 * "Trending this week": what was watched the most on this server in the last 7 days (all users
-	 * when the current user is an administrator). Empty spots are filled with the TMDB weekly trends
-	 * (when a key is configured) and then with the best rated recent titles, then of all time.
+	 * "Trending this week": the titles of the libraries trending this week ([trendingTitles]: TMDB,
+	 * then IMDb). Empty spots are filled with what was watched the most on this server in the last 7
+	 * days (all users when the current user is an administrator) and then with the best rated recent
+	 * titles, then of all time.
 	 *
 	 * The ten places are counted once the titles of hidden libraries and the copies of a title in
 	 * other libraries (one per language) are left out: counted before, they left 6 or 7.
 	 */
 	private suspend fun trending(hidden: Set<UUID>): List<BaseItemDto> {
 		val sources: List<Pair<String, suspend () -> List<UUID>>> = listOf(
+			"trending" to { trendingTitles(parentId = null, types = TRENDING_TYPES, hidden = hidden) },
 			"most watched" to { cachedMostWatched() },
-			"tmdb trending" to { if (tmdb.isConfigured) tmdbTrendingIds() else emptyList() },
 			"top rated" to { topRated(minPremiereDate = LocalDateTime.now().minusYears(2)).map { it.id } },
 			"top rated of all time" to { topRated(minPremiereDate = null).map { it.id } },
 		)
@@ -535,6 +536,95 @@ class ModernHomeRepository(
 		}
 
 		return itemsByIds(picked.values.toList(), CARD_FIELDS)
+	}
+
+	/**
+	 * Titles of a library ([parentId], null for all of them) trending this week, best first, one per
+	 * movie or series (the copies in other libraries are left out):
+	 * 1. TMDB's weekly trending list of that kind (all, movies or TV shows), when there is a TMDB key.
+	 * 2. The IMDb trend ([ImdbTrending]: new IMDb votes beyond the usual).
+	 * 3. Until the device has two days of IMDb votes, and for the places left, the most voted on IMDb
+	 *    of the titles released in the last year.
+	 */
+	suspend fun trendingTitles(
+		parentId: UUID?,
+		types: Set<BaseItemKind>,
+		hidden: Set<UUID> = emptySet(),
+		limit: Int = RANKED_LIMIT,
+	): List<UUID> = withContext(Dispatchers.IO) {
+		val titles = libraryTitles(parentId, types).withoutHidden(hidden)
+		val ranked = ArrayList<BaseItemDto>()
+
+		if (tmdb.isConfigured) {
+			val mediaType = when (types) {
+				setOf(BaseItemKind.MOVIE) -> TmdbTrendingClient.MEDIA_TYPE_MOVIE
+				setOf(BaseItemKind.SERIES) -> TmdbTrendingClient.MEDIA_TYPE_TV
+				else -> TmdbTrendingClient.MEDIA_TYPE_ALL
+			}
+			val refs = safe("tmdb trending") { cachedTrendingRefs(mediaType) }.orEmpty()
+			val byTmdb = titles.groupBy { tmdbKey(it) }
+			for (ref in refs) byTmdb[ref.key]?.firstOrNull()?.let(ranked::add)
+		}
+
+		val trend = ImdbTrending.trend()
+		if (trend != null) {
+			val withNumber = titles.mapNotNull { item -> ImdbRatings.imdbNumber(item)?.let { item to it } }
+			if (trend.hasScores) ranked += withNumber
+				.mapNotNull { (item, number) -> trend.score(number)?.takeIf { it >= MIN_TREND_SCORE }?.let { item to it } }
+				.sortedByDescending { it.second }
+				.map { it.first }
+
+			val since = LocalDateTime.now().minusDays(RECENT_POPULAR_DAYS)
+			ranked += withNumber
+				.filter { (item, _) -> item.premiereDate?.isAfter(since) == true }
+				.mapNotNull { (item, number) -> trend.votes(number)?.let { item to it } }
+				.sortedByDescending { it.second }
+				.map { it.first }
+		}
+
+		ranked
+			.distinctBy { MediaBadges.duplicateKey(it) }
+			.take(limit)
+			.map { it.id }
+	}
+
+	/** "movie:603" / "tv:1399", like TMDB's lists, null without a TMDB id */
+	private fun tmdbKey(item: BaseItemDto): String? {
+		val id = item.providerIds?.entries
+			?.firstOrNull { (key, _) -> key.equals("Tmdb", ignoreCase = true) }
+			?.value?.trim()?.takeIf { it.isNotEmpty() }
+			?: return null
+		return when (item.type) {
+			BaseItemKind.MOVIE -> "${TmdbTrendingClient.MEDIA_TYPE_MOVIE}:$id"
+			BaseItemKind.SERIES -> "${TmdbTrendingClient.MEDIA_TYPE_TV}:$id"
+			else -> null
+		}
+	}
+
+	/** Movies and series of [parentId] (null: all) with their provider ids, nothing else, kept a while */
+	private suspend fun libraryTitles(parentId: UUID?, types: Set<BaseItemKind>): List<BaseItemDto> {
+		val key = "$parentId|${types.joinToString(",")}"
+		val now = System.currentTimeMillis()
+		synchronized(libraryTitlesCache) {
+			libraryTitlesCache[key]
+				?.takeIf { it.server == api.baseUrl && now - it.time < LIBRARY_TITLES_TTL_MS }
+				?.let { return it.titles }
+		}
+
+		val titles = api.itemsApi.getItems(
+			GetItemsRequest(
+				parentId = parentId,
+				includeItemTypes = types,
+				recursive = true,
+				fields = setOf(ItemFields.PROVIDER_IDS),
+				enableImages = false,
+				enableUserData = false,
+				enableTotalRecordCount = false,
+			)
+		).content.items
+
+		synchronized(libraryTitlesCache) { libraryTitlesCache[key] = LibraryTitlesCache(api.baseUrl, now, titles) }
+		return titles
 	}
 
 	private class WatchScore {
@@ -619,14 +709,6 @@ class ModernHomeRepository(
 		return result
 	}
 
-	private suspend fun tmdbTrendingIds(): List<UUID> {
-		val refs = cachedTrendingRefs()
-		if (refs.isEmpty()) return emptyList()
-
-		val index = cachedTmdbIndex()
-		return refs.mapNotNull { ref -> index[ref.key] }.distinct()
-	}
-
 	private suspend fun topRated(minPremiereDate: LocalDateTime?): List<BaseItemDto> = api.itemsApi.getItems(
 		GetItemsRequest(
 			includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
@@ -642,47 +724,19 @@ class ModernHomeRepository(
 		)
 	).content.items
 
-	private suspend fun cachedTrendingRefs(): List<TmdbTrendingClient.TmdbRef> {
+	/** TMDB's trending list of [mediaType], kept a few hours */
+	private suspend fun cachedTrendingRefs(mediaType: String): List<TmdbTrendingClient.TmdbRef> {
 		val now = System.currentTimeMillis()
-		trendingCache?.let { cache -> if (now - cache.time < TRENDING_TTL_MS) return cache.refs }
+		// A new key in the settings: a new list
+		val key = "$mediaType|${tmdb.keyHash}"
+		synchronized(trendingCache) {
+			trendingCache[mediaType]?.takeIf { it.key == key && now - it.time < TRENDING_TTL_MS }?.let { return it.refs }
+		}
 
-		val refs = tmdb.trending()
-		if (refs.isNotEmpty()) trendingCache = TrendingCache(now, refs)
+		val pages = if (mediaType == TmdbTrendingClient.MEDIA_TYPE_ALL) TMDB_PAGES_ALL else TMDB_PAGES_ONE_KIND
+		val refs = tmdb.trending(mediaType, pages)
+		if (refs.isNotEmpty()) synchronized(trendingCache) { trendingCache[mediaType] = TrendingCache(key, now, refs) }
 		return refs
-	}
-
-	private suspend fun cachedTmdbIndex(): Map<String, UUID> {
-		val now = System.currentTimeMillis()
-		tmdbIndexCache?.let { cache ->
-			if (cache.server == api.baseUrl && now - cache.time < TMDB_INDEX_TTL_MS) return cache.index
-		}
-
-		val items = api.itemsApi.getItems(
-			GetItemsRequest(
-				includeItemTypes = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
-				recursive = true,
-				hasTmdbId = true,
-				fields = setOf(ItemFields.PROVIDER_IDS),
-				enableImages = false,
-				enableUserData = false,
-				enableTotalRecordCount = false,
-			)
-		).content.items
-
-		val index = HashMap<String, UUID>()
-		for (item in items) {
-			val tmdbId = item.providerIds?.entries
-				?.firstOrNull { (key, _) -> key.equals("Tmdb", ignoreCase = true) }
-				?.value
-				?.trim()
-			if (tmdbId.isNullOrEmpty()) continue
-
-			val mediaType = if (item.type == BaseItemKind.MOVIE) TmdbTrendingClient.MEDIA_TYPE_MOVIE else TmdbTrendingClient.MEDIA_TYPE_TV
-			index["$mediaType:$tmdbId"] = item.id
-		}
-
-		tmdbIndexCache = TmdbIndexCache(api.baseUrl, now, index)
-		return index
 	}
 
 	/** Latest aired episodes, one card per series with the date of its most recent episode */
@@ -968,6 +1022,12 @@ class ModernHomeRepository(
 		const val RANKED_LIMIT = 10
 		/** Best rated titles asked to fill "Trending this week" */
 		const val TOP_RATED_CANDIDATES = 40
+		val TRENDING_TYPES = setOf(BaseItemKind.MOVIE, BaseItemKind.SERIES)
+		/** Votes beyond the usual for a title to be trending (fewer is noise) */
+		const val MIN_TREND_SCORE = 100
+		/** Without a trend yet: the most voted titles released in this many days */
+		const val RECENT_POPULAR_DAYS = 365L
+		const val LIBRARY_TITLES_TTL_MS = 30 * 60 * 1000L
 		const val TRENDING_DAYS = 7L
 		const val RECENTLY_PLAYED_LIMIT = 200
 		const val NEXT_UP_LIMIT = 150
@@ -990,7 +1050,9 @@ class ModernHomeRepository(
 		const val LOGO_IMAGE_HEIGHT = 200
 
 		const val TRENDING_TTL_MS = 6 * 60 * 60 * 1000L
-		const val TMDB_INDEX_TTL_MS = 30 * 60 * 1000L
+		/** TMDB trending pages asked (20 titles each): all kinds for Home, more of one kind for a library */
+		const val TMDB_PAGES_ALL = 3
+		const val TMDB_PAGES_ONE_KIND = 5
 		const val MOST_WATCHED_TTL_MS = 5 * 60 * 1000L
 
 		val CARD_FIELDS = setOf(

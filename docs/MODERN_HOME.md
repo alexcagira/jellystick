@@ -11,7 +11,7 @@ calidad (Dolby Vision, Atmos, HDR, 4K…) y fecha de estreno.
 | Carrusel principal | Películas y series aleatorias con fondo (prioriza las que tienen logo) |
 | Continue Watching | Episodios/películas a medias y siguientes episodios mezclados, ordenados por lo último que viste (para el siguiente episodio cuenta la última vez que viste la serie). Al salir de un vídeo se pide de nuevo **en cuanto el servidor tiene la posición** (antes devolvía la anterior), solo esa fila y sin esperar a las demás; lo mismo en las páginas de películas y series |
 | Watchlist | Películas y series marcadas con el botón de watchlist (ver más abajo) |
-| Trending this week | Lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador). Los huecos se rellenan con las tendencias de TMDB (si hay clave) y con lo mejor valorado reciente y de siempre, hasta **10 títulos distintos**: los de bibliotecas ocultas y las copias del mismo título en otra biblioteca (una por idioma) no ocupan sitio |
+| Trending this week | Tus títulos que son **tendencia esta semana en TMDB** (con clave de TMDB) y después los que más **tendencia tienen en IMDb** (ver *Tendencias de la semana* más abajo). Los huecos se rellenan con lo más visto en tu servidor en los últimos 7 días (todos los usuarios si eres administrador) y lo mejor valorado reciente y de siempre, hasta **10 títulos distintos**: los de bibliotecas ocultas y las copias del mismo título en otra biblioteca (una por idioma) no ocupan sitio |
 | Latest Episodes | Episodios por fecha de emisión, hasta hoy (una tarjeta por serie, con la fecha); no por fecha de añadido |
 | Latest Films | Películas por fecha de estreno, con la fecha |
 | Recently added movies / shows | Por fecha de añadido al servidor |
@@ -70,6 +70,7 @@ el inicio:
   biblioteca de series solo muestran colecciones con series, y las de películas dejan fuera las que solo tienen
   series (ver *Colecciones de series* más abajo).
 - **Seguir viendo** solo de esa biblioteca: películas a medias, o episodios a medias y siguientes episodios.
+- **Trending this week** de esa biblioteca, del 1 al 10: la lista de películas o de series en tendencia de TMDB y después la tendencia de IMDb (como en el inicio, pero solo con sus títulos).
 - **Últimas películas** (estrenos más recientes de la biblioteca) o **Últimos episodios** en series (por fecha de
   emisión, hasta hoy, uno por serie), como tarjetas
   16:9 con la calidad (4K, HDR, Dolby Vision...) arriba a la izquierda y las banderas de idioma arriba a la derecha.
@@ -388,7 +389,7 @@ está en `ui/collections/` (`ServiceCollectionsRepository.kt`, `StreamingService
 - Las **estrellas** (pósters, media bar, fichas, episodios y pantalla de pausa) son la nota de **IMDb**. Salen del
   conjunto de datos oficial de IMDb `title.ratings.tsv.gz` (https://developer.imdb.com/non-commercial-datasets/,
   uso personal y no comercial, sin clave), que la app descarga 1 minuto después de abrirse la primera vez
-  (unos 8 MB) y después una vez por semana. Se guarda en el dispositivo (`imdb_ratings.bin`, unos 8 MB) y se busca
+  (unos 8 MB) y después una vez al día. Se guarda en el dispositivo (`imdb_ratings.bin`, unos 8 MB) y se busca
   por el id de IMDb de cada título (`ProviderIds.Imdb`). Los títulos sin id de IMDb, o hasta que termina la primera
   descarga, siguen con la nota del servidor (la de TMDb con los proveedores por defecto). En la ficha, junto a la
   nota pone **IMDb** cuando es la de IMDb (`ImdbRatings.kt`).
@@ -414,6 +415,44 @@ pasaba nada** al darle a reproducir (South Park desde *Continue Watching* o desd
 
 En el servidor suele arreglarse con *Actualizar metadatos → Reemplazar todos los metadatos* de la serie (o un
 escaneo completo de la biblioteca), que vuelve a guardar la clave en cada episodio.
+
+## Tendencias de la semana (Trending this week)
+
+Orden de cada fila (`ModernHomeRepository.trendingTitles`), un título por película o serie:
+
+1. **TMDB** (con clave): la lista oficial de tendencias de la semana de TMDB (`/trending/{all|movie|tv}/week`,
+   60 títulos en el inicio, 100 de películas o de series en cada biblioteca), en su orden, con los títulos que
+   tienes (por su id de TMDB). Se pide cada 6 horas.
+2. **IMDb**: la tendencia calculada con los votos de IMDb (abajo).
+3. Los más votados en IMDb de los estrenados en el último año.
+
+En el inicio, si aún faltan, lo más visto en tu servidor y lo mejor valorado.
+
+**Clave de TMDB**: Ajustes → Personalización → Inicio → **Clave de TMDB (Trending this week)**. Es gratis: cuenta en
+themoviedb.org → Ajustes → API → *Clave de API* (v3) o *Token de acceso de lectura* (v4). Se escribe en la tele (con la
+app Fire TV del móvil se puede pegar), la app la comprueba con TMDB antes de guardarla y se puede borrar. Cada
+persona usa la suya: no va dentro del APK. Si compilas con `tmdb.api.key` en `local.properties`, esa se usa cuando
+no hay ninguna en los ajustes. *This product uses the TMDB API but is not endorsed or certified by TMDB.*
+
+### Tendencia de IMDb
+
+Las listas de popularidad de IMDb (MOVIEmeter, TVmeter) no se pueden leer desde una app: no hay API gratuita y
+IMDb no permite leer sus páginas de forma automática. El archivo diario de valoraciones sí (uso personal), y trae
+el **número de votos** de cada título. Con cada descarga diaria (`ImdbRatings`) la app guarda los votos de los
+títulos con al menos 1.000 (`files/imdb_votes/votes-<día>.bin`, ~1 MB por día, se quedan los últimos 10 días) y
+compara el día más nuevo con el de hace una semana (`ImdbTrending.kt`):
+
+    tendencia = votos ganados − votos de hace una semana × crecimiento habitual
+
+El crecimiento habitual es la mediana de los títulos con más de 10.000 votos: un clásico que gana sus votos de
+siempre queda en 0, y un estreno o una serie con temporada nueva sube mucho. Un título que hace una semana tenía
+menos de 1.000 votos cuenta desde 0. Hacen falta al menos 100 votos de más para contar.
+
+- Con un solo día de votos (los primeros días tras instalar), y para los huecos, van los títulos más votados en
+  IMDb de los estrenados en el último año.
+- Se ordenan los títulos de tus bibliotecas que tienen id de IMDb (los del inicio: películas y series de todas;
+  en cada biblioteca, solo las suyas), uno por título.
+- El archivo de IMDb se mira cada 3 horas y se descarga si el del dispositivo tiene más de 20 horas.
 
 ## Títulos nuevos en el servidor
 
@@ -637,17 +676,6 @@ pequeño dentro; ya no usa el triángulo de Jellyfin, que es una marca suya. Est
 (normal y monocromo), banner y casillas del Fire TV, logo de arranque, barra y salvapantallas, el icono de
 *Acerca de* y de los servidores en Ajustes (`drawable/ic_jellyfin.xml`, mismo nombre de recurso) y las imágenes
 de `docs/images`. El texto está dibujado con Montserrat Bold (SIL Open Font License).
-
-## Clave de TMDB (opcional, para completar "Trending this week")
-
-1. Crea una cuenta gratis en themoviedb.org → Ajustes → API → copia la *API Key* (v3) o el *API Read Access Token* (v4).
-2. Añádela a `local.properties` en la raíz del proyecto (este archivo no se sube a Git):
-
-   ```properties
-   tmdb.api.key=TU_CLAVE
-   ```
-
-3. Vuelve a compilar.
 
 ## Compilar e instalar en el Fire TV Stick 4K Max
 

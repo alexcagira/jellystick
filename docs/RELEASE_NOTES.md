@@ -5,7 +5,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 
 ### Inicio
 - Pantalla de inicio estilo plataforma de streaming: barra de navegación flotante con efecto cristal, media bar con logos y fondo difuminado de la diapositiva actual.
-- Filas: **Continue Watching** (a medias y siguientes episodios, por actividad reciente; cambia al instante al salir de un vídeo, sin esperar al servidor, también en las páginas de películas y series), **Watchlist**, **Trending this week** con números del 1 al 10 (lo más visto en tu servidor, TMDB opcional; sin contar bibliotecas ocultas ni copias del mismo título), **Latest Episodes** (por fecha de emisión, no de añadido), **Latest Films**, **Recently added** y **Favourites**.
+- Filas: **Continue Watching** (a medias y siguientes episodios, por actividad reciente; cambia al instante al salir de un vídeo, sin esperar al servidor, también en las páginas de películas y series), **Watchlist**, **Trending this week** con números del 1 al 10: lo que es **tendencia esta semana en TMDB** (con tu clave gratuita de TMDB, en Ajustes → Personalización → Inicio) y después en **IMDb** (votos ganados por encima de lo habitual, del archivo oficial de IMDb), y para los huecos lo más visto en tu servidor; sin contar bibliotecas ocultas ni copias del mismo título, **Latest Episodes** (por fecha de emisión, no de añadido), **Latest Films**, **Recently added** y **Favourites**.
 - Etiquetas en los pósters: resolución (4K, 1080p…), **Dolby Vision**, **Atmos / TrueHD / Digital**, **HDR10+ / HDR / HLG** y **banderas de los idiomas de audio** (español latino con bandera de México, portugués de Brasil…).
 - Etiquetas rojas *New episode / New season / New series* solo para lo **emitido** en los últimos 14 días (una temporada antigua recién añadida no lleva etiqueta).
 - Sin duplicados cuando un título está en varias bibliotecas (p. ej. una por idioma).
@@ -16,7 +16,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 
 ### Bibliotecas de películas y series
 - Página propia de cada biblioteca, como el inicio: media bar, pills con las bibliotecas del mismo tipo, **Colecciones** y **Explorar**.
-- Filas: Continue Watching de esa biblioteca, Últimas películas / Últimos episodios (por fecha de emisión; 16:9 con calidad y banderas), Añadido recientemente, *Porque viste… / te gustó… / está en tu Watchlist*, IMDb Top 250, colecciones, estudios y cadenas, géneros con títulos propios, etiquetas y **filas de temporada** (Halloween, Navidad, San Valentín, verano). Las filas largas acaban en **Ver todo**.
+- Filas: Continue Watching de esa biblioteca, **Trending this week** de esa biblioteca (TMDB e IMDb), Últimas películas / Últimos episodios (por fecha de emisión; 16:9 con calidad y banderas), Añadido recientemente, *Porque viste… / te gustó… / está en tu Watchlist*, IMDb Top 250, colecciones, estudios y cadenas, géneros con títulos propios, etiquetas y **filas de temporada** (Halloween, Navidad, San Valentín, verano). Las filas largas acaban en **Ver todo**.
 - Carga por partes y caché en el dispositivo: sale al momento.
 - **Explorar**: cuadrícula por páginas con salto **A–Z**, filtros (sin ver, vistas, favoritos), géneros sin duplicar entre idiomas (Action/Acción), clasificación por edad española, **idioma de audio**, orden, al azar y etiquetas.
 - Colección **IMDb Top 250** con tus películas, sincronizada cada semana.
@@ -46,7 +46,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 ### Música
 - Página de música nueva: media bar con recomendaciones (*Porque escuchas a…*), **radios** por artista y género, filas configurables y accesos rápidos.
 - Páginas de álbum, lista, artista y género con **corazón en cada canción** y lista automática **Favourite Tracks**.
-- **Reproduciendo ahora** rediseñado: letra opcional, ⏪/⏩ del mando cambian de canción, la siguiente portada ya cargada y **salvapantallas** con letra y aviso **Next up** (portada, canción y álbum de la siguiente) en los últimos 10 segundos.
+- **Reproduciendo ahora** rediseñado: letra opcional, ⏪/⏩ del mando cambian de canción, la siguiente portada ya cargada y **salvapantallas** con letra y aviso **Next up** (portada, canción y álbum de la siguiente) en los últimos 10 segundos. La barra de progreso se corrige cada segundo con la posición real (antes podía llegar al final antes que la canción en el salvapantallas).
 - El botón **☰ del mando** detiene la música desde cualquier pantalla (como *Detener*); en el reproductor de vídeo abre la información de reproducción.
 - Burbuja de *música sonando* en la barra de navegación.
 - **Cola compartida**: código QR para que cualquiera en tu Wi-Fi busque en tu biblioteca y añada canciones o álbumes desde el móvil. Si la cola se acaba, lo que sonó se guarda: una canción nueva empieza por ella y las anteriores siguen en la cola para volver a ponerlas, hasta pulsar ☰.

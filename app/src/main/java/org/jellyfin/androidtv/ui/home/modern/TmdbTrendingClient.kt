@@ -11,15 +11,17 @@ import java.net.URI
 import java.net.URLEncoder
 
 /**
- * Minimal client for the TMDB "trending this week" list. The results are matched against the
- * Jellyfin library (by TMDB id) to build the "Trending this week" row.
+ * Minimal client for TMDB's "trending this week" lists (all, movies or TV shows). The results are
+ * matched against the Jellyfin libraries (by TMDB id) to build the "Trending this week" rows.
  *
- * The key is read at build time from `tmdb.api.key` in local.properties. Both the v3 "API key" and
- * the v4 "API read access token" are supported. Without a key the home screen falls back to a
- * "Top 10" row based on community ratings.
+ * The key is the one set in Settings → Customization → Home → TMDB key, otherwise the one of the
+ * build (`tmdb.api.key` in local.properties). Both the v3 "API key" and the v4 "API read access
+ * token" work. Without a key the rows use the IMDb trend ([ImdbTrending]).
+ *
+ * This product uses the TMDB API but is not endorsed or certified by TMDB.
  */
 class TmdbTrendingClient(
-	private val apiKey: String,
+	private val apiKey: () -> String,
 ) {
 	data class TmdbRef(
 		val mediaType: String,
@@ -41,30 +43,47 @@ class TmdbTrendingClient(
 
 	private val json = Json { ignoreUnknownKeys = true }
 
-	val isConfigured: Boolean get() = apiKey.isNotBlank()
+	val isConfigured: Boolean get() = apiKey().isNotBlank()
+
+	/** Changes with the key (the lists of another key aren't reused) */
+	val keyHash: Int get() = apiKey().trim().hashCode()
 
 	/**
-	 * Get the trending movies and shows of this week, most popular first.
+	 * The trending titles of this week, most popular first: [mediaType] is [MEDIA_TYPE_ALL],
+	 * [MEDIA_TYPE_MOVIE] or [MEDIA_TYPE_TV]. 20 per page.
 	 */
-	suspend fun trending(pages: Int = 3): List<TmdbRef> = withContext(Dispatchers.IO) {
-		if (!isConfigured) return@withContext emptyList()
+	suspend fun trending(mediaType: String = MEDIA_TYPE_ALL, pages: Int = 3): List<TmdbRef> = withContext(Dispatchers.IO) {
+		val key = apiKey().trim()
+		if (key.isEmpty()) return@withContext emptyList()
 
 		(1..pages).flatMap { page ->
-			runCatching { fetchPage(page) }
+			runCatching { fetchPage(key, mediaType, page) }
 				.onFailure { Timber.w(it, "Unable to fetch TMDB trending page $page") }
-				.getOrDefault(emptyList())
+				.getOrNull()
+				.orEmpty()
 		}.distinctBy { it.key }
 	}
 
-	private fun fetchPage(page: Int): List<TmdbRef> {
+	/** Whether [key] works: the number of trending titles it gets, null when TMDB refuses it */
+	suspend fun check(key: String): Int? = withContext(Dispatchers.IO) {
+		runCatching { fetchPage(key.trim(), MEDIA_TYPE_ALL, 1) }
+			.onFailure { Timber.w(it, "TMDB key check failed") }
+			.getOrNull()
+			?.size
+	}
+
+	/** One page of the list, null when TMDB answers with an error (a wrong key) */
+	private fun fetchPage(key: String, mediaType: String, page: Int): List<TmdbRef>? {
 		// v4 read access tokens are long JWTs, v3 API keys are 32 characters
-		val useBearer = apiKey.length > 40
+		val useBearer = key.length > 40
 		val url = buildString {
-			append("https://api.themoviedb.org/3/trending/all/week?page=")
+			append("https://api.themoviedb.org/3/trending/")
+			append(mediaType)
+			append("/week?page=")
 			append(page)
 			if (!useBearer) {
 				append("&api_key=")
-				append(URLEncoder.encode(apiKey, "UTF-8"))
+				append(URLEncoder.encode(key, "UTF-8"))
 			}
 		}
 
@@ -73,17 +92,18 @@ class TmdbTrendingClient(
 			connection.connectTimeout = TIMEOUT_MS
 			connection.readTimeout = TIMEOUT_MS
 			connection.setRequestProperty("Accept", "application/json")
-			if (useBearer) connection.setRequestProperty("Authorization", "Bearer $apiKey")
+			if (useBearer) connection.setRequestProperty("Authorization", "Bearer $key")
 
 			if (connection.responseCode !in 200..299) {
 				Timber.w("TMDB trending returned HTTP ${connection.responseCode}")
-				return emptyList()
+				return null
 			}
 
 			val body = connection.inputStream.bufferedReader().use { it.readText() }
 			return json.decodeFromString<TrendingResponse>(body).results.mapNotNull { result ->
-				val mediaType = result.mediaType ?: return@mapNotNull null
-				if (mediaType == MEDIA_TYPE_MOVIE || mediaType == MEDIA_TYPE_TV) TmdbRef(mediaType, result.id)
+				// The lists of one kind say it too; just in case they don't
+				val type = result.mediaType ?: mediaType.takeIf { it != MEDIA_TYPE_ALL } ?: return@mapNotNull null
+				if (type == MEDIA_TYPE_MOVIE || type == MEDIA_TYPE_TV) TmdbRef(type, result.id)
 				else null
 			}
 		} finally {
@@ -92,6 +112,7 @@ class TmdbTrendingClient(
 	}
 
 	companion object {
+		const val MEDIA_TYPE_ALL = "all"
 		const val MEDIA_TYPE_MOVIE = "movie"
 		const val MEDIA_TYPE_TV = "tv"
 		private const val TIMEOUT_MS = 10_000

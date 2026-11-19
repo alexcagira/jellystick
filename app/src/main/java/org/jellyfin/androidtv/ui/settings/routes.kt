@@ -28,6 +28,7 @@ import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeLibrariesScree
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeNextUpCutoffScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeScreen
 import org.jellyfin.androidtv.ui.settings.screen.home.SettingsHomeSectionScreen
+import org.jellyfin.androidtv.ui.settings.screen.home.SettingsTmdbKeyScreen
 import org.jellyfin.androidtv.ui.settings.screen.library.SettingsLibrariesDisplayGridScreen
 import org.jellyfin.androidtv.ui.settings.screen.library.SettingsLibrariesDisplayImageSizeScreen
 import org.jellyfin.androidtv.ui.settings.screen.library.SettingsLibrariesDisplayImageTypeScreen
@@ -97,6 +98,7 @@ object Routes {
 	const val HOME_LIBRARIES = "/home/libraries"
 	const val HOME_SECTIONS_ORDER = "/home/sections-order"
 	const val MUSIC_SECTIONS_ORDER = "/home/music-sections-order"
+	const val HOME_TMDB_KEY = "/home/tmdb-key"
 	const val LIVETV_GUIDE_FILTERS = "/livetv/guide/filters"
 	const val LIVETV_GUIDE_OPTIONS = "/livetv/guide/options"
 	const val LIVETV_GUIDE_CHANNEL_ORDER = "/livetv/guide/channel-order"
@@ -234,6 +236,9 @@ val routes = mapOf<String, RouteComposable>(
 	},
 	Routes.MUSIC_SECTIONS_ORDER to {
 		SettingsMusicSectionsOrderScreen()
+	},
+	Routes.HOME_TMDB_KEY to {
+		SettingsTmdbKeyScreen()
 	},
 	Routes.LIVETV_GUIDE_FILTERS to {
 		SettingsLiveTvGuideFiltersScreen()

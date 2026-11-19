@@ -457,4 +457,19 @@
     <string name="stream_info_reason_video_range">HDR / Dolby Vision type</string>
     <string name="stream_info_reason_audio_format">audio format</string>
     <string name="stream_info_reason_direct_play_error">direct play failed</string>
+    <string name="tmdb_key">TMDB key (Trending this week)</string>
+    <string name="tmdb_key_summary_set">Trending this week uses TMDB, then IMDb</string>
+    <string name="tmdb_key_summary_none">No key: Trending this week uses the IMDb trend</string>
+    <string name="tmdb_key_help">With a TMDB key, Trending this week starts with what is trending on TMDB this week (all of it on Home, films or shows on each library), then the IMDb trend. The key is free: create an account on themoviedb.org → Settings → API, and copy the API Key or the API Read Access Token. Type it below (with the Fire TV app on your phone you can paste it). Without a key, the IMDb trend is used.</string>
+    <string name="tmdb_key_hint">Paste or type the key</string>
+    <string name="tmdb_key_save">Check and save</string>
+    <string name="tmdb_key_delete">Delete the key</string>
+    <string name="tmdb_key_checking">Checking with TMDB…</string>
+    <string name="tmdb_key_ok">It works: %1$d trending titles. Saved</string>
+    <string name="tmdb_key_failed">TMDB doesn\'t accept this key. Check it and try again</string>
+    <string name="tmdb_key_deleted">Key deleted: the IMDb trend is used</string>
+    <string name="tmdb_key_in_use">A key is saved</string>
+    <string name="tmdb_key_build">Using the key of this build</string>
+    <string name="tmdb_key_none">No key yet</string>
+    <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
 </resources>

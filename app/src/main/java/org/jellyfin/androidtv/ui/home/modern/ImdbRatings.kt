@@ -16,7 +16,7 @@ import java.io.InputStreamReader
 import java.nio.ByteBuffer
 import java.util.zip.GZIPInputStream
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.toJavaDuration
 
@@ -27,16 +27,19 @@ import kotlin.time.toJavaDuration
  * instead of the server's rating (TMDb's with the default metadata providers). Titles without an
  * IMDb id or rating keep the server's.
  *
- * Downloaded once a week (about 8 MB) and kept on the device as two arrays sorted by the IMDb
- * number: the number ("tt0120737" → 120737) and the rating × 10. About 8 MB in memory.
+ * Downloaded once a day (about 8 MB) and kept on the device as two arrays sorted by the IMDb
+ * number: the number ("tt0120737" → 120737) and the rating × 10. About 8 MB in memory. Each download
+ * also keeps the number of votes of the known titles for "Trending this week" ([ImdbTrending]).
  */
 object ImdbRatings {
 	private const val DATASET_URL = "https://datasets.imdbws.com/title.ratings.tsv.gz"
 	private const val FILE_NAME = "imdb_ratings.bin"
 	private const val MAGIC = 0x494D4442 // "IMDB"
 	private const val INITIAL_CAPACITY = 2_000_000
+	private const val INITIAL_VOTES_CAPACITY = 200_000
 	private const val HEADER_SIZE = 8
-	private val MAX_AGE = 7.days
+	/** IMDb publishes the file every day: a new copy each day gives the weekly trend day by day */
+	private val MAX_AGE = 20.hours
 
 	private val lock = Any()
 
@@ -57,11 +60,16 @@ object ImdbRatings {
 			.build()
 	}
 
-	/** IMDb rating of a title (0–10), null without an IMDb id or rating */
-	fun imdbRating(item: BaseItemDto?): Float? {
+	/** The IMDb number of a title ("tt0120737" → 120737), null without an IMDb id */
+	fun imdbNumber(item: BaseItemDto?): Int? {
 		val tconst = item?.providerIds?.entries?.firstOrNull { it.key.equals("Imdb", ignoreCase = true) }?.value
 			?: return null
-		val number = tconst.trim().removePrefix("tt").toIntOrNull() ?: return null
+		return tconst.trim().removePrefix("tt").toIntOrNull()
+	}
+
+	/** IMDb rating of a title (0–10), null without an IMDb id or rating */
+	fun imdbRating(item: BaseItemDto?): Float? {
+		val number = imdbNumber(item) ?: return null
 		val ids = ids ?: return null
 		val ratings = ratings ?: return null
 		val index = ids.binarySearch(number)
@@ -76,6 +84,7 @@ object ImdbRatings {
 
 	/** What the device has, into memory (from a background thread; quick, it is one read) */
 	fun load(context: Context) {
+		ImdbTrending.attach(context)
 		synchronized(lock) {
 			if (ids != null) return
 			val file = file(context)
@@ -101,15 +110,17 @@ object ImdbRatings {
 		}
 	}
 
-	/** A new copy of the dataset when the one on the device is a week old (in the background) */
+	/** A new copy of the dataset when the one on the device is a day old (in the background) */
 	suspend fun refreshIfOld(context: Context) = withContext(Dispatchers.IO) {
 		val file = file(context)
-		if (file.exists() && System.currentTimeMillis() - file.lastModified() < MAX_AGE.inWholeMilliseconds) {
+		val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < MAX_AGE.inWholeMilliseconds
+		// The first time with the trend: the votes of today are needed too
+		if (fresh && ImdbTrending.hasVotes(context)) {
 			load(context)
 			return@withContext
 		}
 
-		runCatching { download(file) }
+		runCatching { download(context, file) }
 			.onFailure { Timber.w(it, "Unable to download the IMDb ratings") }
 			.onSuccess {
 				synchronized(lock) {
@@ -122,7 +133,7 @@ object ImdbRatings {
 		load(context)
 	}
 
-	private fun download(target: File) {
+	private fun download(context: Context, target: File) {
 		val request = Request.Builder().url(DATASET_URL).build()
 		client.newCall(request).execute().use { response ->
 			check(response.isSuccessful) { "HTTP ${response.code}" }
@@ -130,6 +141,10 @@ object ImdbRatings {
 			var ratings = ByteArray(INITIAL_CAPACITY)
 			var count = 0
 			var sorted = true
+			// Votes of the titles with enough of them, for the trend
+			var voteIds = IntArray(INITIAL_VOTES_CAPACITY)
+			var votes = IntArray(INITIAL_VOTES_CAPACITY)
+			var voteCount = 0
 
 			val reader = BufferedReader(InputStreamReader(GZIPInputStream(response.body?.byteStream() ?: error("No body")), Charsets.UTF_8), 1 shl 16)
 			reader.use {
@@ -142,6 +157,16 @@ object ImdbRatings {
 					if (firstTab < 3 || secondTab < 0 || !line.startsWith("tt")) continue
 					val number = line.substring(2, firstTab).toIntOrNull() ?: continue
 					val rating = line.substring(firstTab + 1, secondTab).toFloatOrNull() ?: continue
+					val numVotes = line.substring(secondTab + 1).trim().toIntOrNull() ?: 0
+					if (numVotes >= ImdbTrending.MIN_VOTES) {
+						if (voteCount == voteIds.size) {
+							voteIds = voteIds.copyOf(voteCount * 3 / 2)
+							votes = votes.copyOf(voteCount * 3 / 2)
+						}
+						voteIds[voteCount] = number
+						votes[voteCount] = numVotes
+						voteCount++
+					}
 
 					if (count == ids.size) {
 						ids = ids.copyOf(count * 3 / 2)
@@ -171,6 +196,8 @@ object ImdbRatings {
 			partial.writeBytes(bytes)
 			check(partial.renameTo(target)) { "Unable to save the IMDb ratings" }
 			Timber.i("IMDb ratings downloaded: $count titles")
+
+			ImdbTrending.saveVotes(context, voteIds, votes, voteCount)
 		}
 	}
 }

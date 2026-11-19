@@ -457,4 +457,19 @@
     <string name="stream_info_reason_video_range">tipo de HDR / Dolby Vision</string>
     <string name="stream_info_reason_audio_format">formato de audio</string>
     <string name="stream_info_reason_direct_play_error">falló la reproducción directa</string>
+    <string name="tmdb_key">Clave de TMDB (Trending this week)</string>
+    <string name="tmdb_key_summary_set">Trending this week usa TMDB y después IMDb</string>
+    <string name="tmdb_key_summary_none">Sin clave: Trending this week usa la tendencia de IMDb</string>
+    <string name="tmdb_key_help">Con una clave de TMDB, Trending this week empieza por lo que es tendencia esta semana en TMDB (todo en el inicio; películas o series en cada biblioteca) y sigue con la tendencia de IMDb. La clave es gratis: crea una cuenta en themoviedb.org → Ajustes → API y copia la Clave de API o el Token de acceso de lectura. Escríbela abajo (con la app Fire TV del móvil puedes pegarla). Sin clave se usa la tendencia de IMDb.</string>
+    <string name="tmdb_key_hint">Pega o escribe la clave</string>
+    <string name="tmdb_key_save">Comprobar y guardar</string>
+    <string name="tmdb_key_delete">Borrar la clave</string>
+    <string name="tmdb_key_checking">Comprobando con TMDB…</string>
+    <string name="tmdb_key_ok">Funciona: %1$d títulos en tendencia. Guardada</string>
+    <string name="tmdb_key_failed">TMDB no acepta esta clave. Revísala y vuelve a probar</string>
+    <string name="tmdb_key_deleted">Clave borrada: se usa la tendencia de IMDb</string>
+    <string name="tmdb_key_in_use">Hay una clave guardada</string>
+    <string name="tmdb_key_build">Usando la clave de esta versión</string>
+    <string name="tmdb_key_none">Todavía sin clave</string>
+    <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
 </resources>

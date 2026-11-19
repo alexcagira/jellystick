@@ -87,15 +87,19 @@ class MainActivity : FragmentActivity() {
 
 		if (savedInstanceState == null && navigationRepository.canGoBack) navigationRepository.reset(clearHistory = true)
 
-		// IMDb ratings: what the device has at once, a new copy in the background when a week old
+		// IMDb ratings and votes (stars, Trending this week): what the device has at once, a new copy
+		// in the background once a day (checked every few hours: the app can stay open for days)
 		if (!imdbRatingsStarted) {
 			imdbRatingsStarted = true
 			val appContext = applicationContext
 			ProcessLifecycleOwner.get().lifecycleScope.launch(Dispatchers.IO) {
 				ImdbRatings.load(appContext)
 				delay(IMDB_REFRESH_DELAY_MS)
-				BackgroundTraffic.awaitTurn()
-				ImdbRatings.refreshIfOld(appContext)
+				while (true) {
+					BackgroundTraffic.awaitTurn()
+					ImdbRatings.refreshIfOld(appContext)
+					delay(IMDB_CHECK_INTERVAL_MS)
+				}
 			}
 		}
 
@@ -205,6 +209,9 @@ private const val REFRESH_DONE = 100.0
 
 /** The download of the IMDb ratings waits for the app to settle after starting */
 private const val IMDB_REFRESH_DELAY_MS = 60_000L
+
+/** How often the IMDb file is checked for a new day */
+private const val IMDB_CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
 
 /** The IMDb ratings are loaded once per app process (activities can be created again) */
 private var imdbRatingsStarted = false
