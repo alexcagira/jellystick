@@ -45,6 +45,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import org.jellyfin.androidtv.ui.home.modern.awaitFrames
+import kotlin.math.roundToInt
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -847,7 +854,9 @@ internal fun EpisodesHeader(
 
 /**
  * Season switcher in the style of the navigation bar: "Season 1 | Season 2 | Season 3".
- * Moving down from the buttons above lands on the current season.
+ * Moving down from the buttons above lands on the current season. With many seasons the pills
+ * scroll so the current one is in view (season 19 of a long series was off to the right, only up
+ * to season 8 showed).
  */
 @Composable
 private fun SeasonTabs(
@@ -858,6 +867,21 @@ private fun SeasonTabs(
 ) {
 	val selectedFocusRequester = remember { FocusRequester() }
 	val hasSelected = tabs.any { it.id == selectedId }
+	val scrollState = rememberScrollState()
+	// Where each pill is in the scrolled content (start, width in pixels) and the width of the visible part
+	val pillBounds = remember(tabs) { HashMap<java.util.UUID, Pair<Int, Int>>() }
+	var viewportWidth by remember { mutableIntStateOf(0) }
+	var scrolledOnce by remember { mutableStateOf(false) }
+
+	// The current season in the middle of the visible part (at once the first time, smoothly after)
+	LaunchedEffect(selectedId, tabs, viewportWidth) {
+		if (viewportWidth == 0 || selectedId == null) return@LaunchedEffect
+		awaitFrames(1)
+		val (start, width) = pillBounds[selectedId] ?: return@LaunchedEffect
+		val target = (start - (viewportWidth - width) / 2).coerceIn(0, scrollState.maxValue)
+		if (scrolledOnce) scrollState.animateScrollTo(target) else scrollState.scrollTo(target)
+		scrolledOnce = true
+	}
 
 	Row(
 		modifier = Modifier.padding(start = ModernHomeDimens.ScreenPaddingHorizontal, top = 4.dp, end = ModernHomeDimens.ScreenPaddingHorizontal),
@@ -865,9 +889,12 @@ private fun SeasonTabs(
 	) {
 		Row(
 			modifier = Modifier
+				// Measured after the episode count, so the count always has room
+				.weight(1f, fill = false)
 				.background(Color.Black.copy(alpha = 0.35f), CircleShape)
 				.border(1.dp, ModernHomeColors.GlassBorder, CircleShape)
-				.horizontalScroll(rememberScrollState())
+				.onSizeChanged { viewportWidth = it.width }
+				.horizontalScroll(scrollState)
 				.padding(4.dp)
 				.then(if (hasSelected) Modifier.focusRestorer(selectedFocusRequester) else Modifier.focusRestorer())
 				.focusGroup(),
@@ -879,7 +906,9 @@ private fun SeasonTabs(
 					text = tab.name,
 					selected = tab.id == selectedId,
 					onClick = { onSelected(tab) },
-					modifier = if (tab.id == selectedId) Modifier.focusRequester(selectedFocusRequester) else Modifier,
+					modifier = Modifier
+						.onPlaced { coordinates -> pillBounds[tab.id] = coordinates.positionInParent().x.roundToInt() to coordinates.size.width }
+						.then(if (tab.id == selectedId) Modifier.focusRequester(selectedFocusRequester) else Modifier),
 				)
 			}
 		}

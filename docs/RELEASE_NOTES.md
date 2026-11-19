@@ -27,7 +27,7 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - Fichas nuevas de películas, series, temporadas y personas: fondo a pantalla completa con logo, valoración, géneros y sinopsis; Next up, temporadas, carrusel de episodios, reparto y similares. Se abren al momento y lo más lento (*Más como esto*) llega después.
 - Nota de **IMDb** y, en las películas, la media de **Letterboxd** (de 0 a 5).
 - Botón **Reproducir / Reanudar T01:E05 / Reanudar desde 1:05:32** con **⏮** al lado para empezar desde el principio, favoritos, tráiler, visto, información del archivo y **Watchlist** (sincronizada con la de KefinTweaks en la web).
-- Cambio de temporada sin salir de la página, ✓ para marcar episodios como vistos y **calidad y banderas en cada episodio**.
+- Cambio de temporada sin salir de la página (en series largas las pastillas se desplazan solas hasta la temporada actual), ✓ para marcar episodios como vistos y **calidad y banderas en cada episodio**.
 - **Sintonía de la serie** (theme song) con fundidos.
 - Menú de los pósters (mantener OK): reproducir, visto/no visto, **añadir a la watchlist**, más información, ir a la serie o la temporada, información del archivo e **Identificar** como en la web (admin).
 

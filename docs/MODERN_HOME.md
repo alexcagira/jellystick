@@ -480,6 +480,10 @@ personas: fondo a pantalla completa con logo, valoración, duración/temporadas,
 botones (*Play*, favoritos, tráiler, visto, información del archivo, watchlist y ⋮ para la ficha clásica con
 todas las opciones). Debajo: *Next up*, temporadas, episodios, reparto y títulos similares.
 
+Encima de los episodios, las **temporadas** van en pastillas; en series con muchas (South Park, Los Simpson) la fila se
+desplaza sola para que la temporada actual quede a la vista, al abrir la ficha y al cambiar de temporada
+(`SeasonTabs`).
+
 En series y temporadas el botón muestra el episodio: **Resume S01:E05** si ya lo empezaste, **Play S02:E01**
 si no (en español, *Reanudar T01:E05* / *Reproducir T02:E01*). En películas empezadas hace más de un minuto el
 botón dice **Reanudar desde 1:05:32**. En los dos casos, al lado sale **⏮** (antes de *Favoritos*): lo vuelve a
