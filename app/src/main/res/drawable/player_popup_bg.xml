@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Band of the channel changer in the player: dark at the bottom, fading up into the picture -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="90"
+        android:endColor="#00000000"
+        android:centerColor="#B3060810"
+        android:startColor="#F2060810" />
+</shape>

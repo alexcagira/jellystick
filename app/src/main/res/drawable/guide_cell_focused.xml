@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Focused cell of the TV guide: white, like the focused buttons and pills of the app -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="2dp">
+    <shape android:shape="rectangle">
+        <solid android:color="@color/white" />
+        <corners android:radius="7dp" />
+    </shape>
+</inset>

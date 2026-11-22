@@ -178,7 +178,7 @@ internal fun HeroCarousel(
 
 			Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
 				HeroButton(
-					text = stringResource(R.string.lbl_play),
+					text = slide.playLabel ?: stringResource(R.string.lbl_play),
 					icon = R.drawable.ic_play,
 					primary = true,
 					onClick = { onPlay(slide) },
@@ -294,6 +294,10 @@ private fun HeroInfo(
 
 @Composable
 private fun HeroMetadata(slide: HeroSlide) {
+	if (slide.liveInfo != null) {
+		LiveMetadata(slide)
+		return
+	}
 	val typeLabel = when (slide.item.type) {
 		BaseItemKind.SERIES -> stringResource(R.string.modern_home_tv_show)
 		else -> slide.runtimeMinutes?.takeIf { it > 0 }?.let(::formatRuntime) ?: stringResource(R.string.modern_home_movie)
@@ -343,6 +347,90 @@ private fun HeroMetadata(slide: HeroSlide) {
 
 		QualityBadges(slide.quality, scale = 1.3f)
 		LanguageFlags(slide.languages)
+	}
+}
+
+/** Live TV: "LIVE", the channel logo and when it's on */
+@Composable
+private fun LiveMetadata(slide: HeroSlide) {
+	val imageLoader = koinInject<ImageLoader>()
+	Row(
+		verticalAlignment = Alignment.CenterVertically,
+		horizontalArrangement = Arrangement.spacedBy(10.dp),
+	) {
+		if (slide.onNow) LiveBadge()
+		if (slide.channelLogoUrl != null) {
+			AsyncImage(
+				model = slide.channelLogoUrl,
+				contentDescription = null,
+				imageLoader = imageLoader,
+				contentScale = ContentScale.Fit,
+				alignment = Alignment.CenterStart,
+				modifier = Modifier
+					.height(26.dp)
+					.widthIn(max = 90.dp),
+			)
+		}
+		Text(
+			text = slide.liveInfo.orEmpty(),
+			color = ModernHomeColors.TextPrimary,
+			fontSize = 14.sp,
+			fontWeight = FontWeight.SemiBold,
+			maxLines = 1,
+			overflow = TextOverflow.Ellipsis,
+		)
+		if (slide.rating != null && slide.rating > 0f) {
+			Icon(
+				imageVector = ImageVector.vectorResource(R.drawable.ic_star),
+				contentDescription = null,
+				tint = ModernHomeColors.Accent,
+				modifier = Modifier.size(14.dp),
+			)
+			Text(
+				text = String.format(Locale.getDefault(), "%.1f", slide.rating),
+				color = ModernHomeColors.TextPrimary,
+				fontSize = 14.sp,
+				fontWeight = FontWeight.Bold,
+			)
+		}
+		if (!slide.officialRating.isNullOrBlank()) {
+			Text(
+				text = slide.officialRating,
+				color = ModernHomeColors.TextPrimary,
+				fontSize = 10.sp,
+				fontWeight = FontWeight.Bold,
+				maxLines = 1,
+				modifier = Modifier
+					.border(1.dp, ModernHomeColors.BadgeBorder, RoundedCornerShape(3.dp))
+					.padding(horizontal = 4.dp, vertical = 1.dp),
+			)
+		}
+	}
+}
+
+/** Red "LIVE" tag of what is on now (media bar, programme page, player) */
+@Composable
+internal fun LiveBadge(modifier: Modifier = Modifier) {
+	Row(
+		verticalAlignment = Alignment.CenterVertically,
+		horizontalArrangement = Arrangement.spacedBy(5.dp),
+		modifier = modifier
+			.background(ModernHomeColors.NewLabel, RoundedCornerShape(4.dp))
+			.padding(horizontal = 7.dp, vertical = 2.dp),
+	) {
+		Box(
+			modifier = Modifier
+				.size(6.dp)
+				.background(Color.White, CircleShape),
+		)
+		Text(
+			text = stringResource(R.string.live_tv_live).uppercase(),
+			color = Color.White,
+			fontSize = 11.sp,
+			fontWeight = FontWeight.Bold,
+			letterSpacing = 0.6.sp,
+			maxLines = 1,
+		)
 	}
 }
 

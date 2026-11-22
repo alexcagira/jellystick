@@ -235,6 +235,18 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                 closePlayer();
                 return kotlin.Unit.INSTANCE;
             });
+            // Live TV: the guide (its button in the controls) and the channels (↓). When they
+            // can't open, the remote stays on the modern controls
+            modernOverlay.setOnShowGuide(() -> {
+                if (isLiveTvPlaying()) showGuide();
+                else modernOverlay.focusControls();
+                return kotlin.Unit.INSTANCE;
+            });
+            modernOverlay.setOnShowChannels(() -> {
+                if (isLiveTvPlaying()) showQuickChannelChanger();
+                else modernOverlay.focusControls();
+                return kotlin.Unit.INSTANCE;
+            });
 
             // The modern controls replace the title panel, the Leanback controls and the skip button
             binding.topPanel.setVisibility(View.GONE);
@@ -242,6 +254,11 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
             binding.leanbackFragment.setVisibility(View.GONE);
             modernOverlay.attach(binding.getRoot());
         }
+    }
+
+    private boolean isLiveTvPlaying() {
+        PlaybackController controller = playbackControllerContainer.getValue().getPlaybackController();
+        return controller != null && controller.isLiveTv() && binding != null;
     }
 
     @Nullable
@@ -254,6 +271,7 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         super.onDestroyView();
 
         binding = null;
+        if (modernOverlay != null) modernOverlay.release();
         modernOverlay = null;
         // To fix race condition in hide timer
         mIsVisible = false;
@@ -572,7 +590,10 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
                     }
                 }
 
-                if (playbackControllerContainer.getValue().getPlaybackController().isLiveTv() && keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_Y) {
+                // ☰ opens the guide with the original controls only: with the modern ones it shows
+                // the stream info (and stops the music anywhere else in the app)
+                if (playbackControllerContainer.getValue().getPlaybackController().isLiveTv()
+                        && ((keyCode == KeyEvent.KEYCODE_MENU && modernOverlay == null) || keyCode == KeyEvent.KEYCODE_BUTTON_Y)) {
                     showGuide();
                     return true;
                 }
@@ -768,6 +789,8 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         binding.popupArea.startAnimation(hidePopup);
         mPopupPanelVisible = false;
         binding.skipOverlay.setSkipUiEnabled(!mIsVisible && !mGuideVisible && !mPopupPanelVisible);
+        // The remote goes back to the modern controls
+        if (modernOverlay != null) modernOverlay.focusControls();
     }
 
     public void showGuide() {
@@ -796,6 +819,8 @@ public class CustomPlaybackOverlayFragment extends Fragment implements LiveTvGui
         playbackControllerContainer.getValue().getPlaybackController().mVideoManager.setVideoFullSize(true);
         mGuideVisible = false;
         binding.skipOverlay.setSkipUiEnabled(!mIsVisible && !mGuideVisible && !mPopupPanelVisible);
+        // The remote goes back to the modern controls
+        if (modernOverlay != null) modernOverlay.focusControls();
     }
 
     private void loadGuide() {

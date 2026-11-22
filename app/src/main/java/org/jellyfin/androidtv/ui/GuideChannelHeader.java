@@ -25,6 +25,9 @@ public class GuideChannelHeader extends RelativeLayout {
     private BaseItemDto mChannel;
     private Context mContext;
     private LiveTvGuide mTvGuide;
+    // The card of the header (rounded, in the colours of the modern screens)
+    private View mCell;
+    private TextView mChannelName;
 
     public GuideChannelHeader(Context context, LiveTvGuide tvGuide, BaseItemDto channel) {
         super(context);
@@ -43,8 +46,10 @@ public class GuideChannelHeader extends RelativeLayout {
             Utils.convertDpToPixel(context, LiveTvGuideFragment.GUIDE_ROW_HEIGHT_DP)
         ));
         this.addView(v);
+        mCell = v;
         this.setFocusable(true);
-        ((TextView) findViewById(R.id.channelName)).setText(channel.getName());
+        mChannelName = findViewById(R.id.channelName);
+        mChannelName.setText(channel.getName());
         ((TextView) findViewById(R.id.channelNumber)).setText(channel.getNumber());
         mChannelImage = findViewById(R.id.channelImage);
         mFavImage = findViewById(R.id.favImage);
@@ -78,12 +83,15 @@ public class GuideChannelHeader extends RelativeLayout {
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
 
+        // Focused: white with dark text, like the focused buttons of the app
         if (gainFocus) {
-            setBackgroundColor(Utils.getThemeColor(mContext, android.R.attr.colorAccent));
+            mCell.setBackgroundResource(R.drawable.guide_cell_focused);
+            mChannelName.setTextColor(ContextCompat.getColor(mContext, R.color.guide_text_on_focus));
 
             mTvGuide.setSelectedProgram(this);
         } else {
-            setBackground(ContextCompat.getDrawable(mContext, R.drawable.light_border));
+            mCell.setBackgroundResource(R.drawable.guide_cell_bg);
+            mChannelName.setTextColor(ContextCompat.getColor(mContext, R.color.white));
         }
     }
 }

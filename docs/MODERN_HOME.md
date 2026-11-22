@@ -473,6 +473,70 @@ o `/config/system.xml`) con Jellyfin parado, y arráncalo otra vez:
 <LibraryUpdateDuration>5</LibraryUpdateDuration>
 ```
 
+## TV en directo
+
+Con la pantalla de inicio moderna, la biblioteca de **TV en directo** abre una página como la de las bibliotecas
+(`ui/livetv/modern`): la barra de navegación de cristal y las pestañas **Programas**, **Guía**, **Canales** y
+**Favoritos**, como la web de Jellyfin. Todo sale de la guía (EPG) del servidor y se vuelve a leer cada 5 minutos
+mientras se ve la página y al volver de un canal o de la guía.
+
+- **Programas** (la pestaña de entrada): la **media bar** del inicio con lo destacado de la guía: hasta 8 programas
+  con imagen, uno por canal, primero los **deportes** en emisión o que empiezan en las próximas 3 horas (un partido),
+  luego las películas en emisión, los estrenos y directos, y lo que está en emisión; antes los que tienen imagen
+  apaisada. Etiqueta roja *EN DIRECTO*, logo del canal y horario; *Ver ahora* sintoniza el canal y *Más información*
+  abre la página del programa. Debajo, las filas de la web con las mismas peticiones: **En emisión**
+  (`/LiveTv/Programs/Recommended?IsAiring=true`), **Series y programas** (`IsSeries=true`, sin películas, deportes,
+  infantil ni noticias), **Películas** (`IsMovie`), **Deportes** (`IsSports`), **Infantil** (`IsKids`) y **Noticias**
+  (`IsNews`), todas con `HasAired=false` por hora de inicio: lo que está en emisión primero. Cada tarjeta lleva la
+  hora (*20:00 – 21:00* si está en emisión, *dom 22 nov 10:30* si no), el episodio (*S1:E4*) y el canal; sin imagen,
+  el logo del canal entero sobre fondo oscuro (`HomeCard.logoImage`). OK abre la página del programa, **⏯** sintoniza.
+- **Guía**: la pestaña abre la guía de TV (la de siempre con los colores de la app).
+- **Canales** (`LiveChannelsTab`): todos los canales en cuadrícula de 4 con el logo, número y nombre, el programa en
+  emisión, su horario y una barra de progreso que avanza sola. A la izquierda, **Buscar canales** (número, nombre o
+  programa, sin tildes) y el filtro **Todos los canales / Favoritos** con cuántos hay. OK sintoniza; **mantener OK**
+  añade el canal a favoritos o lo quita (♥ en la tarjeta).
+- **Favoritos**: los canales favoritos con la imagen de lo que emiten y el logo del canal encima.
+- Atrás: de una tarjeta a las pestañas, de las pestañas a *Programas* y de ahí fuera.
+
+**Carga de la guía** (`LiveTvProgramLoader`): el SDK lee una respuesta entera o nada, así que un solo programa del
+EPG con un campo inesperado (un número demasiado grande, un id que no lo es) dejaba la guía entera con *No program
+data available*, y la guía de muchos canales podía pasar de los 30 segundos de espera. Ahora la guía, la guía del
+reproductor y la página piden los programas con su propio cliente HTTP (2 minutos de margen), los canales de la guía
+en grupos de 25 (la dirección de una petición con cientos de canales es demasiado larga para el servidor) y leen
+cada programa por separado: el que no se puede leer entero se lee con solo los campos que usa la app (`LenientItems`)
+o se deja fuera. Las fechas sin zona se toman como UTC. Si falla, un aviso dice por qué (*HTTP 414*, *timeout*...), y si
+el servidor no manda nada, otro dice los canales, las horas pedidas, cuántos programas llegaron y la hora de la tele y la
+del servidor.
+
+**Hora del servidor** (`LiveTvClock`): cada respuesta trae la hora del servidor (cabecera `Date`). Si el reloj o la zona
+horaria del Fire TV no coinciden con los del servidor, la guía pedía las horas del reloj del Fire TV y no había nada en
+ellas. Ahora las horas se piden como instantes del servidor (`2026-11-22T20:00:00Z`), los programas de la guía se
+mueven a la hora del Fire TV para cuadrar con su línea de tiempo (un aviso, una vez, dice que no coinciden), y lo que
+compara con "ahora" (en emisión, progreso, barra del reproductor) usa la hora del servidor.
+
+**Imágenes en su propia cola**: Coil usa un `Dispatcher` de OkHttp propio (10 peticiones por servidor). Antes compartía
+el del API y el vídeo (24): las imágenes de la guía, que el servidor descarga del EPG y pueden tardar, lo llenaban y un
+canal se quedaba cargando. La página de TV en directo pide las filas de dos en dos, solo de las próximas 12 horas
+(`minEndDate`/`maxStartDate`), no vuelve a leerlas si se leyeron hace menos de un minuto y deja de cargar al sintonizar
+un canal o al salir (`stopLoading`).
+
+- **Página del programa** (`ModernProgramScreen`; también desde la guía y las filas antiguas, si las fichas
+  modernas están activadas): la imagen del programa de fondo, el **logo del canal** donde las películas llevan el
+  logo del título, horario, duración, lo que queda si está en emisión, géneros y sinopsis. Botones *Ver ahora* /
+  *Ver el canal*, *Grabar* (o *Cancelar grabación*), *Grabar serie* (series) y *Guía de TV*. Debajo, lo que pone
+  después el canal.
+- **Reproductor**: los controles modernos también con canales. Arriba el número y nombre del canal, su logo y el
+  programa con *EN DIRECTO*; la barra va del inicio al final del programa (por el reloj; se lee el siguiente
+  programa cuando acaba) con las horas a los lados y *Termina a las…*. OK muestra los controles (un canal no se
+  pausa), **↓** abre el selector de canales y **☰** la información de reproducción, como en películas y series (la
+  guía tiene su botón). Al cerrar la guía o el selector sin cambiar de canal el foco vuelve a los controles: la vista
+  Compose lo pide por dentro (`ModernPlayerState.focusRequests`), no basta con que la vista tenga el foco, y mientras
+  la guía o el selector están abiertos los controles no se lo quitan (`panelOpen`). Botones: guía, canales,
+  información, audio, subtítulos, calidad, modo y desfase.
+- **Guía y selector de canales**: los mismos de siempre con los colores del resto de la app: fondos azul noche,
+  celdas redondeadas con borde fino, en blanco con letra oscura la que tiene el foco, letra *sans-serif-medium*, y
+  la franja de canales del reproductor con un degradado en vez de la banda gris.
+
 ## Fichas de películas, series, temporadas y personas
 
 "More info" (y cualquier ficha de la app) abre la nueva página para películas, series, temporadas y
@@ -516,7 +580,7 @@ Los subtítulos ASS/SSA con estilos propios se dibujan como vienen en el archivo
 
 ## Reproductor
 
-Controles nuevos para películas y episodios (la TV en directo mantiene los originales, con la guía):
+Controles nuevos para películas, episodios y canales (los canales, ver *TV en directo*):
 
 - **Reproduciendo**: sin nada en pantalla. **OK** pausa, **izquierda/derecha** buscan hacia delante o atrás
   (mantener pulsado acelera) con miniatura de la escena, **arriba/abajo** muestran los controles.

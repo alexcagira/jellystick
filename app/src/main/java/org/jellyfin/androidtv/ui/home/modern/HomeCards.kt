@@ -127,6 +127,7 @@ internal fun CardArtwork(
 	url: String?,
 	fallbackTitle: String,
 	modifier: Modifier = Modifier,
+	logo: Boolean = false,
 ) {
 	// The title is only laid out when there is no image: measuring it under every poster cost time
 	// on each new card while scrolling
@@ -154,12 +155,21 @@ internal fun CardArtwork(
 				contentDescription = null,
 				imageLoader = imageLoader,
 				onError = { failed = true },
-				contentScale = ContentScale.Crop,
-				modifier = Modifier.fillMaxSize(),
+				contentScale = if (logo) ContentScale.Fit else ContentScale.Crop,
+				modifier = if (logo) {
+					Modifier
+						.fillMaxSize()
+						.background(Brush.verticalGradient(listOf(LogoCardTop, LogoCardBottom)))
+						.padding(horizontal = 36.dp, vertical = 26.dp)
+				} else Modifier.fillMaxSize(),
 			)
 		}
 	}
 }
+
+/** Background of a card that shows a logo */
+private val LogoCardTop = Color(0xFF1C2433)
+private val LogoCardBottom = Color(0xFF111722)
 
 @Composable
 internal fun PosterCard(
@@ -353,7 +363,7 @@ internal fun LandscapeCard(
 			onPlay = onClick,
 			modifier = Modifier.size(ModernHomeDimens.LandscapeWidth, ModernHomeDimens.LandscapeHeight),
 		) {
-			CardArtwork(url = card.imageUrl, fallbackTitle = card.title)
+			CardArtwork(url = card.imageUrl, fallbackTitle = card.title, logo = card.logoImage)
 
 			if (card.showBadges) {
 				// The time left takes the top left corner of a started title: its quality goes to

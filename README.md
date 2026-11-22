@@ -69,6 +69,13 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 - **Dolby Vision + HDR10+ files play directly as Dolby Vision** on the Fire TV 4K / 4K Max (with Atmos passthrough), like Plex, instead of being remuxed by the server to HDR.
 - When a file can't play directly, it retries by itself with **Dolby Vision as HDR10**, converted audio or transcoding, and remembers it for the whole series.
 
+### Live TV
+- A Live TV page with the tabs **Programmes**, **Guide**, **Channels** and **Favourites**: a **media bar with the highlights of the guide** (sports live or about to start, films, premieres) and the rows of Jellyfin web (on now, shows, movies, sports, for kids, news).
+- **Channels** in a grid with a channel search and a favourites filter; hold OK on a channel to make it a favourite.
+- A guide that loads even with big lineups and EPGs with odd programmes.
+- **Programme pages** with the programme's picture as background and the channel logo, watch, record and record series.
+- The **modern player for channels** (programme bar from start to end, ↓ for the channels, buttons for the guide and the stream info) and a restyled guide and channel changer.
+
 ### Music
 - Music page with recommendations, **stations** by artist and genre, and album, artist and playlist pages with a heart on every song.
 - Redesigned **Now Playing** with lyrics, a **screensaver** with big lyrics and a **Next up** card in the last seconds of each song.

@@ -5,6 +5,10 @@ import static org.koin.java.KoinJavaComponent.get;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
+import androidx.core.content.ContextCompat;
+import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.view.LayoutInflater;
@@ -32,6 +36,8 @@ public class ProgramGridCell extends RelativeLayout implements RecordingIndicato
     private BaseItemDto mProgram;
     private ImageView mRecIndicator;
     private int mBackgroundColor = 0;
+    // The card of the cell (rounded, in the colours of the modern screens)
+    private View mCell;
     private boolean isLast;
     private boolean isFirst;
 
@@ -46,6 +52,7 @@ public class ProgramGridCell extends RelativeLayout implements RecordingIndicato
         LayoutInflater inflater = LayoutInflater.from(context);
         View v = inflater.inflate(R.layout.program_grid_cell, this, false);
         this.addView(v);
+        mCell = v;
 
         setFocusable(true);
 
@@ -135,20 +142,34 @@ public class ProgramGridCell extends RelativeLayout implements RecordingIndicato
                 mBackgroundColor = getResources().getColor(R.color.guide_kids_bg);
             }
 
-            setBackgroundColor(mBackgroundColor);
         }
+        mCell.setBackground(cellBackground());
+    }
+
+    /** The card of the cell: its genre colour when the guide is colour coded, otherwise the dark card */
+    private Drawable cellBackground() {
+        if (mBackgroundColor == 0) return ContextCompat.getDrawable(getContext(), R.drawable.guide_cell_bg);
+        GradientDrawable card = new GradientDrawable();
+        card.setColor(mBackgroundColor);
+        card.setCornerRadius(Utils.convertDpToPixel(getContext(), 7));
+        card.setStroke(Utils.convertDpToPixel(getContext(), 1), ContextCompat.getColor(getContext(), R.color.guide_cell_border));
+        int inset = Utils.convertDpToPixel(getContext(), 2);
+        return new InsetDrawable(card, inset);
     }
 
     @Override
     protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
 
+        // Focused: white with dark text, like the focused buttons of the app
         if (gainFocus) {
-            setBackgroundColor(Utils.getThemeColor(getContext(), android.R.attr.colorAccent));
+            mCell.setBackgroundResource(R.drawable.guide_cell_focused);
+            mProgramName.setTextColor(ContextCompat.getColor(getContext(), R.color.guide_text_on_focus));
 
             mActivity.setSelectedProgram(this);
         } else {
-            setBackgroundColor(mBackgroundColor);
+            mCell.setBackground(cellBackground());
+            mProgramName.setTextColor(ContextCompat.getColor(getContext(), R.color.white));
         }
     }
 

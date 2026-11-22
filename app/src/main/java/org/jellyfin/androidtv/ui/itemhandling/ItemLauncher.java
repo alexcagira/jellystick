@@ -65,7 +65,8 @@ public class ItemLauncher {
             case MUSIC:
                 return Destinations.INSTANCE.musicLibrary(baseItem);
             case LIVETV:
-                return Destinations.INSTANCE.librarySmartScreen(baseItem);
+                // Modern page with the highlights of the guide when the modern home is on
+                return Destinations.INSTANCE.liveTvLibrary(baseItem);
             default:
                 return Destinations.INSTANCE.libraryBrowser(baseItem, null);
         }

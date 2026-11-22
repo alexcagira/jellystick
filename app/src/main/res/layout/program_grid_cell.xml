@@ -3,8 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="55dp"
-    android:background="@drawable/light_border"
-    android:padding="2sp"
+    android:background="@drawable/guide_cell_bg"
+    android:padding="5dp"
     tools:layout_width="210dp">
 
     <TextView
@@ -19,10 +19,11 @@
         android:ellipsize="end"
         android:focusable="false"
         android:focusableInTouchMode="false"
-        android:fontFamily="sans-serif-light"
+        android:fontFamily="sans-serif-medium"
         android:maxLines="1"
         android:text="@string/no_program_data"
-        android:textSize="18sp" />
+        android:textColor="@color/white"
+        android:textSize="15sp" />
 
     <LinearLayout
         android:id="@+id/infoRow"

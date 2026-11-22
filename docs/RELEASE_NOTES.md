@@ -43,6 +43,18 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - **Dolby Vision + HDR10+ en directo y en Dolby Vision** en el Fire TV 4K / 4K Max (p. ej. *Los anillos de poder*), como Plex: antes el servidor quitaba Dolby Vision (remux) y la tele mostraba HDR. La app oculta los metadatos HDR10+ al decodificador Dolby Vision, que era lo que dejaba la pantalla en negro. El audio Atmos va en *passthrough*.
 - Opciones para Fire TV: **Dolby Vision como HDR10** (sin bloques de fotogramas anteriores: se quitan los metadatos Dolby Vision antes de decodificar) y *audio offload* desactivable (evita vídeo congelado con Atmos).
 
+### TV en directo
+- **Página de TV en directo** con pestañas **Programas**, **Guía**, **Canales** y **Favoritos** (como la web de Jellyfin), barra de navegación de cristal y fondo difuminado.
+- **Programas** (la pestaña de entrada): **media bar con lo destacado de la guía** como la del inicio (partidos y demás deportes en directo o a punto de empezar, películas, estrenos) con el logo del canal y la etiqueta *EN DIRECTO*, y las filas de la web: **En emisión**, **Series y programas**, **Películas**, **Deportes**, **Infantil** y **Noticias**, con la hora (*20:00 – 21:00* o *dom 22 nov 10:30*), el episodio y el canal. Los programas sin imagen llevan el logo del canal entero.
+- **Canales**: todos los canales en cuadrícula (logo, número, nombre, lo que ponen, hasta cuándo y cuánto lleva) con **buscador de canales** y filtro **Todos / Favoritos** al lado. Mantener OK en un canal lo **añade a favoritos** o lo quita.
+- **Favoritos**: tus canales favoritos con la imagen de lo que emiten.
+- **Guía**: pide los programas (EPG) con la hora del servidor. Con *No program data available* en todos los canales, la app pedía las horas según el reloj del Fire TV, y si su hora o su zona horaria no coinciden con las del servidor pedía horas sin programas. Ahora pide las horas del servidor y coloca los programas en la hora del Fire TV (un aviso dice si no coinciden). Además, cada programa se lee por separado y los canales se piden en grupos pequeños y con más tiempo; si la guía sigue vacía, un aviso dice qué ha recibido. Lo mismo en la guía del reproductor.
+- Arreglado: **los canales se quedaban cargando** después de abrir la página de TV en directo. Las imágenes de la guía, que el servidor descarga del EPG y a veces tardan, ocupaban la cola de conexiones del vídeo: ahora las imágenes van en su propia cola, la página pide las filas de dos en dos y solo de las próximas 12 horas, y deja de cargar en cuanto se sintoniza un canal.
+- **Página de cada programa**: su imagen de fondo, el logo del canal, horario, lo que queda, **Ver ahora**, **Grabar** / **Grabar serie** y lo que pone después el canal.
+- **Reproductor moderno también en directo**: logo del canal, el programa con *EN DIRECTO*, la barra del programa de su inicio a su fin, *Termina a las…*; ↓ abre los canales y los botones la guía y la información. **☰ ya no abre la guía**: como en películas y series, muestra la información de reproducción.
+- Arreglado: tras abrir la guía o el selector de canales y cerrarlos sin cambiar de canal, OK ya no volvía a mostrar los controles con la barra de tiempo.
+- La guía y el selector de canales con los colores y las letras del resto de la app: tarjetas oscuras redondeadas, en blanco la que tiene el foco.
+
 ### Música
 - Página de música nueva: media bar con recomendaciones (*Porque escuchas a…*), **radios** por artista y género, filas configurables y accesos rápidos.
 - Páginas de álbum, lista, artista y género con **corazón en cada canción** y lista automática **Favourite Tracks**.

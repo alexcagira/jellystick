@@ -131,6 +131,8 @@ data class HomeCard(
 	val playId: UUID? = null,
 	/** 16:9 cards: show the quality badges and the audio flags (library rows) */
 	val showBadges: Boolean = false,
+	/** The image is a logo (a channel's): shown whole on a dark card instead of cropped */
+	val logoImage: Boolean = false,
 )
 
 @Serializable
@@ -159,6 +161,13 @@ data class HeroSlide(
 	val quality: MediaQuality?,
 	/** Audio languages (movies) */
 	val languages: List<LanguageBadge> = emptyList(),
+	/** Live TV: "20:00 – 21:45 · Antena 3", shown with the channel logo instead of year and length */
+	val liveInfo: String? = null,
+	val channelLogoUrl: String? = null,
+	/** Live TV: the programme is on now (the "LIVE" badge) */
+	val onNow: Boolean = false,
+	/** Text of the first button ("Watch now"), "Play" when null */
+	val playLabel: String? = null,
 )
 
 data class ModernHomeState(

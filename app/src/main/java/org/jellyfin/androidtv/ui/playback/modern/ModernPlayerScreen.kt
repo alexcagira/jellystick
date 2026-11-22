@@ -70,6 +70,7 @@ import org.jellyfin.androidtv.ui.base.Icon
 import org.jellyfin.androidtv.ui.base.Text
 import org.jellyfin.androidtv.ui.home.modern.BebasNeue
 import org.jellyfin.androidtv.ui.home.modern.ImdbRatings
+import org.jellyfin.androidtv.ui.home.modern.LiveBadge
 import org.jellyfin.androidtv.ui.home.modern.ModernHomeColors
 import org.jellyfin.androidtv.ui.home.modern.awaitFrames
 import org.jellyfin.androidtv.ui.home.modern.tryRequestFocus
@@ -87,6 +88,8 @@ private const val CONTROLS_TIMEOUT_MS = 5_000L
 /** Seeking without OK for this long: the position is forgotten and the playback stays where it was */
 private const val SCRUB_CANCEL_MS = 8_000L
 private const val TICKS_PER_MS = 10_000L
+/** Live TV: start and end of the programme on the bar */
+private val liveTimeFormatter: DateTimeFormatter get() = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
 /** Element focused when the controls appear */
 private enum class ControlsFocus { DEFAULT, SEEK_BAR }
@@ -109,6 +112,8 @@ fun ModernPlayerScreen(
 	val state = overlay.state
 	val rootFocusRequester = remember { FocusRequester() }
 	val seekBarFocusRequester = remember { FocusRequester() }
+	// Live TV: the bar can't be sought, the first button gets the focus
+	val liveFocusRequester = remember { FocusRequester() }
 
 	var controlsVisible by remember { mutableStateOf(false) }
 	var controlsFocus by remember { mutableStateOf(ControlsFocus.DEFAULT) }
@@ -168,14 +173,26 @@ fun ModernPlayerScreen(
 		}
 	}
 
-	// Focus: the controls when they appear, the screen itself (key handling) when they hide
+	// Focus: the controls when they appear, the screen itself (key handling) when they hide. Not
+	// while the guide or the channel changer of live TV is open: they have it
 	LaunchedEffect(controlsVisible, controlsFocus) {
 		awaitFrames(1)
 		when {
+			state.panelOpen -> Unit
 			!controlsVisible -> rootFocusRequester.tryRequestFocus()
+			state.live -> liveFocusRequester.tryRequestFocus()
 			// OK on the seek bar plays/pauses, left/right seek
 			else -> seekBarFocusRequester.tryRequestFocus()
 		}
+	}
+
+	// The guide or the channel changer closed: the remote comes back to the player (OK shows the
+	// controls again). Asking the view for the focus isn't enough, the screen has to take it
+	LaunchedEffect(state.focusRequests) {
+		if (state.focusRequests == 0) return@LaunchedEffect
+		controlsVisible = false
+		awaitFrames(1)
+		rootFocusRequester.tryRequestFocus()
 	}
 
 	// Smooth position while the controls are visible
@@ -201,7 +218,8 @@ fun ModernPlayerScreen(
 				val isDown = event.type == KeyEventType.KeyDown
 				val isBack = event.key == Key.Back || event.key == Key.Escape
 
-				// ☰ opens or closes the stream info (when released); the controls hide to make room
+				// ☰ opens or closes the stream info (when released); the controls hide to make room.
+				// Live TV too: the guide has its button in the controls
 				if (event.key == Key.Menu) {
 					if (event.type == KeyEventType.KeyUp) {
 						if (infoVisible) infoVisible = false
@@ -235,15 +253,27 @@ fun ModernPlayerScreen(
 				}
 
 				when (event.key) {
-					Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+					// Live TV: OK shows the controls (a channel doesn't pause), ↓ the channels
+					Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.DirectionDown -> if (state.live) {
 						if (isDown && event.nativeKeyEvent.repeatCount == 0) {
-							if (skipVisible) overlay.skipSegment()
-							else {
-								overlay.playPause()
-								showControls()
-							}
+							if (event.key == Key.DirectionDown) overlay.showChannels() else showControls()
 						}
 						true
+					} else when (event.key) {
+						Key.DirectionDown -> {
+							if (isDown) showControls()
+							true
+						}
+						else -> {
+							if (isDown && event.nativeKeyEvent.repeatCount == 0) {
+								if (skipVisible) overlay.skipSegment()
+								else {
+									overlay.playPause()
+									showControls()
+								}
+							}
+							true
+						}
 					}
 
 					Key.DirectionLeft, Key.DirectionRight -> {
@@ -254,7 +284,7 @@ fun ModernPlayerScreen(
 						true
 					}
 
-					Key.DirectionUp, Key.DirectionDown -> {
+					Key.DirectionUp -> {
 						if (isDown) showControls()
 						true
 					}
@@ -314,6 +344,19 @@ fun ModernPlayerScreen(
 				onPlayPause = overlay::playPause,
 				onMenu = { menu = it },
 				skipVisible = skipVisible,
+				liveFocusRequester = liveFocusRequester,
+				onShowInfo = {
+					infoVisible = true
+					controlsVisible = false
+				},
+				onShowGuide = {
+					controlsVisible = false
+					overlay.showGuide()
+				},
+				onShowChannels = {
+					controlsVisible = false
+					overlay.showChannels()
+				},
 			)
 		}
 
@@ -354,10 +397,16 @@ private fun PlayerControls(
 	onPlayPause: () -> Unit,
 	onMenu: (PlayerMenu) -> Unit,
 	skipVisible: Boolean,
+	liveFocusRequester: FocusRequester,
+	onShowInfo: () -> Unit,
+	onShowGuide: () -> Unit,
+	onShowChannels: () -> Unit,
 ) {
 	val state = overlay.state
 	val item = state.item
 	val imageLoader = koinInject<ImageLoader>()
+	val live = state.live
+	val liveProgram = state.liveProgram
 
 	Box(modifier = Modifier.fillMaxSize()) {
 		// Readability gradients
@@ -391,7 +440,9 @@ private fun PlayerControls(
 				)
 				Spacer(Modifier.width(10.dp))
 				Text(
-					text = item?.let { playerTitle(it) }.orEmpty(),
+					// Live TV: "2  Antena 3"
+					text = if (live) listOfNotNull(item?.number?.takeIf { it.isNotBlank() }, item?.name).joinToString("  ")
+					else item?.let { playerTitle(it) }.orEmpty(),
 					color = ModernHomeColors.TextPrimary,
 					fontSize = 14.sp,
 					fontWeight = FontWeight.SemiBold,
@@ -413,6 +464,37 @@ private fun PlayerControls(
 						.height(54.dp)
 						.widthIn(max = 230.dp),
 				)
+			}
+
+			// Live TV: the programme on now under the channel logo
+			if (live && liveProgram != null) {
+				Spacer(Modifier.height(10.dp))
+				Row(
+					verticalAlignment = Alignment.CenterVertically,
+					modifier = Modifier.padding(start = 8.dp),
+				) {
+					LiveBadge()
+					Spacer(Modifier.width(10.dp))
+					Text(
+						text = liveProgram.name.orEmpty(),
+						color = ModernHomeColors.TextPrimary,
+						fontSize = 22.sp,
+						fontWeight = FontWeight.Bold,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+					)
+				}
+				liveProgram.episodeTitle?.takeIf { it.isNotBlank() && it != liveProgram.name }?.let { episode ->
+					Text(
+						text = episode,
+						color = ModernHomeColors.TextSecondary,
+						fontSize = 14.sp,
+						fontWeight = FontWeight.Medium,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						modifier = Modifier.padding(start = 8.dp, top = 2.dp),
+					)
+				}
 			}
 		}
 
@@ -469,7 +551,17 @@ private fun PlayerControls(
 				}
 
 				val remainingMs = (state.durationMs - state.positionMs).coerceAtLeast(0)
-				if (state.durationMs > 0) {
+				// Live TV: when the programme ends
+				val liveEnd = liveProgram?.endDate
+				if (live && liveEnd != null) {
+					Text(
+						text = stringResource(R.string.modern_player_ends_at, liveEnd.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))),
+						color = ModernHomeColors.TextSecondary,
+						fontSize = 12.sp,
+						fontWeight = FontWeight.SemiBold,
+						maxLines = 1,
+					)
+				} else if (!live && state.durationMs > 0) {
 					val endTime = LocalTime.now()
 						.plusSeconds((remainingMs / state.speed.coerceAtLeast(0.1f) / 1000f).toLong())
 						.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
@@ -485,6 +577,25 @@ private fun PlayerControls(
 				Spacer(Modifier.weight(1f))
 
 				Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+					// Live TV: the guide, the channels and the stream info first
+					if (live) {
+						PlayerIconButton(
+							icon = R.drawable.ic_tv_guide,
+							contentDescription = stringResource(R.string.lbl_live_tv_guide),
+							onClick = onShowGuide,
+							modifier = Modifier.focusRequester(liveFocusRequester),
+						)
+						PlayerIconButton(
+							icon = R.drawable.ic_channel_bar,
+							contentDescription = stringResource(R.string.live_tv_channels),
+							onClick = onShowChannels,
+						)
+						PlayerIconButton(
+							icon = R.drawable.ic_info,
+							contentDescription = stringResource(R.string.stream_info_title),
+							onClick = onShowInfo,
+						)
+					}
 					PlayerIconButton(
 						icon = R.drawable.ic_select_audio,
 						contentDescription = stringResource(R.string.modern_player_audio),
@@ -513,11 +624,14 @@ private fun PlayerControls(
 						contentDescription = stringResource(R.string.modern_player_playback_mode),
 						onClick = { onMenu(PlayerMenu.PLAYBACK_MODE) },
 					)
-					PlayerIconButton(
-						icon = R.drawable.ic_playback_speed,
-						contentDescription = stringResource(R.string.modern_player_speed),
-						onClick = { onMenu(PlayerMenu.SPEED) },
-					)
+					// A channel plays at its own pace
+					if (!live) {
+						PlayerIconButton(
+							icon = R.drawable.ic_playback_speed,
+							contentDescription = stringResource(R.string.modern_player_speed),
+							onClick = { onMenu(PlayerMenu.SPEED) },
+						)
+					}
 					PlayerIconButton(
 						icon = R.drawable.ic_subtitle_offset,
 						contentDescription = stringResource(R.string.modern_player_subtitle_offset),
@@ -595,7 +709,8 @@ private fun SeekBarRow(
 				modifier = Modifier.onGloballyPositioned { onPositioned(it.boundsInWindow().top) },
 			) {
 				Text(
-					text = formatTime(shownPosition),
+					// Live TV: when the programme started
+					text = if (state.live) state.liveProgram?.startDate?.format(liveTimeFormatter).orEmpty() else formatTime(shownPosition),
 					color = ModernHomeColors.TextPrimary,
 					fontSize = 12.sp,
 					fontWeight = FontWeight.SemiBold,
@@ -618,7 +733,9 @@ private fun SeekBarRow(
 				)
 				Spacer(Modifier.width(12.dp))
 				Text(
-					text = "-" + formatTime((state.durationMs - shownPosition).coerceAtLeast(0)),
+					// Live TV: when it ends
+					text = if (state.live) state.liveProgram?.endDate?.format(liveTimeFormatter).orEmpty()
+					else "-" + formatTime((state.durationMs - shownPosition).coerceAtLeast(0)),
 					color = ModernHomeColors.TextPrimary,
 					fontSize = 12.sp,
 					fontWeight = FontWeight.SemiBold,

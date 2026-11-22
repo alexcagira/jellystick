@@ -50,6 +50,10 @@ import org.jellyfin.androidtv.ui.library.modern.ModernBrowseViewModel
 import org.jellyfin.androidtv.ui.library.modern.AudioLanguageIndex
 import org.jellyfin.androidtv.ui.music.MusicStopper
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryRepository
+import org.jellyfin.androidtv.ui.livetv.modern.LiveTvProgramLoader
+import org.jellyfin.androidtv.ui.livetv.modern.ModernLiveTvRepository
+import org.jellyfin.androidtv.ui.livetv.modern.ModernLiveTvViewModel
+import org.jellyfin.androidtv.ui.livetv.modern.ModernProgramViewModel
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryViewModel
 import org.jellyfin.androidtv.ui.music.modern.FavouriteTracks
 import org.jellyfin.androidtv.ui.music.modern.MusicCache
@@ -111,6 +115,9 @@ val defaultDeviceInfo = named("defaultDeviceInfo")
 
 private const val MAX_REQUESTS = 64
 private const val MAX_REQUESTS_PER_SERVER = 24
+// Images go in a queue of their own (see Coil below)
+private const val MAX_IMAGE_REQUESTS = 24
+private const val MAX_IMAGE_REQUESTS_PER_SERVER = 10
 
 val appModule = module {
 	// SDK
@@ -157,14 +164,23 @@ val appModule = module {
 
 	single { SocketHandler(get(), get(), get(), get(), get(), get(), get(), get(), get(), ProcessLifecycleOwner.get().lifecycle) }
 
-	// Coil (images)
+	// Coil (images). Their own queue: pictures of the guide that the server downloads from the EPG
+	// can take long, and with the queue of the API and the video they kept a channel from starting
 	single {
 		val okHttpFactory = get<OkHttpFactory>()
+		val imageFactory = OkHttpFactory(
+			okHttpFactory.base.newBuilder()
+				.dispatcher(Dispatcher().apply {
+					maxRequests = MAX_IMAGE_REQUESTS
+					maxRequestsPerHost = MAX_IMAGE_REQUESTS_PER_SERVER
+				})
+				.build()
+		)
 		val httpClientOptions = get<HttpClientOptions>()
 
 		@OptIn(ExperimentalCoilApi::class)
 		OkHttpNetworkFetcherFactory(
-			callFactory = { okHttpFactory.createClient(httpClientOptions) },
+			callFactory = { imageFactory.createClient(httpClientOptions) },
 			connectivityChecker = ::createCoilConnectivityChecker,
 		)
 	}
@@ -218,6 +234,9 @@ val appModule = module {
 	single { MusicCache(androidContext()) }
 	single { ImdbTop250(androidContext(), get()) }
 	single { ModernLibraryRepository(androidContext(), get(), get(), get(), get()) }
+	// Programmes of the guide: more time, small groups of channels, unreadable programmes left out
+	single { LiveTvProgramLoader(get(), get()) }
+	single { ModernLiveTvRepository(androidContext(), get(), get(), get()) }
 	single { LibraryBrowseRepository(get(), get()) }
 	single { AudioLanguageIndex(androidContext(), get()) }
 	single { ModernMusicRepository(get(), get()) }
@@ -247,6 +266,9 @@ val appModule = module {
 	viewModel { ModernMusicViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicItemViewModel(get(), get(), get(), get()) }
 	viewModel { ModernLibraryViewModel(get(), get(), get(), get(), get()) }
+	// Live TV in the style of the libraries, and the programme pages
+	viewModel { ModernLiveTvViewModel(get(), get()) }
+	viewModel { ModernProgramViewModel(get(), get()) }
 	viewModel { ModernBrowseViewModel(get(), get(), get(), get()) }
 	viewModel { ModernMusicBrowseViewModel(get()) }
 	viewModel { ModernSearchViewModel(get(), get(), get(), get()) }

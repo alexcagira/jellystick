@@ -7,6 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.ui.livetv.modern.LiveTvClock
 import org.jellyfin.androidtv.R
 import org.jellyfin.androidtv.data.model.DataRefreshService
 import org.jellyfin.androidtv.data.repository.ItemMutationRepository
@@ -53,7 +54,8 @@ fun CustomPlaybackOverlayFragment.refreshSelectedProgram() {
 			val item = withContext(Dispatchers.IO) {
 				api.userLibraryApi.getItem(mSelectedProgram.id).content
 			}
-			mSelectedProgram = item
+			// In the TV's clock, like the rest of the guide (LiveTvClock)
+			mSelectedProgram = LiveTvClock.toDeviceClock(item)
 		}.onFailure { error ->
 			Timber.e(error, "Unable to get program details")
 		}

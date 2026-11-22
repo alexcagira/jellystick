@@ -92,14 +92,16 @@
         android:layout_width="315dp"
         android:layout_height="80sp"
         android:id="@+id/guideTitle"
-        android:textSize="25sp"
+        android:textSize="26sp"
+        android:textColor="@color/white"
+        android:textStyle="bold"
         android:layout_marginEnd="10dp"
         android:ellipsize="end"
         android:maxLines="1"
         android:layout_alignParentEnd="false"
         android:gravity="center_vertical"
         android:layout_toStartOf="@+id/textClock2"
-        android:fontFamily="sans-serif-light" />
+        android:fontFamily="sans-serif-medium" />
 
     <TextClock
         android:layout_width="wrap_content"
@@ -127,7 +129,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:id="@+id/summary"
-        android:textSize="16sp"
+        android:textSize="15sp"
+        android:textColor="@color/guide_text_secondary"
         android:layout_below="@+id/guideInfoRow"
         android:layout_above="@+id/timelineHScroller"
         android:layout_marginBottom="10sp"
@@ -136,7 +139,7 @@
         android:maxLines="5"
         android:layout_alignStart="@+id/guideInfoRow"
         android:layout_alignEnd="@+id/guideInfoRow"
-        android:fontFamily="sans-serif-light" />
+        android:fontFamily="sans-serif-medium" />
 
     <TextView
         android:id="@+id/channelsStatus"
@@ -148,7 +151,7 @@
         android:layout_marginBottom="2sp"
         android:textColor="@color/grey_light"
         android:textSize="12sp"
-        android:fontFamily="sans-serif-light" />
+        android:fontFamily="sans-serif-medium" />
 
     <TextView
         android:layout_width="wrap_content"
@@ -163,7 +166,7 @@
         android:textStyle="bold"
         android:textSize="12sp"
         android:textColor="@color/grey_light"
-        android:fontFamily="sans-serif-light" />
+        android:fontFamily="sans-serif-medium" />
 
     <RelativeLayout
         android:layout_width="fill_parent"
@@ -204,6 +207,6 @@
         android:background="@color/black_transparent"
         android:textStyle="bold"
         android:layout_alignParentStart="true"
-        android:fontFamily="sans-serif-light" />
+        android:fontFamily="sans-serif-medium" />
 
 </RelativeLayout>

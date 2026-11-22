@@ -45,7 +45,7 @@
         android:layout_width="fill_parent"
         android:layout_height="225dp"
         android:layout_gravity="bottom"
-        android:background="@color/black_transparent"
+        android:background="@drawable/player_popup_bg"
         android:visibility="gone">
 
         <LinearLayout

@@ -1,8 +1,28 @@
 package org.jellyfin.androidtv.ui.playback.modern
 
 import android.content.Context
+import android.view.View
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.ui.livetv.modern.LiveTvClock
+import org.jellyfin.androidtv.util.apiclient.getUrl
+import org.jellyfin.androidtv.util.apiclient.itemImages
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.extensions.liveTvApi
+import org.jellyfin.sdk.model.api.ImageFormat
+import org.jellyfin.sdk.model.api.ImageType
+import timber.log.Timber
+import java.time.LocalDateTime
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,7 +39,6 @@ import org.jellyfin.androidtv.ui.playback.VideoSpeedController
 import org.jellyfin.androidtv.ui.playback.setSubtitleIndex
 import org.jellyfin.androidtv.util.ImageHelper
 import org.jellyfin.sdk.model.api.BaseItemDto
-import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.MediaSegmentType
 import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.PlayMethod
@@ -42,6 +61,13 @@ data class PlayerOption(
  * [ModernPlayerOverlay]. Only touched from the main thread.
  */
 class ModernPlayerState {
+	/**
+	 * Live TV: the guide or the channel changer (views of the fragment) is open, the controls leave
+	 * the focus to it
+	 */
+	var panelOpen by mutableStateOf(false)
+	/** Changes when the remote has to come back to the controls (the guide or the changer closed) */
+	var focusRequests by mutableIntStateOf(0)
 	var item by mutableStateOf<BaseItemDto?>(null)
 	var logoUrl by mutableStateOf<String?>(null)
 	/** Media source being played, for the trickplay thumbnails */
@@ -59,6 +85,11 @@ class ModernPlayerState {
 	/** "Skip intro" / "Skip credits": where to jump to, null when there is nothing to skip */
 	var skipTargetMs by mutableStateOf<Long?>(null)
 	var skipType by mutableStateOf<MediaSegmentType?>(null)
+
+	/** Live TV: a channel plays. The bar is the programme on now, from its start to its end */
+	var live by mutableStateOf(false)
+	/** Live TV: the programme on now on the channel */
+	var liveProgram by mutableStateOf<BaseItemDto?>(null)
 }
 
 /**
@@ -76,8 +107,8 @@ class ModernPlayerOverlay(
 		@JvmStatic
 		fun isEnabledFor(items: List<BaseItemDto>?): Boolean {
 			val userPreferences = org.koin.java.KoinJavaComponent.get<UserPreferences>(UserPreferences::class.java)
-			if (!userPreferences[UserPreferences.modernPlayerEnabled]) return false
-			return items.orEmpty().none { it.type == BaseItemKind.TV_CHANNEL || it.type == BaseItemKind.PROGRAM }
+			// Live TV too: the programme on now in the bar, the guide (button) and the channels on ↓
+			return userPreferences[UserPreferences.modernPlayerEnabled] && !items.isNullOrEmpty()
 		}
 
 		/**
@@ -92,6 +123,10 @@ class ModernPlayerOverlay(
 	private val playbackControllerContainer by inject<PlaybackControllerContainer>()
 	private val imageHelper by inject<ImageHelper>()
 	private val userPreferences by inject<UserPreferences>()
+	private val api by inject<ApiClient>()
+	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+	private var liveJob: Job? = null
+	private var composeView: View? = null
 
 	private val qualityController by lazy { VideoQualityController(userPreferences[UserPreferences.maxBitrate], userPreferences) }
 	private var speedController: VideoSpeedController? = null
@@ -100,6 +135,10 @@ class ModernPlayerOverlay(
 
 	/** Called to close the player (back arrow) */
 	var onClose: () -> Unit = {}
+
+	/** Live TV: the guide of the player (its button), and the channel changer (↓) */
+	var onShowGuide: () -> Unit = {}
+	var onShowChannels: () -> Unit = {}
 
 	private val controller: PlaybackController?
 		get() = playbackControllerContainer.playbackController
@@ -116,16 +155,33 @@ class ModernPlayerOverlay(
 		val view = ComposeView(root.context).apply {
 			setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
 			isFocusable = true
+			// The focus goes into the controls, not to this frame (the keys wouldn't reach them)
+			descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
 			setContent { ModernPlayerScreen(overlay = this@ModernPlayerOverlay) }
 		}
 		root.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 		view.requestFocus()
+		composeView = view
+	}
+
+	/** The remote goes back to the controls (after the guide or the channel changer closed) */
+	fun focusControls() {
+		state.panelOpen = false
+		composeView?.requestFocus()
+		// The view having the focus isn't enough: the screen takes it inside (ModernPlayerScreen)
+		state.focusRequests++
+	}
+
+	/** The player closes */
+	fun release() {
+		scope.cancel()
+		composeView = null
 	}
 
 	// Events from the fragment
 
 	fun onProgress(positionMs: Long) {
-		state.positionMs = positionMs
+		if (!state.live) state.positionMs = positionMs
 		refreshPlayState()
 	}
 
@@ -134,9 +190,58 @@ class ModernPlayerOverlay(
 	fun onItemChanged() {
 		val controller = controller ?: return
 		val item = controller.currentlyPlayingItem
+		val previous = state.item
 		state.item = item
-		state.logoUrl = imageHelper.getLogoImageUrl(item, 600)
+		state.live = controller.isLiveTv
+		state.logoUrl = if (state.live) item?.itemImages?.get(ImageType.PRIMARY)?.getUrl(api, maxHeight = CHANNEL_LOGO_HEIGHT, format = ImageFormat.PNG)
+		else imageHelper.getLogoImageUrl(item, 600)
+		if (state.live && (item?.id != previous?.id || state.liveProgram == null)) {
+			if (item?.id != previous?.id) state.liveProgram = null
+			watchLiveProgram()
+		}
 		refreshPlayState()
+	}
+
+	/** Live TV: the programme on now, read again when it ends */
+	private fun watchLiveProgram() {
+		val channelId = state.item?.id ?: return
+		liveJob?.cancel()
+		liveJob = scope.launch {
+			while (true) {
+				val program = try {
+					withContext(Dispatchers.IO) { api.liveTvApi.getChannel(channelId).content.currentProgram }
+				} catch (err: CancellationException) {
+					throw err
+				} catch (err: Exception) {
+					Timber.w(err, "Unable to read the programme on now")
+					null
+				}
+				if (state.item?.id != channelId) return@launch
+				if (program != null) state.liveProgram = program
+				refreshPlayState()
+				// Once it ends, the next one (at most a few minutes, the guide can change)
+				val untilEnd = program?.endDate?.let { java.time.Duration.between(LiveTvClock.now(), it).toMillis() } ?: 0L
+				delay((untilEnd + LIVE_END_MARGIN_MS).coerceIn(LIVE_MIN_REFRESH_MS, LIVE_MAX_REFRESH_MS))
+			}
+		}
+	}
+
+	/** Live TV: where the programme on now is (from its start to its end, by the clock) */
+	private fun refreshLivePosition(): Boolean {
+		if (!state.live) return false
+		val program = state.liveProgram
+		val start = program?.startDate
+		val end = program?.endDate
+		if (start == null || end == null) {
+			state.positionMs = 0
+			state.durationMs = 0
+			return true
+		}
+		// The server's time: the TV's clock may not match it (LiveTvClock)
+		val now = LiveTvClock.now()
+		state.durationMs = java.time.Duration.between(start, end).toMillis().coerceAtLeast(0)
+		state.positionMs = java.time.Duration.between(start, now).toMillis().coerceIn(0, state.durationMs)
+		return true
 	}
 
 	fun askToSkip(target: Duration, type: MediaSegmentType?) {
@@ -153,7 +258,7 @@ class ModernPlayerOverlay(
 		val controller = controller ?: return
 		state.playing = controller.isPlaying
 		state.paused = controller.isPaused
-		state.durationMs = controller.duration.coerceAtLeast(0)
+		if (!refreshLivePosition()) state.durationMs = controller.duration.coerceAtLeast(0)
 		state.canSeek = controller.canSeek()
 		state.hasNext = controller.hasNextItem()
 		state.hasPrevious = controller.hasPreviousItem()
@@ -164,8 +269,18 @@ class ModernPlayerOverlay(
 
 	fun refreshPosition() {
 		val controller = controller ?: return
-		state.positionMs = controller.currentPosition
+		if (!state.live) state.positionMs = controller.currentPosition
 		refreshPlayState()
+	}
+
+	fun showGuide() {
+		state.panelOpen = true
+		onShowGuide()
+	}
+
+	fun showChannels() {
+		state.panelOpen = true
+		onShowChannels()
 	}
 
 	fun playPause() {
@@ -323,3 +438,8 @@ class ModernPlayerOverlay(
 }
 
 private const val MAX_SUBTITLE_OFFSET_MS = 30_000L
+private const val CHANNEL_LOGO_HEIGHT = 120
+/** Live TV: the next programme is read this long after the current one ends */
+private const val LIVE_END_MARGIN_MS = 5_000L
+private const val LIVE_MIN_REFRESH_MS = 15_000L
+private const val LIVE_MAX_REFRESH_MS = 5 * 60_000L

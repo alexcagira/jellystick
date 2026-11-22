@@ -19,6 +19,8 @@ import org.jellyfin.androidtv.ui.itemdetail.FullDetailsFragment
 import org.jellyfin.androidtv.ui.library.modern.BrowseFilter
 import org.jellyfin.androidtv.ui.library.modern.ModernBrowseFragment
 import org.jellyfin.androidtv.ui.library.modern.ModernLibraryFragment
+import org.jellyfin.androidtv.ui.livetv.modern.ModernLiveTvFragment
+import org.jellyfin.androidtv.ui.livetv.modern.ModernProgramFragment
 import org.jellyfin.androidtv.ui.library.modern.libraryKind
 import org.jellyfin.androidtv.ui.itemdetail.ItemListFragment
 import org.jellyfin.androidtv.ui.itemdetail.MusicFavoritesListFragment
@@ -184,12 +186,28 @@ object Destinations {
 	}.getOrDefault(false)
 
 	// TODO only pass item id instead of complete JSON to browsing destinations
-	fun channelDetails(item: UUID, channel: UUID, programInfo: BaseItemDto) =
-		fragmentDestination<FullDetailsFragment> {
+	/** A programme of the guide: the modern programme page when the modern details are on */
+	fun channelDetails(item: UUID, channel: UUID, programInfo: BaseItemDto): Destination.Fragment =
+		if (modernDetailsEnabled()) liveProgram(programInfo)
+		else fragmentDestination<FullDetailsFragment> {
 			putString("ItemId", item.toString())
 			putString("ChannelId", channel.toString())
 			putString("ProgramInfo", Json.encodeToString(programInfo))
 		}
+
+	/** Programme page: its picture, the channel logo, watch and record */
+	fun liveProgram(program: BaseItemDto) = fragmentDestination<ModernProgramFragment> {
+		putString(ModernProgramFragment.ARGUMENT_PROGRAM, Json.encodeToString(program))
+	}
+
+	/** Live TV in the style of the libraries (media bar with the highlights of the guide) */
+	fun modernLiveTv(item: BaseItemDto) = fragmentDestination<ModernLiveTvFragment> {
+		putString(Extras.Folder, Json.encodeToString(item))
+	}
+
+	/** The Live TV page: the modern one when the modern home is on */
+	fun liveTvLibrary(item: BaseItemDto): Destination.Fragment =
+		if (preference(UserPreferences.modernHomeEnabled)) modernLiveTv(item) else librarySmartScreen(item)
 
 	// TODO only pass item id instead of complete JSON to browsing destinations
 	fun seriesTimerDetails(item: UUID, seriesTimer: SeriesTimerInfoDto) =

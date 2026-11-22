@@ -43,6 +43,18 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - **Dolby Vision + HDR10+ played directly, as Dolby Vision** on the Fire TV 4K / 4K Max (e.g. *The Rings of Power*), like Plex: the server used to remove Dolby Vision (remux) and the TV showed HDR. The app hides the HDR10+ metadata from the Dolby Vision decoder, which is what made the screen black. Atmos audio goes through as passthrough.
 - Fire TV options: **play Dolby Vision as HDR10** (no blocks of earlier frames: the Dolby Vision metadata is removed before decoding), and *audio offload* can be turned off (avoids frozen video with Atmos).
 
+### Live TV
+- **Live TV page** with the tabs **Programmes**, **Guide**, **Channels** and **Favourites** (like Jellyfin web), glass navigation bar and blurred background.
+- **Programmes** (the first tab): a **media bar with the highlights of the guide** like the home one (matches and other sports live or about to start, films, premieres) with the channel logo and a *LIVE* tag, and the rows of the web: **On now**, **Shows**, **Movies**, **Sports**, **For kids** and **News**, with the time (*20:00 – 21:00* or *Sun 22 Nov 10:30*), the episode and the channel. Programmes without a picture show the whole channel logo.
+- **Channels**: every channel in a grid (logo, number, name, what's on, until when and how far it is) with a **channel search** and an **All / Favourites** filter on the side. Holding OK on a channel **adds it to the favourites** or takes it out.
+- **Favourites**: your favourite channels with the picture of what they show now.
+- **Guide**: it asks for the programmes (EPG) with the server's time. With *No program data available* on every channel, the app asked for the hours of the Fire TV's clock, and when its time or time zone don't match the server's it asked for hours without programmes. Now it asks for the server's hours and places the programmes on the Fire TV's clock (a message says when they don't match). Each programme is also read on its own and the channels are asked for in small groups and with more time; if the guide is still empty, a message says what came. Same in the guide of the player.
+- Fixed: **channels kept loading** after opening the Live TV page. The guide's pictures, which the server downloads from the EPG and can be slow, took up the queue of connections of the video: now pictures have their own queue, the page asks for the rows two at a time and only for the next 12 hours, and it stops loading as soon as a channel is tuned in.
+- **Programme page**: its picture as background, the channel logo, times, time left, **Watch now**, **Record** / **Record series** and what the channel shows next.
+- **Modern player for live TV too**: channel logo, the programme with *LIVE*, the bar of the programme from its start to its end, *Ends at…*; ↓ opens the channels and buttons the guide and the stream info. **☰ no longer opens the guide**: like with films and series, it shows the stream info.
+- Fixed: after opening the guide or the channel changer and closing them without changing the channel, OK didn't bring back the controls and the timeline.
+- The guide and the channel changer in the colours and fonts of the rest of the app: dark rounded cards, white when focused.
+
 ### Music
 - New music page: media bar with recommendations (*Because you listen to…*), **stations** by artist and genre, configurable rows and quick links.
 - Album, playlist, artist and genre pages with a **heart on every song** and an automatic **Favourite Tracks** playlist.

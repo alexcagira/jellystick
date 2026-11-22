@@ -308,7 +308,7 @@ fun ModernSearchScreen(viewModel: ModernSearchViewModel) {
  * remote while the keyboard is open to dictate the search.
  */
 @Composable
-private fun SearchField(
+internal fun SearchField(
 	query: String,
 	hint: String,
 	startEditing: Boolean,
