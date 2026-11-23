@@ -643,10 +643,19 @@ Fire TV 4K Max se reproducen en directo.
 Sale un aviso en cada intento y sigue en el mismo punto. El paso que funcionó se recuerda para **toda la serie**
 (o la película), así los siguientes episodios empiezan ya así. En los controles, el botón **Modo de reproducción**
 (⇄) muestra cómo se está reproduciendo ahora (directo, emisión del servidor o transcodificando) y permite elegirlo
-a mano (también *Reempaquetar*, el remux solo, y en archivos Dolby Vision el interruptor *Dolby Vision como HDR10*);
+a mano (también *Reempaquetar*, el remux solo, que manda el vídeo del archivo tal cual aunque pase del límite de
+calidad del reproductor; en archivos HDR, **HLG a SDR** / **HDR10 a SDR** / **Dolby Vision a SDR**, que el servidor
+convierte a la calidad elegida, `PlaybackFallback.applySdr`: el perfil dice que no reproduce ningún HDR; y en archivos
+Dolby Vision el interruptor *Dolby Vision como HDR10*);
 *Automático* vuelve a intentar la reproducción directa y olvida lo recordado. Transcodificar necesita que
 tu usuario tenga permiso para ello en el servidor y que el servidor pueda hacerlo (CPU o aceleración por hardware).
 El código está en `ui/playback/PlaybackFallback.kt`.
+
+**Solo el chip decodifica el vídeo** (`SubtitleOffsetRenderersFactory`): si hay decodificador por hardware para el
+códec, los de software de Android se quitan de la lista, y el decodificador de vídeo de FFmpeg (con *Preferir
+FFmpeg*, o cuando el chip decía no poder con el formato) no se usa; el audio sigue con FFmpeg. En software un 4K
+HEVC de 10 bits (HLG, HDR) salía como mármol con curvas de nivel y a saltos. Si el chip no arranca, falla y el
+servidor convierte (los niveles de arriba).
 
 **El reproductor primero**: OkHttp manda como mucho 5 peticiones a la vez al mismo servidor y pone las demás
 en cola, y el vídeo, la API y las sintonías comparten esas 5: el reproductor esperaba detrás de las filas del

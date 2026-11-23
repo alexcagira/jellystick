@@ -41,6 +41,8 @@ Every new feature can be turned off in *Settings → Customization → Home* to 
 - **Skip intro / credits / recap** with Jellyfin media segments or Intro Skipper.
 - When a file fails in direct play, the app automatically retries with **Dolby Vision as HDR10, converted audio or transcoding** from the same position, and remembers it for the whole series.
 - **Dolby Vision + HDR10+ played directly, as Dolby Vision** on the Fire TV 4K / 4K Max (e.g. *The Rings of Power*), like Plex: the server used to remove Dolby Vision (remux) and the TV showed HDR. The app hides the HDR10+ metadata from the Dolby Vision decoder, which is what made the screen black. Atmos audio goes through as passthrough.
+- **4K HLG (and HDR) that looked like marble**, with blotches and contour lines: video is only decoded by the Fire TV's chip now. When the chip's decoder didn't start (or with *Prefer FFmpeg*), a software decoder that can't handle 10-bit took over; now, if the chip can't, the server converts it.
+- Two more options in *Playback mode* (⇄) for those cases: **HLG to SDR** (or HDR10 / Dolby Vision to SDR: converted by the server, at the chosen quality) and **Repackage (remux) at original quality** (the file's video as it is even over the player's quality limit). Both are kept for the whole series.
 - Fire TV options: **play Dolby Vision as HDR10** (no blocks of earlier frames: the Dolby Vision metadata is removed before decoding), and *audio offload* can be turned off (avoids frozen video with Atmos).
 
 ### Live TV

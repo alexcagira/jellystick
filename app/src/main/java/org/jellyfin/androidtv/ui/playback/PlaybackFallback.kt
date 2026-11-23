@@ -16,6 +16,7 @@ import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.ProfileCondition
 import org.jellyfin.sdk.model.api.ProfileConditionType
 import org.jellyfin.sdk.model.api.ProfileConditionValue
+import org.jellyfin.sdk.model.api.VideoRangeType
 
 /**
  * Some files the server says this device plays as they are don't work on it (a codec the Fire TV
@@ -66,6 +67,77 @@ class PlaybackFallback(context: Context) {
 		fun isDolbyVision(source: MediaSourceInfo?): Boolean = source?.mediaStreams.orEmpty().any { stream ->
 			stream.type == MediaStreamType.VIDEO && stream.videoRangeType?.serialName?.startsWith("DOVI", ignoreCase = true) == true
 		}
+
+		/** Every kind of HDR: HDR10, HDR10+, HLG and Dolby Vision */
+		private val HDR_RANGE_TYPES: List<VideoRangeType> = VideoRangeType.entries
+			.filter { it != VideoRangeType.SDR && it != VideoRangeType.UNKNOWN }
+
+		/** The video of [source] is HDR (HDR10, HDR10+, HLG or Dolby Vision) */
+		@JvmStatic
+		fun isHdr(source: MediaSourceInfo?): Boolean = source?.mediaStreams.orEmpty().any { stream ->
+			stream.type == MediaStreamType.VIDEO && stream.videoRangeType in HDR_RANGE_TYPES
+		}
+
+		/** The video of [item] is HDR, when its media sources aren't known yet */
+		@JvmStatic
+		fun isHdrItem(item: BaseItemDto?): Boolean =
+			item?.mediaSources.orEmpty().any(::isHdr) || item?.mediaStreams.orEmpty().any { stream ->
+				stream.type == MediaStreamType.VIDEO && stream.videoRangeType in HDR_RANGE_TYPES
+			}
+
+		/** The HDR of [source] by its name ("HLG", "HDR10"...), for the player menu */
+		@JvmStatic
+		fun hdrLabel(source: MediaSourceInfo?): String? = source?.mediaStreams.orEmpty()
+			.firstOrNull { it.type == MediaStreamType.VIDEO }
+			?.videoRangeType
+			?.takeIf { it in HDR_RANGE_TYPES }
+			?.let { type ->
+				when (type) {
+					VideoRangeType.HLG, VideoRangeType.DOVI_WITH_HLG -> "HLG"
+					VideoRangeType.HDR10_PLUS -> "HDR10+"
+					VideoRangeType.HDR10 -> "HDR10"
+					else -> "Dolby Vision"
+				}
+			}
+
+		/**
+		 * HDR to SDR on the server: the device says it plays no HDR at all, so the server converts
+		 * the picture (with tone mapping when it's on in the server's settings). For HDR that looks
+		 * wrong on a TV (4K HLG with blotches like marble on a Fire TV), at the size and quality
+		 * chosen.
+		 */
+		@JvmStatic
+		fun applySdr(options: VideoOptions, maxBitrate: Int?) {
+			val hdr = HDR_RANGE_TYPES.joinToString("|") { it.serialName }
+			options.enableDirectPlay = false
+			options.allowVideoStreamCopy = false
+			options.profile = options.profile?.let { profile ->
+				profile.copy(
+					maxStreamingBitrate = maxBitrate ?: profile.maxStreamingBitrate,
+					codecProfiles = profile.codecProfiles + CodecProfile(
+						type = CodecType.VIDEO,
+						// Every video codec
+						codec = null,
+						conditions = listOf(
+							ProfileCondition(
+								condition = ProfileConditionType.NOT_EQUALS,
+								property = ProfileConditionValue.VIDEO_RANGE_TYPE,
+								value = hdr,
+								isRequired = false,
+							)
+						),
+						applyConditions = listOf(
+							ProfileCondition(
+								condition = ProfileConditionType.EQUALS_ANY,
+								property = ProfileConditionValue.VIDEO_RANGE_TYPE,
+								value = hdr,
+								isRequired = false,
+							)
+						),
+					)
+				)
+			}
+		}
 	}
 
 	private val preferences = context.getSharedPreferences("playback_fallback", Context.MODE_PRIVATE)
@@ -107,9 +179,27 @@ class PlaybackFallback(context: Context) {
 		}
 	}
 
+	/** HDR to SDR on the server was chosen for the series of [item] */
+	fun rememberedSdr(item: BaseItemDto?): Boolean =
+		item != null && preferences.getBoolean(SDR_PREFIX + key(item), false)
+
+	fun rememberSdr(item: BaseItemDto?, enabled: Boolean) {
+		if (item == null) return
+		preferences.edit {
+			if (enabled) putBoolean(SDR_PREFIX + key(item), true) else remove(SDR_PREFIX + key(item))
+		}
+	}
+
 	/** What the server is asked for at [level] (after the device profile is set) */
 	fun apply(options: VideoOptions, level: Int) {
 		if (level >= REMUX) options.enableDirectPlay = false
+		// Repackaged or with the audio converted, the video is the file's: the quality limit of the
+		// player doesn't make the server convert it (a 4K file over the limit was transcoded anyway)
+		if (level == REMUX || level == TRANSCODE_AUDIO) {
+			options.profile = options.profile?.let { profile ->
+				profile.copy(maxStreamingBitrate = maxOf(profile.maxStreamingBitrate ?: 0, ORIGINAL_QUALITY_BITRATE))
+			}
+		}
 		if (level >= TRANSCODE_AUDIO) options.allowAudioStreamCopy = false
 		if (level >= TRANSCODE_ALL) {
 			options.enableDirectStream = false
@@ -160,6 +250,9 @@ class PlaybackFallback(context: Context) {
 }
 
 private const val DOLBY_VISION_PREFIX = "dv:"
+private const val SDR_PREFIX = "sdr:"
+/** Enough for any file (a 4K Blu-ray remux peaks around 130 Mbit/s) */
+private const val ORIGINAL_QUALITY_BITRATE = 200_000_000
 private const val KEY_VERSION = "_version"
 private const val VERSION = 1
 private const val MAX_WIDTH = 1920

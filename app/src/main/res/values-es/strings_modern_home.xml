@@ -343,7 +343,7 @@
     <string name="modern_player_playback_mode">Modo de reproducción</string>
     <string name="modern_player_playback_mode_now">Ahora: %1$s</string>
     <string name="modern_player_mode_direct">Automático (directo si se puede)</string>
-    <string name="modern_player_mode_remux">Reempaquetar el archivo (remux)</string>
+    <string name="modern_player_mode_remux">Reempaquetar el archivo (remux, calidad original)</string>
     <string name="modern_player_mode_audio">Convertir el audio</string>
     <string name="modern_player_mode_all">Convertir vídeo y audio (transcodificar)</string>
     <string name="modern_player_method_direct">reproducción directa</string>
@@ -385,6 +385,7 @@
     <string name="app_update_debug_note">(Versión debug: la release se instala como otra app)</string>
     <string name="playback_fallback_dolby_vision">Este archivo Dolby Vision no se reproduce aquí: reintentando como HDR10…</string>
     <string name="modern_player_mode_dolby_vision">Dolby Vision como HDR10</string>
+    <string name="modern_player_mode_sdr">%1$s a SDR (lo convierte el servidor)</string>
     <string name="subtitles_settings_caption">Color, contorno o sombra, fuente y tamaño, con vista previa</string>
     <string name="subtitles_presets">Estilos</string>
     <string name="subtitles_custom">Personalizar</string>

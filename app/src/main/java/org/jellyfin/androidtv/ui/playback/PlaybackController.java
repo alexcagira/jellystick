@@ -141,6 +141,8 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     private boolean fallbackFromStartFailure = false;
     // Dolby Vision decoded as HDR10 for the current item (tried first: no work for the server)
     private boolean dolbyVisionFallback = false;
+    /** HDR to SDR on the server, chosen in the player menu for the current item */
+    private boolean sdrFallback = false;
     private static final int MAX_PLAYBACK_RETRIES = 4;
 
     private Display.Mode[] mDisplayModes;
@@ -328,6 +330,42 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         refreshStream();
     }
 
+    private boolean hdrAsSdrFor(BaseItemDto item) {
+        return sdrFallback || playbackFallback.getValue().rememberedSdr(item);
+    }
+
+    /** For the player menu: the video is HDR (HDR10, HDR10+, HLG, Dolby Vision) */
+    public boolean isHdrVideo() {
+        return PlaybackFallback.isHdr(getCurrentMediaSource());
+    }
+
+    /** For the player menu: "HLG", "HDR10"... of the current video */
+    @Nullable
+    public String getHdrLabel() {
+        return PlaybackFallback.hdrLabel(getCurrentMediaSource());
+    }
+
+    /** For the player menu: the server converts the HDR of the current video to SDR */
+    public boolean isHdrAsSdr() {
+        return hdrAsSdrFor(getCurrentlyPlayingItem());
+    }
+
+    /**
+     * From the player menu: HDR to SDR on the server for this series (instead of the other modes),
+     * and play it again
+     */
+    public void setHdrAsSdr(boolean enabled) {
+        sdrFallback = enabled;
+        playbackFallback.getValue().rememberSdr(getCurrentlyPlayingItem(), enabled);
+        if (enabled) {
+            playbackFallback.getValue().remember(getCurrentlyPlayingItem(), PlaybackFallback.DIRECT);
+            fallbackLevel = PlaybackFallback.DIRECT;
+        }
+        fallbackFromStartFailure = false;
+        playbackRetries = 0;
+        refreshStream();
+    }
+
     /** Level of the current item: the one reached after errors, or the one kept for its series */
     private int currentFallbackLevel() {
         return Math.max(fallbackLevel, playbackFallback.getValue().rememberedLevel(getCurrentlyPlayingItem()));
@@ -343,6 +381,9 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         playbackFallback.getValue().remember(getCurrentlyPlayingItem(), level);
         fallbackLevel = level;
         fallbackFromStartFailure = false;
+        // The modes are one or the other: HDR to SDR goes off
+        sdrFallback = false;
+        playbackFallback.getValue().rememberSdr(getCurrentlyPlayingItem(), false);
         // Automatic: everything as it is again, Dolby Vision too
         if (level == PlaybackFallback.DIRECT) {
             dolbyVisionFallback = false;
@@ -667,6 +708,13 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             int level = Math.max(fallbackLevel, playbackFallback.getValue().rememberedLevel(item));
             playbackFallback.getValue().apply(internalOptions, level);
             if (level > PlaybackFallback.DIRECT) Timber.i("Playback fallback level %d for %s", level, item.getName());
+            // HDR to SDR on the server (player menu), unless the last level replaced the profile already
+            if (hdrAsSdrFor(item) && level < PlaybackFallback.TRANSCODE_ALL
+                    && (PlaybackFallback.isHdr(currentMediaSource) || PlaybackFallback.isHdrItem(item))) {
+                // At the quality chosen in the player (not the original one of a remux)
+                PlaybackFallback.applySdr(internalOptions, internalProfile.getMaxStreamingBitrate());
+                Timber.i("HDR to SDR on the server for %s", item.getName());
+            }
             // Read by the player when it picks the decoders of this stream
             PlaybackFallback.setDecodeDolbyVisionAsHdr10(dolbyVisionAsHdr10For(item));
         } else {
@@ -1092,6 +1140,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         fallbackLevel = PlaybackFallback.DIRECT;
         fallbackFromStartFailure = false;
         dolbyVisionFallback = false;
+        sdrFallback = false;
     }
 
     private void clearPlaybackSessionOptions() {

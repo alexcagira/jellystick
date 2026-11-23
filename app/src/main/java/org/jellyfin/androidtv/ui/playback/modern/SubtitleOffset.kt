@@ -9,6 +9,8 @@ import androidx.media3.decoder.DecoderInputBuffer
 import android.os.Handler
 import androidx.annotation.OptIn
 import androidx.media3.common.MimeTypes
+import timber.log.Timber
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ForwardingRenderer
@@ -46,8 +48,23 @@ class SubtitleOffsetRenderersFactory(
 		setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
 			val hdr10 = dolbyVisionAsHdr10 || PlaybackFallback.decodeDolbyVisionAsHdr10
 			if (hdr10 && mimeType == MimeTypes.VIDEO_DOLBY_VISION) emptyList()
-			else MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+			else hardwareFirst(mimeType, MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder))
 		}
+	}
+
+	/**
+	 * Video only with the decoders of the Fire TV's chip when it has one for the codec. The software
+	 * decoder of Android took over when the chip's wouldn't start, and with 10-bit video (4K HLG, HDR)
+	 * it gave pictures like marble with contour lines and stutter. Without it a stream that doesn't
+	 * start goes to the server's conversion (playback fallback) instead.
+	 */
+	private fun hardwareFirst(mimeType: String, decoders: List<MediaCodecInfo>): List<MediaCodecInfo> {
+		if (!MimeTypes.isVideo(mimeType)) return decoders
+		val hardware = decoders.filterNot { it.softwareOnly }
+		if (hardware.size != decoders.size && hardware.isNotEmpty()) {
+			Timber.i("Software decoders of %s left out: %s", mimeType, decoders.filter { it.softwareOnly }.joinToString { it.name })
+		}
+		return hardware.ifEmpty { decoders }
 	}
 
 	/**
@@ -66,6 +83,15 @@ class SubtitleOffsetRenderersFactory(
 	) {
 		val start = out.size
 		super.buildVideoRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, allowedVideoJoiningTimeMs, out)
+		// No video decoding with FFmpeg (the audio keeps it): in software a 4K 10-bit stream can't be
+		// decoded in time on a Fire TV and came out like marble. What the chip can't play, the
+		// server converts
+		for (index in out.lastIndex downTo start) {
+			if (out[index].javaClass.name.contains("Ffmpeg", ignoreCase = true)) {
+				Timber.i("Video renderer %s left out", out[index].javaClass.simpleName)
+				out.removeAt(index)
+			}
+		}
 		val index = (start until out.size).firstOrNull { out[it] is MediaCodecVideoRenderer } ?: return
 		out[index] = DolbyVisionAsHdr10VideoRenderer(
 			MediaCodecVideoRenderer.Builder(context)

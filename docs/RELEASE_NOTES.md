@@ -41,6 +41,8 @@ Todo lo nuevo se puede desactivar en *Ajustes → Personalización → Inicio* p
 - **Saltar intro / créditos / resumen** con los segmentos de Jellyfin o Intro Skipper.
 - Si un archivo no funciona en reproducción directa, la app reintenta sola con **Dolby Vision como HDR10, audio convertido o transcodificación**, desde el mismo punto, y lo recuerda para toda la serie.
 - **Dolby Vision + HDR10+ en directo y en Dolby Vision** en el Fire TV 4K / 4K Max (p. ej. *Los anillos de poder*), como Plex: antes el servidor quitaba Dolby Vision (remux) y la tele mostraba HDR. La app oculta los metadatos HDR10+ al decodificador Dolby Vision, que era lo que dejaba la pantalla en negro. El audio Atmos va en *passthrough*.
+- **4K HLG (y HDR) que se veía como mármol**, con manchas y curvas de nivel: el vídeo ya solo lo decodifica el chip del Fire TV. Antes, si el decodificador del chip no arrancaba (o con *Preferir FFmpeg*), lo hacía uno por software que no sabe de 10 bits; ahora, si el chip no puede, convierte el servidor.
+- *Modo de reproducción* (⇄) con dos opciones más para esos casos: **HLG a SDR** (o HDR10 / Dolby Vision a SDR: lo convierte el servidor, a la calidad elegida) y **Reempaquetar (remux) a calidad original** (el vídeo del archivo tal cual aunque pase del límite de calidad del reproductor). Se recuerdan para toda la serie.
 - Opciones para Fire TV: **Dolby Vision como HDR10** (sin bloques de fotogramas anteriores: se quitan los metadatos Dolby Vision antes de decodificar) y *audio offload* desactivable (evita vídeo congelado con Atmos).
 
 ### TV en directo

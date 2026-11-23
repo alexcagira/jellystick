@@ -366,10 +366,14 @@ class ModernPlayerOverlay(
 		}
 	}
 
-	/** Direct play, remux, audio or full conversion by the server: kept for the whole series */
+	/**
+	 * Direct play, remux (at the file's quality), audio or full conversion by the server and, for HDR
+	 * files, HDR to SDR on the server: one of them, kept for the whole series
+	 */
 	fun playbackModeOptions(): List<PlayerOption> {
 		val controller = controller ?: return emptyList()
 		val current = controller.getPlaybackFallbackLevel()
+		val sdr = controller.isHdrAsSdr()
 		return listOf(
 			PlaybackFallback.DIRECT to R.string.modern_player_mode_direct,
 			PlaybackFallback.REMUX to R.string.modern_player_mode_remux,
@@ -378,10 +382,18 @@ class ModernPlayerOverlay(
 		).map { (level, label) ->
 			PlayerOption(
 				label = context.getString(label),
-				selected = level == current,
-				onSelect = { if (level != controller.getPlaybackFallbackLevel()) controller.setPlaybackFallbackLevel(level) },
+				selected = level == current && !sdr,
+				onSelect = { if (level != controller.getPlaybackFallbackLevel() || controller.isHdrAsSdr()) controller.setPlaybackFallbackLevel(level) },
 			)
 		} + listOfNotNull(
+			// HDR files (4K HLG that looks like marble...): the server converts the picture to SDR
+			if (controller.isHdrVideo() || sdr) {
+				PlayerOption(
+					label = context.getString(R.string.modern_player_mode_sdr, controller.getHdrLabel() ?: "HDR"),
+					selected = sdr,
+					onSelect = { if (!controller.isHdrAsSdr()) controller.setHdrAsSdr(true) },
+				)
+			} else null,
 			// Dolby Vision files: their HDR10 layer instead (on/off, also kept for the series)
 			if (controller.isDolbyVisionVideo()) {
 				val enabled = controller.isDolbyVisionAsHdr10()
