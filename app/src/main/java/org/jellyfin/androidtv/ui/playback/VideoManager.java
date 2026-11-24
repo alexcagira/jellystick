@@ -49,6 +49,9 @@ import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.SubtitleView;
 
+import org.jellyfin.androidtv.util.Utils;
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KMode;
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KVideoOutput;
 import org.jellyfin.androidtv.ui.playback.modern.SubtitleOffsetRenderersFactory;
 import org.jellyfin.androidtv.ui.settings.screen.customization.subtitle.SubtitleStyles;
 import org.jellyfin.androidtv.R;
@@ -89,6 +92,8 @@ public class VideoManager {
     private PlaybackOverlayFragmentHelper _helper;
     public ExoPlayer mExoPlayer;
     private PlayerView mExoPlayerView;
+    /** Anime4K: the video through the upscaling shaders while a mode is on */
+    private Anime4KVideoOutput anime4k;
     private Handler mHandler = new Handler();
 
     private long mMetaDuration = -1;
@@ -160,6 +165,10 @@ public class VideoManager {
         mExoPlayerView.getSubtitleView().setFixedTextSize(TypedValue.COMPLEX_UNIT_DIP, userPreferences.get(UserPreferences.Companion.getSubtitlesTextSize()));
         mExoPlayerView.getSubtitleView().setBottomPaddingFraction(userPreferences.get(UserPreferences.Companion.getSubtitlesOffsetPosition()));
         mExoPlayerView.getSubtitleView().setStyle(subtitleStyle);
+        anime4k = new Anime4KVideoOutput(activity, mExoPlayerView, mExoPlayer, message -> {
+            Utils.showToast(activity, message);
+            return kotlin.Unit.INSTANCE;
+        });
 
         if (assHandler != null) {
             assHandler.init(mExoPlayer);
@@ -728,8 +737,44 @@ public class VideoManager {
         releasePlayer();
     }
 
+    /** Anime4K mode for what plays now (OFF: the normal video output) */
+    public void setAnime4KMode(@NonNull Anime4KMode mode) {
+        if (anime4k != null) anime4k.setMode(mode);
+    }
+
+    /** The Anime4K mode drawing now (lighter than the chosen one for big videos or a slow TV, OFF for HDR) */
+    @NonNull
+    public Anime4KMode getAnime4KActiveMode() {
+        return anime4k != null ? anime4k.getActiveMode() : Anime4KMode.OFF;
+    }
+
+    /** Experimental: Anime4K at the TV's 4K */
+    public void setAnime4KUhd(boolean uhd) {
+        if (anime4k != null) anime4k.setUhd(uhd);
+    }
+
+    /** Anime4K draws at 4K now */
+    public boolean isAnime4KUhdActive() {
+        return anime4k != null && anime4k.getUhdActive();
+    }
+
+    /** The 4K test pattern for a few seconds */
+    public void showAnime4KTestPattern() {
+        if (anime4k != null) anime4k.showTestPattern();
+    }
+
+    /** Why the chosen Anime4K mode isn't the one drawing */
+    @Nullable
+    public String getAnime4KStatus() {
+        return anime4k != null ? anime4k.getStatusMessage() : null;
+    }
+
     private void releasePlayer() {
         _helper.setScreensaverLock(false);
+        if (anime4k != null) {
+            anime4k.release();
+            anime4k = null;
+        }
         if (mExoPlayer != null) {
             mExoPlayerView.setPlayer(null);
             mExoPlayer.release();

@@ -78,6 +78,7 @@ internal fun PlayerMenus(
 			PlayerMenu.QUALITY -> overlay.qualityOptions()
 			PlayerMenu.SPEED -> overlay.speedOptions()
 			PlayerMenu.PLAYBACK_MODE -> overlay.playbackModeOptions()
+			PlayerMenu.ANIME4K -> overlay.anime4kOptions()
 			else -> emptyList()
 		}
 	}
@@ -92,11 +93,12 @@ internal fun PlayerMenus(
 		// With how it plays now
 		PlayerMenu.PLAYBACK_MODE -> stringResource(R.string.modern_player_playback_mode) + " · " +
 			stringResource(R.string.modern_player_playback_mode_now, overlay.playMethodLabel())
+		PlayerMenu.ANIME4K -> remember(menu, options) { overlay.anime4kTitle() }
 		null -> ""
 	}
 
 	OptionsDialog(
-		visible = menu in setOf(PlayerMenu.AUDIO, PlayerMenu.SUBTITLES, PlayerMenu.QUALITY, PlayerMenu.SPEED, PlayerMenu.PLAYBACK_MODE),
+		visible = menu in setOf(PlayerMenu.AUDIO, PlayerMenu.SUBTITLES, PlayerMenu.QUALITY, PlayerMenu.SPEED, PlayerMenu.PLAYBACK_MODE, PlayerMenu.ANIME4K),
 		title = title,
 		options = options,
 		onDismissRequest = onDismissRequest,

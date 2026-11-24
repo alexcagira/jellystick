@@ -28,6 +28,8 @@ import org.jellyfin.androidtv.ui.InteractionTrackerViewModel;
 import org.jellyfin.androidtv.ui.livetv.TvManager;
 import org.jellyfin.androidtv.util.TimeUtils;
 import org.jellyfin.androidtv.util.Utils;
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KMode;
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KPreferences;
 import org.jellyfin.androidtv.util.apiclient.ReportingHelper;
 import org.jellyfin.androidtv.util.apiclient.Response;
 import org.jellyfin.androidtv.util.profile.DeviceProfileKt;
@@ -132,6 +134,7 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     // Playback fallback (see PlaybackFallback): how much of the work the server does for the
     // current item, raised when a stream fails, and the watchdog of the start of each stream
     private final Lazy<PlaybackFallback> playbackFallback = inject(PlaybackFallback.class);
+    private final Lazy<Anime4KPreferences> anime4kPreferences = inject(Anime4KPreferences.class);
     private int fallbackLevel = PlaybackFallback.DIRECT;
     @Nullable
     private PlaybackStartWatchdog startWatchdog = null;
@@ -328,6 +331,51 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         playbackFallback.getValue().rememberDolbyVision(getCurrentlyPlayingItem(), enabled);
         playbackRetries = 0;
         refreshStream();
+    }
+
+    /** For the player menu: the Anime4K mode chosen for this series */
+    @NonNull
+    public Anime4KMode getAnime4KMode() {
+        return anime4kPreferences.getValue().modeFor(getCurrentlyPlayingItem());
+    }
+
+    /** For the player menu: the Anime4K mode drawing now */
+    @NonNull
+    public Anime4KMode getAnime4KActiveMode() {
+        return hasInitializedVideoManager() ? mVideoManager.getAnime4KActiveMode() : Anime4KMode.OFF;
+    }
+
+    /** For the player menu: why the chosen mode isn't the one drawing */
+    @Nullable
+    public String getAnime4KStatus() {
+        return hasInitializedVideoManager() ? mVideoManager.getAnime4KStatus() : null;
+    }
+
+    /** For the player menu: experimental 4K is on */
+    public boolean isAnime4KUhd() {
+        return anime4kPreferences.getValue().getUhd();
+    }
+
+    /** For the player menu: Anime4K draws at 4K now */
+    public boolean isAnime4KUhdActive() {
+        return hasInitializedVideoManager() && mVideoManager.isAnime4KUhdActive();
+    }
+
+    /** From the player menu: experimental 4K on or off (for everything) */
+    public void setAnime4KUhd(boolean uhd) {
+        anime4kPreferences.getValue().setUhd(uhd);
+        if (hasInitializedVideoManager()) mVideoManager.setAnime4KUhd(uhd);
+    }
+
+    /** From the player menu: the 4K test pattern */
+    public void showAnime4KTestPattern() {
+        if (hasInitializedVideoManager()) mVideoManager.showAnime4KTestPattern();
+    }
+
+    /** From the player menu: Anime4K for this series, at once (no new stream) */
+    public void setAnime4KMode(@NonNull Anime4KMode mode) {
+        anime4kPreferences.getValue().remember(getCurrentlyPlayingItem(), mode);
+        if (hasInitializedVideoManager()) mVideoManager.setAnime4KMode(mode);
     }
 
     private boolean hdrAsSdrFor(BaseItemDto item) {
@@ -805,6 +853,9 @@ public class PlaybackController implements PlaybackControllerNotifiable {
 
         mStartPosition = position;
         mCurrentStreamInfo = response;
+        // Anime4K as chosen for the series (off for everything else), at 4K when that is on
+        mVideoManager.setAnime4KUhd(anime4kPreferences.getValue().getUhd());
+        mVideoManager.setAnime4KMode(anime4kPreferences.getValue().modeFor(item));
         mCurrentOptions.setMediaSourceId(response.getMediaSource().getId());
 
         if (response.getMediaUrl() == null) {

@@ -657,6 +657,40 @@ FFmpeg*, o cuando el chip decía no poder con el formato) no se usa; el audio si
 HEVC de 10 bits (HLG, HDR) salía como mármol con curvas de nivel y a saltos. Si el chip no arranca, falla y el
 servidor convierte (los niveles de arriba).
 
+**Anime4K** (`ui/playback/anime4k`): los shaders de [Anime4K](https://github.com/bloc97/Anime4K) (MIT, tal cual
+en `assets/anime4k` con su licencia) para anime. El botón ✦ de los controles abre el menú: *Desactivado*, **Sharp
+upscaler (rápido)** (Deblur DoG + Upscale DoG x2), **Sharp + líneas** (además Darken HQ y Thin HQ, antes de escalar)
+y **Restaurar y escalar CNN** (Clamp Highlights + Restore CNN S + Upscale CNN x2 S, solo hasta 720p: con más pasa
+a *Sharp + líneas*). Se aplica al momento, sin volver a pedir el vídeo, y se recuerda para la serie
+(`Anime4KPreferences`).
+
+Cómo funciona: los shaders son de mpv (`//!HOOK`, `//!BIND`, `//!SAVE`, `//!WIDTH`, `//!WHEN`...).
+`MpvHookParser` los lee, `HookPass.fragmentShader` hace de cada pase un shader de GLSL ES 3.00 con los nombres de mpv
+(`NAME_tex`, `NAME_texOff`, `NAME_pos`, `NAME_pt`, `NAME_size`; `HOOKED` y `MAIN` son la misma textura) y
+`Anime4KPlanner` decide qué pases corren y de qué tamaño (expresiones en notación polaca inversa con el tamaño del vídeo,
+`NATIVE`, y el de la pantalla, `OUTPUT`). Con un modo activo, `Anime4KVideoOutput` pone un `GLSurfaceView` en el sitio
+del `SurfaceView` del reproductor (dentro del marco que mantiene la proporción, bajo los subtítulos) y ExoPlayer
+decodifica en el `SurfaceTexture` de `Anime4KRenderer`: cada fotograma se copia a una textura (fila de arriba primero,
+como en mpv), pasa por los pases en texturas de media precisión (`RGBA16F`: las redes necesitan valores negativos) y se
+escala a la pantalla (Catmull-Rom al agrandar, filtro de área al reducir). Al apagarlo, el vídeo vuelve al
+`SurfaceView` normal.
+
+Límites: solo vídeo SDR (HDR y Dolby Vision siguen por la salida normal, la tele hace sus colores). Sin OpenGL ES 3.0,
+sin texturas de media precisión en las que dibujar o con un shader que el driver rechaza, se desactiva con un aviso.
+Si el Fire TV no llega a tiempo (más del 15 % de los fotogramas del reproductor sin dibujar dos veces seguidas en
+4 s), pasa a un modo más ligero hasta cerrar el reproductor. Los pases se comprobaron compilándolos y ejecutándolos en
+WebGL 2 (el mismo GLSL ES 3.00) con una imagen de prueba: líneas más nítidas que con el escalado normal.
+
+**Anime4K en 4K (experimental)**: las apps del Fire TV tienen una pantalla de 1920×1080 aunque la tele esté en 4K; lo
+que dibuja la GPU sale a ese tamaño y solo el vídeo del decodificador va a 4K nativo. Con *4K (experimental)* el búfer
+del `GLSurfaceView` pasa a la resolución de la tele (`SurfaceHolder.setFixedSize`, el tamaño de la vista por
+resolución física / ancho de la pantalla de la app), `OUTPUT` es 3840×2160 y los pases x2 de Anime4K también corren con
+1080p. Que el Fire TV lo mande a la tele en 4K o lo reduzca a 1080p por el camino depende de su compositor: *Probar 4K*
+dibuja 20 s cuatro franjas de líneas blancas y negras (1 y 2 píxeles, verticales y horizontales) a ese tamaño. Si las
+cuatro se ven con líneas, llega 4K; si la 1.ª y la 3.ª se ven grises, el Fire TV lo reduce y el 4K no sirve. Si en 4K se
+saltan fotogramas, vuelve a 1080p con el mismo modo. La textura que va a la pantalla es de 8 bits (la mitad de memoria
+que las de media precisión). Se guarda para todo (`Anime4KPreferences.uhd`).
+
 **El reproductor primero**: OkHttp manda como mucho 5 peticiones a la vez al mismo servidor y pone las demás
 en cola, y el vídeo, la API y las sintonías comparten esas 5: el reproductor esperaba detrás de las filas del
 inicio. Ahora son 24 (`MAX_REQUESTS_PER_SERVER` en `di/AppModule.kt`). Al darle a reproducir

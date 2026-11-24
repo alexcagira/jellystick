@@ -95,7 +95,7 @@ private val liveTimeFormatter: DateTimeFormatter get() = DateTimeFormatter.ofLoc
 private enum class ControlsFocus { DEFAULT, SEEK_BAR }
 
 /** Menus opened from the buttons on the bottom right */
-internal enum class PlayerMenu { AUDIO, SUBTITLES, CHAPTERS, QUALITY, SPEED, SUBTITLE_OFFSET, PLAYBACK_MODE }
+internal enum class PlayerMenu { AUDIO, SUBTITLES, CHAPTERS, QUALITY, SPEED, SUBTITLE_OFFSET, PLAYBACK_MODE, ANIME4K }
 
 /**
  * Streaming style player controls:
@@ -637,6 +637,14 @@ private fun PlayerControls(
 						contentDescription = stringResource(R.string.modern_player_subtitle_offset),
 						onClick = { onMenu(PlayerMenu.SUBTITLE_OFFSET) },
 					)
+					// Anime4K: the upscaling shaders for anime
+					if (!live) {
+						PlayerIconButton(
+							icon = R.drawable.ic_anime4k,
+							contentDescription = stringResource(R.string.modern_player_anime4k),
+							onClick = { onMenu(PlayerMenu.ANIME4K) },
+						)
+					}
 				}
 			}
 		}

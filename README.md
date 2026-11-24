@@ -68,6 +68,7 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 - **Subtitles your way**: Netflix-like, classic, bold, box or yellow styles, outline or shadow, font, size and colours, with a preview.
 - **Dolby Vision + HDR10+ files play directly as Dolby Vision** on the Fire TV 4K / 4K Max (with Atmos passthrough), like Plex, instead of being remuxed by the server to HDR.
 - When a file can't play directly, it retries by itself with **Dolby Vision as HDR10**, converted audio or transcoding, and remembers it for the whole series.
+- **Anime4K** for anime: a *Sharp upscaler*, sharper and darker line art, or the restore + upscale networks for SD and 720p, switched on per series from the player.
 
 ### Live TV
 - A Live TV page with the tabs **Programmes**, **Guide**, **Channels** and **Favourites**: a **media bar with the highlights of the guide** (sports live or about to start, films, premieres) and the rows of Jellyfin web (on now, shows, movies, sports, for kids, news).
@@ -164,4 +165,5 @@ The rhombus logo is Jellystick's own; the name is drawn with Montserrat Bold (SI
 Ratings: information courtesy of IMDb (https://www.imdb.com), from its datasets for personal and non-commercial use;
 Letterboxd averages are read from letterboxd.com. Trending lists: this product uses the TMDB API but is not endorsed or certified
 by TMDB. Jellystick is not affiliated with IMDb, Letterboxd or TMDB.
+Anime4K shaders by bloc97 (https://github.com/bloc97/Anime4K), MIT License (app/src/main/assets/anime4k/LICENSE-Anime4K.txt).
 Jellyfin is a trademark of its owners; Jellystick is not endorsed by them. Fire TV is a trademark of Amazon.

@@ -11,6 +11,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KMode
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KVideoOutput
 import org.jellyfin.androidtv.ui.livetv.modern.LiveTvClock
 import org.jellyfin.androidtv.util.apiclient.getUrl
 import org.jellyfin.androidtv.util.apiclient.itemImages
@@ -404,6 +406,46 @@ class ModernPlayerOverlay(
 				)
 			} else null
 		)
+	}
+
+	/**
+	 * Anime4K: off or one of the modes, kept for the series; it changes at once. Then the
+	 * experimental 4K (on/off, for everything) and its test pattern
+	 */
+	fun anime4kOptions(): List<PlayerOption> {
+		val controller = controller ?: return emptyList()
+		val current = controller.getAnime4KMode()
+		val uhd = controller.isAnime4KUhd()
+		return Anime4KMode.entries.map { mode ->
+			PlayerOption(
+				label = context.getString(Anime4KVideoOutput.labelOf(mode)),
+				selected = mode == current,
+				onSelect = { if (mode != controller.getAnime4KMode()) controller.setAnime4KMode(mode) },
+			)
+		} + listOf(
+			PlayerOption(
+				label = context.getString(R.string.anime4k_uhd),
+				selected = uhd,
+				onSelect = { controller.setAnime4KUhd(!controller.isAnime4KUhd()) },
+			),
+			PlayerOption(
+				label = context.getString(R.string.anime4k_uhd_test_option),
+				selected = false,
+				onSelect = { controller.showAnime4KTestPattern() },
+			),
+		)
+	}
+
+	/** "Anime4K · now: Sharp", or why it doesn't draw (HDR, too slow...) */
+	fun anime4kTitle(): String {
+		val controller = controller ?: return context.getString(R.string.modern_player_anime4k)
+		val chosen = controller.getAnime4KMode()
+		val active = controller.getAnime4KActiveMode()
+		val title = context.getString(R.string.modern_player_anime4k)
+		if (chosen == Anime4KMode.OFF) return title
+		val activeLabel = context.getString(Anime4KVideoOutput.labelOf(active)) + if (controller.isAnime4KUhdActive()) " · 4K" else ""
+		val now = context.getString(R.string.anime4k_title_active, activeLabel)
+		return listOfNotNull(title, now, controller.getAnime4KStatus()?.takeIf { active != chosen }).joinToString(" · ")
 	}
 
 	/** How the current stream plays, null before it starts */

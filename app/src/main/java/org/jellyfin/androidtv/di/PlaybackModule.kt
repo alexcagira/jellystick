@@ -15,6 +15,7 @@ import org.jellyfin.androidtv.preference.constant.BufferLength
 import org.jellyfin.androidtv.ui.browsing.MainActivity
 import org.jellyfin.androidtv.ui.playback.MediaManager
 import org.jellyfin.androidtv.ui.playback.PlaybackFallback
+import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KPreferences
 import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
 import org.jellyfin.androidtv.ui.playback.VideoQueueManager
 import org.jellyfin.androidtv.ui.playback.rewrite.RewriteMediaManager
@@ -41,6 +42,8 @@ val playbackModule = module {
 	single { VideoQueueManager() }
 	// Files that need remux or transcoding on this device, by series
 	single { PlaybackFallback(androidContext()) }
+	// Anime4K mode of each series
+	single { Anime4KPreferences(androidContext()) }
 	single<MediaManager> { RewriteMediaManager(get(), get()) }
 
 	single { PlaybackLauncher(get(), get(), get(), get()) }
