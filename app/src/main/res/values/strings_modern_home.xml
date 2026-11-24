@@ -389,11 +389,12 @@
     <string name="modern_player_anime4k">Anime4K</string>
     <string name="anime4k_off">Off</string>
     <string name="anime4k_sharp">Sharp upscaler (fast)</string>
-    <string name="anime4k_sharp_lines">Sharp + darker, thinner lines</string>
-    <string name="anime4k_cnn">Restore + upscale CNN (SD and 720p)</string>
+    <string name="anime4k_sharp_lines">Sharp + darker lines</string>
+    <string name="anime4k_cnn">Restore + upscale CNN S (light)</string>
+    <string name="anime4k_mode_a">Mode A: restore + upscale CNN M (best)</string>
     <string name="anime4k_title_active">now: %1$s</string>
     <string name="anime4k_hdr">Anime4K only works with SDR video: off for this one</string>
-    <string name="anime4k_reduced">%1$s is for SD and 720p: %2$s for this video</string>
+    <string name="anime4k_reduced">%1$s is for videos up to 1080p: %2$s for this one</string>
     <string name="anime4k_too_slow">The Fire TV can\'t keep up with %1$s: %2$s instead</string>
     <string name="anime4k_failed">Anime4K doesn\'t work on this device (%1$s): off</string>
     <string name="anime4k_uhd">4K (experimental): 1080p to 4K</string>

@@ -28,29 +28,48 @@ enum class Anime4KMode(
 		)
 	),
 
-	/** [SHARP] with darker, thinner line art (before the upscale: a quarter of the pixels to work on) */
+	/**
+	 * [SHARP] with darker line art (before the upscale: a quarter of the pixels to work on). Without
+	 * Anime4K's "Thin": it warped textured backgrounds into something like an oil painting.
+	 */
 	SHARP_LINES(
 		listOf(
 			"Anime4K_Deblur_DoG.glsl",
 			"Anime4K_Darken_HQ.glsl",
-			"Anime4K_Thin_HQ.glsl",
 			"Anime4K_Upscale_DoG_x2.glsl",
 		)
 	),
 
-	/** The neural network ones (restore and upscale, small models): only light enough for SD and 720p */
+	/** The small neural networks (restore and upscale) */
 	CNN(
 		listOf(
 			"Anime4K_Clamp_Highlights.glsl",
 			"Anime4K_Restore_CNN_S.glsl",
 			"Anime4K_Upscale_CNN_x2_S.glsl",
 		),
-		maxSourceHeight = 720,
+		maxSourceHeight = 1080,
+	),
+
+	/**
+	 * Anime4K's Mode A (Fast), as in its mpv templates for low-end GPUs: restore and upscale with
+	 * the medium networks, then the small one when the screen is still twice as big (720p to 4K)
+	 */
+	MODE_A(
+		listOf(
+			"Anime4K_Clamp_Highlights.glsl",
+			"Anime4K_Restore_CNN_M.glsl",
+			"Anime4K_Upscale_CNN_x2_M.glsl",
+			"Anime4K_AutoDownscalePre_x2.glsl",
+			"Anime4K_AutoDownscalePre_x4.glsl",
+			"Anime4K_Upscale_CNN_x2_S.glsl",
+		),
+		maxSourceHeight = 1080,
 	);
 
 	/** The next lighter mode (too slow on this TV, or a video too big for the mode) */
 	val fallback: Anime4KMode
 		get() = when (this) {
+			MODE_A -> CNN
 			CNN -> SHARP_LINES
 			SHARP_LINES -> SHARP
 			SHARP, OFF -> OFF
@@ -95,22 +114,31 @@ class HookPass(
 	val samplers: List<String> get() = binds.distinct()
 
 	/**
+	 * The neural network passes compute in half precision (fp16): about twice as fast on the GPUs
+	 * of TVs, and enough for them (mpv often stores them in fp16 too). Positions stay in full
+	 * precision: in fp16 a 4K texture can't be addressed texel by texel.
+	 */
+	val halfPrecision: Boolean get() = description.contains("CNN")
+
+	/**
 	 * The pass as a GLSL ES 3.00 fragment shader. For every texture NAME it reads, the names mpv
 	 * gives: NAME_raw (the sampler), NAME_size, NAME_pt (one texel), NAME_pos (where this pixel is
 	 * in it), NAME_tex(pos) and NAME_texOff(offset in texels). HOOKED and the hooked texture (MAIN)
 	 * are the same: either name works when one of them is bound.
 	 */
 	fun fragmentShader(): String = buildString {
+		val precision = if (halfPrecision) "mediump" else "highp"
 		appendLine("#version 300 es")
-		appendLine("precision highp float;")
+		appendLine("precision $precision float;")
 		appendLine("precision highp int;")
-		appendLine("precision highp sampler2D;")
-		appendLine("in vec2 v_pos;")
+		appendLine("precision $precision sampler2D;")
+		// Positions and texel sizes always in full precision (pos + pt * offset stays highp)
+		appendLine("in highp vec2 v_pos;")
 		appendLine("out vec4 frag_color;")
 		for (sampler in samplers) {
-			appendLine("uniform sampler2D ${sampler}_raw;")
-			appendLine("uniform vec2 ${sampler}_size;")
-			appendLine("uniform vec2 ${sampler}_pt;")
+			appendLine("uniform $precision sampler2D ${sampler}_raw;")
+			appendLine("uniform highp vec2 ${sampler}_size;")
+			appendLine("uniform highp vec2 ${sampler}_pt;")
 		}
 		val hooked = if (hook == HOOK_PREKERNEL) MAIN else hook
 		val names = samplers.associateWith { it }.toMutableMap()

@@ -389,11 +389,12 @@
     <string name="modern_player_anime4k">Anime4K</string>
     <string name="anime4k_off">Desactivado</string>
     <string name="anime4k_sharp">Sharp upscaler (rápido)</string>
-    <string name="anime4k_sharp_lines">Sharp + líneas más oscuras y finas</string>
-    <string name="anime4k_cnn">Restaurar y escalar CNN (SD y 720p)</string>
+    <string name="anime4k_sharp_lines">Sharp + líneas más oscuras</string>
+    <string name="anime4k_cnn">Restaurar y escalar CNN S (ligero)</string>
+    <string name="anime4k_mode_a">Mode A: restaurar y escalar CNN M (calidad)</string>
     <string name="anime4k_title_active">ahora: %1$s</string>
     <string name="anime4k_hdr">Anime4K solo funciona con vídeo SDR: desactivado en este</string>
-    <string name="anime4k_reduced">%1$s es para SD y 720p: %2$s en este vídeo</string>
+    <string name="anime4k_reduced">%1$s es para vídeos de hasta 1080p: %2$s en este</string>
     <string name="anime4k_too_slow">El Fire TV no llega a tiempo con %1$s: pasa a %2$s</string>
     <string name="anime4k_failed">Anime4K no funciona en este dispositivo (%1$s): desactivado</string>
     <string name="anime4k_uhd">4K (experimental): de 1080p a 4K</string>

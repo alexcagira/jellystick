@@ -54,7 +54,7 @@ class Anime4KVideoOutput(
 		private set
 
 	/** The heaviest mode this TV kept up with in this playback */
-	private var ceiling: Anime4KMode = Anime4KMode.CNN
+	private var ceiling: Anime4KMode = Anime4KMode.MODE_A
 
 	/** OpenGL failed: off until the player is opened again */
 	private var failure: String? = null
@@ -321,6 +321,7 @@ class Anime4KVideoOutput(
 			Anime4KMode.SHARP -> org.jellyfin.androidtv.R.string.anime4k_sharp
 			Anime4KMode.SHARP_LINES -> org.jellyfin.androidtv.R.string.anime4k_sharp_lines
 			Anime4KMode.CNN -> org.jellyfin.androidtv.R.string.anime4k_cnn
+			Anime4KMode.MODE_A -> org.jellyfin.androidtv.R.string.anime4k_mode_a
 		}
 
 		/** HDR10, HDR10+, HLG and Dolby Vision keep the normal output */

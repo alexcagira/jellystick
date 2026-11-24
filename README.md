@@ -68,7 +68,7 @@ Every new screen can be turned off in *Settings → Customization → Home* to g
 - **Subtitles your way**: Netflix-like, classic, bold, box or yellow styles, outline or shadow, font, size and colours, with a preview.
 - **Dolby Vision + HDR10+ files play directly as Dolby Vision** on the Fire TV 4K / 4K Max (with Atmos passthrough), like Plex, instead of being remuxed by the server to HDR.
 - When a file can't play directly, it retries by itself with **Dolby Vision as HDR10**, converted audio or transcoding, and remembers it for the whole series.
-- **Anime4K** for anime: a *Sharp upscaler*, sharper and darker line art, or the restore + upscale networks for SD and 720p, switched on per series from the player.
+- **Anime4K** for anime: a *Sharp upscaler*, darker line art, the small restore + upscale networks or Anime4K's **Mode A**, switched on per series from the player (an experimental 4K output too).
 
 ### Live TV
 - A Live TV page with the tabs **Programmes**, **Guide**, **Channels** and **Favourites**: a **media bar with the highlights of the guide** (sports live or about to start, films, premieres) and the rows of Jellyfin web (on now, shows, movies, sports, for kids, news).

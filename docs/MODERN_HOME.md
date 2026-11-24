@@ -659,10 +659,16 @@ servidor convierte (los niveles de arriba).
 
 **Anime4K** (`ui/playback/anime4k`): los shaders de [Anime4K](https://github.com/bloc97/Anime4K) (MIT, tal cual
 en `assets/anime4k` con su licencia) para anime. El botón ✦ de los controles abre el menú: *Desactivado*, **Sharp
-upscaler (rápido)** (Deblur DoG + Upscale DoG x2), **Sharp + líneas** (además Darken HQ y Thin HQ, antes de escalar)
-y **Restaurar y escalar CNN** (Clamp Highlights + Restore CNN S + Upscale CNN x2 S, solo hasta 720p: con más pasa
-a *Sharp + líneas*). Se aplica al momento, sin volver a pedir el vídeo, y se recuerda para la serie
-(`Anime4KPreferences`).
+upscaler (rápido)** (Deblur DoG + Upscale DoG x2), **Sharp + líneas más oscuras** (además Darken HQ, antes de escalar;
+sin el *Thin* de Anime4K, que pintaba los fondos con textura como un óleo), **Restaurar y escalar CNN S** (Clamp
+Highlights + Restore CNN S + Upscale CNN x2 S) y **Mode A** (el *Mode A (Fast)* de las plantillas de mpv para GPU
+modestas: Clamp Highlights, Restore CNN M, Upscale CNN x2 M, AutoDownscalePre x2 y x4 y Upscale CNN x2 S, que solo
+corre cuando falta otro x2, de 720p a 4K). Los dos CNN son para vídeos de hasta 1080p (con más pasan a *Sharp +
+líneas*). Los pases de las redes calculan en media precisión (`mediump`, fp16: casi el doble de rápido en las GPU de
+los Fire TV); las posiciones siguen en precisión completa, porque en fp16 una textura 4K no se puede recorrer píxel a
+píxel. Se aplica al momento, sin volver a pedir el vídeo, y se recuerda para la serie (`Anime4KPreferences`). Coste
+aproximado por fotograma: CNN S de 720p a 1080p ~1,9 GMAC; Mode A de 720p a 1080p ~3,9 GMAC; Mode A de 1080p a 4K
+~8,7 GMAC (lo más probable es que ahí el vigilante baje a 1080p o a CNN S).
 
 Cómo funciona: los shaders son de mpv (`//!HOOK`, `//!BIND`, `//!SAVE`, `//!WIDTH`, `//!WHEN`...).
 `MpvHookParser` los lee, `HookPass.fragmentShader` hace de cada pase un shader de GLSL ES 3.00 con los nombres de mpv
