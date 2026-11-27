@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
 import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KMode
 import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KVideoOutput
 import org.jellyfin.androidtv.ui.livetv.modern.LiveTvClock
+import org.jellyfin.androidtv.ui.playback.chooseAudioStream
+import org.jellyfin.androidtv.ui.playback.chooseSubtitleIndex
 import org.jellyfin.androidtv.util.apiclient.getUrl
 import org.jellyfin.androidtv.util.apiclient.itemImages
 import org.jellyfin.sdk.api.client.ApiClient
@@ -38,7 +40,6 @@ import org.jellyfin.androidtv.ui.playback.PlaybackFallback
 import org.jellyfin.androidtv.ui.playback.PlaybackControllerContainer
 import org.jellyfin.androidtv.ui.playback.VideoQualityController
 import org.jellyfin.androidtv.ui.playback.VideoSpeedController
-import org.jellyfin.androidtv.ui.playback.setSubtitleIndex
 import org.jellyfin.androidtv.util.ImageHelper
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.MediaSegmentType
@@ -332,7 +333,7 @@ class ModernPlayerOverlay(
 			PlayerOption(
 				label = stream.displayTitle ?: stream.language ?: "#${stream.index}",
 				selected = stream.index == current,
-				onSelect = { controller.switchAudioStream(stream.index) },
+				onSelect = { controller.chooseAudioStream(stream.index) },
 			)
 		}
 	}
@@ -342,12 +343,12 @@ class ModernPlayerOverlay(
 		val current = controller.subtitleStreamIndex
 		val subtitles = controller.currentMediaSource?.mediaStreams.orEmpty().filter { it.type == MediaStreamType.SUBTITLE }
 
-		return listOf(PlayerOption(noneLabel, current == -1) { controller.setSubtitleIndex(-1) }) +
+		return listOf(PlayerOption(noneLabel, current == -1) { controller.chooseSubtitleIndex(-1) }) +
 			subtitles.map { stream ->
 				PlayerOption(
 					label = stream.displayTitle ?: stream.language ?: "#${stream.index}",
 					selected = stream.index == current,
-					onSelect = { controller.setSubtitleIndex(stream.index) },
+					onSelect = { controller.chooseSubtitleIndex(stream.index) },
 				)
 			}
 	}

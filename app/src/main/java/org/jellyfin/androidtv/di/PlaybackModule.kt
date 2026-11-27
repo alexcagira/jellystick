@@ -17,6 +17,7 @@ import org.jellyfin.androidtv.ui.playback.MediaManager
 import org.jellyfin.androidtv.ui.playback.PlaybackFallback
 import org.jellyfin.androidtv.ui.playback.anime4k.Anime4KPreferences
 import org.jellyfin.androidtv.ui.playback.PlaybackLauncher
+import org.jellyfin.androidtv.ui.playback.TrackPreferences
 import org.jellyfin.androidtv.ui.playback.VideoQueueManager
 import org.jellyfin.androidtv.ui.playback.rewrite.RewriteMediaManager
 import org.jellyfin.androidtv.util.AndroidVersion
@@ -44,6 +45,7 @@ val playbackModule = module {
 	single { PlaybackFallback(androidContext()) }
 	// Anime4K mode of each series
 	single { Anime4KPreferences(androidContext()) }
+	single { TrackPreferences(androidContext()) }
 	single<MediaManager> { RewriteMediaManager(get(), get()) }
 
 	single { PlaybackLauncher(get(), get(), get(), get()) }

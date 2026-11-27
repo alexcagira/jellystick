@@ -53,6 +53,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 import kotlin.Lazy;
 import kotlin.Unit;
@@ -135,6 +136,15 @@ public class PlaybackController implements PlaybackControllerNotifiable {
     // current item, raised when a stream fails, and the watchdog of the start of each stream
     private final Lazy<PlaybackFallback> playbackFallback = inject(PlaybackFallback.class);
     private final Lazy<Anime4KPreferences> anime4kPreferences = inject(Anime4KPreferences.class);
+    // Audio and subtitles picked in the player for the movie or series (every episode): asked for
+    // each new item until it plays (onPrepared), then the player keeps what is on
+    private final Lazy<TrackPreferences> trackPreferences = inject(TrackPreferences.class);
+    @Nullable
+    private UUID tracksRestoredFor = null;
+    private boolean restoreAudio = false;
+    private boolean restoreSubtitle = false;
+    @Nullable
+    private Integer rememberedAudioIndex = null;
     private int fallbackLevel = PlaybackFallback.DIRECT;
     @Nullable
     private PlaybackStartWatchdog startWatchdog = null;
@@ -732,14 +742,40 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             internalOptions.setSubtitleStreamIndex(forcedSubtitleIndex);
         }
         MediaSourceInfo currentMediaSource = getCurrentMediaSource();
-        if (forcedAudioLanguage != null) {
-            // find the first audio stream with the requested language
-            for (MediaStream stream : currentMediaSource.getMediaStreams()) {
-                if (stream.getType() == MediaStreamType.AUDIO && forcedAudioLanguage.equals(stream.getLanguage())) {
-                    internalOptions.setAudioStreamIndex(stream.getIndex());
+        List<MediaStream> currentStreams = currentMediaSource != null ? currentMediaSource.getMediaStreams() : null;
+        if (forcedAudioLanguage != null && currentStreams != null) {
+            // find the first audio stream with the requested language, unless the one kept is in it
+            // already (two tracks in one language: the commentary does not replace the film)
+            Integer keptAudio = internalOptions.getAudioStreamIndex();
+            boolean keep = false;
+            for (MediaStream stream : currentStreams) {
+                if (stream.getType() == MediaStreamType.AUDIO && keptAudio != null && stream.getIndex() == keptAudio
+                        && forcedAudioLanguage.equals(stream.getLanguage())) {
+                    keep = true;
                     break;
                 }
             }
+            if (!keep) {
+                for (MediaStream stream : currentStreams) {
+                    if (stream.getType() == MediaStreamType.AUDIO && forcedAudioLanguage.equals(stream.getLanguage())) {
+                        internalOptions.setAudioStreamIndex(stream.getIndex());
+                        break;
+                    }
+                }
+            }
+        }
+        // A new item: the tracks picked for this movie or series win (not when the subtitles had
+        // to be turned off because they could not be burned in)
+        restoreAudio = !isLiveTv && !item.getId().equals(tracksRestoredFor);
+        restoreSubtitle = restoreAudio && forcedSubtitleIndex == null;
+        if (restoreAudio && currentStreams != null) {
+            Integer audio = trackPreferences.getValue().audioFor(item, currentStreams);
+            if (audio != null) internalOptions.setAudioStreamIndex(audio);
+            if (restoreSubtitle) {
+                Integer subtitle = trackPreferences.getValue().subtitleFor(item, currentStreams);
+                if (subtitle != null) internalOptions.setSubtitleStreamIndex(subtitle);
+            }
+            Timber.i("Remembered tracks for %s: audio %s, subtitles %s", item.getName(), audio, restoreSubtitle ? internalOptions.getSubtitleStreamIndex() : "forced");
         }
         if (!isLiveTv && currentMediaSource != null) {
             internalOptions.setMediaSourceId(currentMediaSource.getId());
@@ -895,6 +931,17 @@ public class PlaybackController implements PlaybackControllerNotifiable {
         } else {
             // No saved preference, use server default
             mCurrentOptions.setSubtitleStreamIndex(response.getMediaSource().getDefaultSubtitleStreamIndex());
+        }
+        // The tracks picked for this movie or series win over the session language and the server
+        // default, matched again on the streams of the file that plays
+        rememberedAudioIndex = null;
+        if (!isLiveTv && !item.getId().equals(tracksRestoredFor)) {
+            List<MediaStream> streams = response.getMediaSource().getMediaStreams();
+            if (restoreSubtitle) {
+                Integer subtitle = trackPreferences.getValue().subtitleFor(item, streams);
+                if (subtitle != null) mCurrentOptions.setSubtitleStreamIndex(subtitle < 0 ? null : subtitle);
+            }
+            if (restoreAudio) rememberedAudioIndex = trackPreferences.getValue().audioFor(item, streams);
         }
         setDefaultAudioIndex(response);
         Timber.i("default audio index set to %s remote default %s", mDefaultAudioIndex, response.getMediaSource().getDefaultAudioStreamIndex());
@@ -1537,9 +1584,15 @@ public class PlaybackController implements PlaybackControllerNotifiable {
             // otherwise, use the server default
             if (mCurrentOptions.getAudioStreamIndex() != null) {
                 eligibleAudioTrack = mCurrentOptions.getAudioStreamIndex();
+            } else if (rememberedAudioIndex != null) {
+                // the one picked for this movie or series
+                eligibleAudioTrack = rememberedAudioIndex;
             } else if (getCurrentMediaSource().getDefaultAudioStreamIndex() != null) {
                 eligibleAudioTrack = getCurrentMediaSource().getDefaultAudioStreamIndex();
             }
+            rememberedAudioIndex = null;
+            // From now on the player keeps what is on (restarts, quality changes)
+            if (!isLiveTv && getCurrentlyPlayingItem() != null) tracksRestoredFor = getCurrentlyPlayingItem().getId();
             switchAudioStream(eligibleAudioTrack);
         }
     }

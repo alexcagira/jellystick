@@ -618,6 +618,16 @@ Controles nuevos para películas, episodios y canales (los canales, ver *TV en d
   segmentos de Jellyfin 10.10+) cuando su acción es "Preguntar" en los ajustes de reproducción (segmentos multimedia). OK salta.
 - **Desfase de subtítulos**: de ±0,1 s o ±0,5 s, se reinicia en cada reproducción. No afecta a los subtítulos
   ASS/SSA con estilos (los dibuja otra librería).
+- **Pistas recordadas** (`TrackPreferences`): el audio y los subtítulos elegidos en el reproductor (menús nuevos y
+  clásicos, o desde otra app con el control remoto de Jellyfin) se guardan por película o por serie (`seriesId`, así
+  vale para todos los episodios), también *Ninguno*. Se guarda cómo es la pista, no su número: idioma, título,
+  forzados, SDH, códec, canales y si es externa. En otro archivo gana la pista del mismo idioma (ISO 639-2: `ja` =
+  `jpn`, `fre` = `fra`; sin idioma = `und`) que más se parece: mismo título (sin mayúsculas ni signos), mismo tipo
+  (*Signs & Songs*/forzados, comentarios, SDH), forzados, SDH, códec, canales, externa y, para desempatar, el mismo
+  número. Sin ese idioma se queda lo de antes (idioma de la sesión o lo que diga el servidor). Se pide al servidor
+  con el `PlaybackInfo` de cada elemento nuevo y se vuelve a comprobar con las pistas del archivo que llega; una vez
+  que suena (`onPrepared`), los reinicios del mismo elemento (calidad, subtítulos grabados) siguen con lo que hay
+  puesto. Lo que elige la app sola no se guarda.
 
 Se desactiva en Ajustes → Personalización → Inicio → **Controles modernos del reproductor**.
 
